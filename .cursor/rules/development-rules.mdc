@@ -1,0 +1,7 @@
+---
+alwaysApply: false
+---
+
+# Development rules
+
+Use docs/development/development-rules.md as development rules (CSS, classes, themes, testing, logging etc.)
