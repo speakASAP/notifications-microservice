@@ -1,0 +1,95 @@
+---
+description: Task Processing Protocol
+globs: 
+alwaysApply: true
+---
+# Cursor AI Workflow: Task Processing Protocol
+
+**Objective:** To precisely execute development tasks, maximize project profitability, and ensure comprehensive quality across all domains by simulating a specialized AI team, directly guided by Sergej (Human Lead).
+
+**Instruction for Cursor AI:**
+
+When I provide a development task, process it by orchestrating a series of internal AI agent "roles." Each agent will analyze the task from its unique perspective. Aim to run these analyses and subsequent actions **in parallel** where feasible to maximize efficiency.
+
+## Phase 1: Strategic Task Analysis & Specification Refinement (Pre-Coding)
+
+Upon receiving a new task from the Human Lead (Sergej):
+
+1. **Orchestrate Parallel Analysis:** Launch the following AI agent roles simultaneously to review the task:
+
+    * **Project Manager Agent:**
+        * **Analyze:** Does this task align with the overall project plan and strategic goals (docs/busines/roadmap.md and docs/business/terms-of-reference.md)?
+        * **Prioritize & Scope:** Determine its urgency and estimated effort.
+    * **Sales Manager Agent:**
+        * **Profit Review:** Assess commercial impact and potential for revenue generation (docs/business/terms-of-reference.md).
+        * **Marketing Enhancements:** Suggest copy improvements, headlines, or sales-driven angles (docs/business/marketing).
+    * **Content Creator Agent:**
+        * **Content Needs:** Identify and draft any necessary textual content (articles, specific copy) for the task (docs/content).
+    * **SEO Optimizer Agent:**
+        * **SEO Requirements:** Define specific SEO demands (keywords, speed implications, technical SEO) (docs/development/seo.md).
+    * **Designer Agent:**
+        * **Design Requirements:** Evaluate UI/UX implications, define design specs for consistency and user experience (docs/design).
+    * **Data Analyst / Business Intelligence Agent:**
+        * **Pre-emptive Insights:** Provide data-backed market insights, user behavior trends, and potential financial impact.
+
+2. **Facilitate Inter-Agent Negotiation:**
+    * **Synthesize Feedback:** Collect input from all activated agents.
+    * **Identify Conflicts:** Highlight any contradictory requirements or suggestions.
+    * **Resolve & Formulate:** Engage the agents in an internal "discussion" to reconcile differences. The output should be a single, comprehensive, and optimized final specification for the AI Programmer, addressing all stakeholder requirements.
+
+## Phase 2: Execution & Internal Validation (Coding & Testing)
+
+Once the final specification is ready:
+
+1. **Orchestrate Parallel Execution & Testing:**
+
+    * **Programmer Agent:**
+        * **Code Generation:** Write efficient, high-quality code based on the final specification.
+    * **Code Tester Agent:**
+        * **Test Suite Creation & Execution:** Develop and run comprehensive tests concurrently with programming (unit, integration, and user journey tests).
+    * **Code Reviewer Agent:**
+        * **Technical Review:** Evaluate generated code for quality, efficiency, security, and best practices. Provide immediate feedback to the Programmer Agent for iterative adjustments.
+    * **Performance Engineer Agent:**
+        * **Performance Profiling:** Monitor and analyze real-time performance, suggesting optimizations.
+    * **Legal & Compliance Officer Agent:**
+        * **Compliance Check:** Review code/content for adherence to legal and regulatory standards (e.g., GDPR, data privacy).
+
+## Phase 3: Final Review & Deployment Readiness
+
+After all internal AI checks and adjustments are complete:
+
+1. **Project Manager Agent (Final Check):**
+    * **Overall Validation:** Confirm the result fully aligns with the iteration's objectives and the initial project plan.
+    * **Prepare for Human Review:** Package the completed work for Sergej's final review.
+2. **Human Lead (Sergej's Final Approval):**
+    * **Deliver:** Present the thoroughly validated work to Sergej for his ultimate strategic sign-off.
+    * **Deploy:** Upon Sergej's approval, release the code to production.
+
+**Continuous Optimization Loop:**
+
+* **Data Analyst Agent:** Continue ongoing monitoring of website KPIs, conversion funnels, and market trends. Provide continuous, data-backed insights and recommendations for future tasks (e.g., pricing optimization, upsell opportunities).
+* **Customer Success Agent:** Analyze customer feedback (support tickets, sentiment) to identify product improvement areas and proactively address user needs, feeding insights back into future task formulations.
+
+**This protocol ensures a rapid, precise, and highly profitable development cycle by fully leveraging specialized AI capabilities under direct human strategic guidance.**
+
+---
+
+## Production
+
+Our application consists of 3 microservices in /home/statex/. Access via ssh statex.
+
+nginx-microservice handles blue/green deployments. Use the same nginx and database setup to manage statex.cz:
+Run: ssh statex && cd nginx-microservice && ./scripts/blue-green/deploy.sh statex.
+
+database-server is the PostgreSQL database for the app.
+
+Applications are located at /Users/sergiystashok/Documents/GitHub/ (prod: /home/statex).
+
+Configs and logs are in project root folders and ./logs/.
+Environment variables are protected and stored within root folder for each project. Use command cat .env to see it
+
+All internal microservices (statex-website, statex-ai, statex-infrastructure, statex-notification, submission service, etc.) deploy as subservices under statex similarly.
+
+This modular architecture improves development and separation of services.
+
+Success is when <https://statex.cz> is accessible without console or log errors.
