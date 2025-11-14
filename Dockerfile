@@ -33,4 +33,4 @@ COPY --from=builder /app/node_modules ./node_modules
 EXPOSE 3010
 
 # Start application
-CMD ["node", "dist/main"]
+CMD ["node", "dist/src/main"]
