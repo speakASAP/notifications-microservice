@@ -11,7 +11,14 @@ import { LoggerService } from '../../shared/logger/logger.service';
 export interface WhatsAppOptions {
   phoneNumber: string;
   message: string;
-  templateData?: Record<string, any>;
+  templateData?: Record<string, unknown>;
+}
+
+export interface WhatsAppSendResult {
+  success: boolean;
+  messageId: string | undefined;
+  channel: string;
+  recipient: string;
 }
 
 @Injectable()
@@ -30,7 +37,7 @@ export class WhatsAppService {
     this.apiUrl = process.env.WHATSAPP_API_URL || 'https://graph.facebook.com/v18.0';
   }
 
-  async send(options: WhatsAppOptions): Promise<any> {
+  async send(options: WhatsAppOptions): Promise<WhatsAppSendResult> {
     // Format phone number (remove + and spaces)
     const phoneNumber = options.phoneNumber.replace(/[+\s]/g, '');
 
@@ -76,9 +83,11 @@ export class WhatsAppService {
         channel: 'whatsapp',
         recipient: phoneNumber,
       };
-    } catch (error: any) {
-      this.logger.error(`WhatsApp sending failed to ${phoneNumber}: ${error.message}`, error.stack, 'WhatsAppService');
-      throw new Error(`WhatsApp sending failed: ${error.message}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`WhatsApp sending failed to ${phoneNumber}: ${errorMessage}`, errorStack, 'WhatsAppService');
+      throw new Error(`WhatsApp sending failed: ${errorMessage}`);
     }
   }
 }

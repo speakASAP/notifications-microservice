@@ -5,12 +5,12 @@ services:
       dockerfile: Dockerfile
     container_name: notification-microservice
     ports:
-      - "3010:3010"
+      - "3368:3368"
     env_file:
       - .env
     environment:
       - NODE_ENV=production
-      - PORT=3010
+      - PORT=3368
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
       - DB_HOST=${DB_HOST:-db-server-postgres}
       - DB_PORT=${DB_PORT:-5432}
@@ -32,7 +32,7 @@ services:
       - nginx-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3010/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3368/health"]
       interval: 30s
       timeout: 10s
       retries: 3

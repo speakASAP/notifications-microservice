@@ -73,7 +73,7 @@ export class Notification {
     type: 'jsonb',
     nullable: true,
   })
-  templateData: Record<string, any> | null;
+  templateData: Record<string, unknown> | null;
 
   @Column({
     type: 'varchar',
