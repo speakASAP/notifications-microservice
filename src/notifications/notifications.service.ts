@@ -13,6 +13,36 @@ import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { Notification, NotificationStatus } from './entities/notification.entity';
 import { LoggerService } from '../../shared/logger/logger.service';
 
+export interface NotificationSendResult {
+  id: string;
+  status: string;
+  channel: string;
+  recipient: string;
+  messageId?: string;
+}
+
+export interface NotificationHistoryItem {
+  id: string;
+  channel: string;
+  type: string;
+  recipient: string;
+  subject: string | null;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface NotificationStatusResult {
+  id: string;
+  status: string;
+  channel: string;
+  recipient: string;
+  error: string | null;
+  messageId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 @Injectable()
 export class NotificationsService {
   constructor(
@@ -25,13 +55,13 @@ export class NotificationsService {
     private logger: LoggerService,
   ) {}
 
-  async send(sendNotificationDto: SendNotificationDto): Promise<any> {
+  async send(sendNotificationDto: SendNotificationDto): Promise<NotificationSendResult> {
     const { channel, recipient, message, subject, templateData, type } = sendNotificationDto;
 
     // Create notification record with pending status
     const notification = this.notificationRepository.create({
-      channel: channel as any,
-      type: type as any,
+      channel,
+      type,
       recipient,
       subject: subject || null,
       message,
@@ -44,7 +74,7 @@ export class NotificationsService {
     this.logger.log(`Sending notification ${notification.id} via ${channel} to ${recipient}`, 'NotificationsService');
 
     try {
-      let result: any;
+      let result: { messageId?: string };
 
       switch (channel) {
         case NotificationChannel.EMAIL:
@@ -56,13 +86,19 @@ export class NotificationsService {
           });
           break;
 
-        case NotificationChannel.TELEGRAM:
+        case NotificationChannel.TELEGRAM: {
+          // Use chatId if provided, otherwise use recipient
+          const chatId = sendNotificationDto.chatId || recipient;
           result = await this.telegramService.send({
-            chatId: recipient,
+            chatId,
             message,
             templateData,
+            botToken: sendNotificationDto.botToken,
+            inlineKeyboard: sendNotificationDto.inlineKeyboard,
+            parseMode: sendNotificationDto.parseMode,
           });
           break;
+        }
 
         case NotificationChannel.WHATSAPP:
           result = await this.whatsappService.send({
@@ -91,19 +127,21 @@ export class NotificationsService {
         recipient: recipient,
         messageId: result.messageId,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Update notification with failed status
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
       notification.status = NotificationStatus.FAILED;
-      notification.error = error.message;
+      notification.error = errorMessage;
       await this.notificationRepository.save(notification);
 
-      this.logger.error(`Failed to send notification ${notification.id}: ${error.message}`, error.stack, 'NotificationsService');
+      this.logger.error(`Failed to send notification ${notification.id}: ${errorMessage}`, errorStack, 'NotificationsService');
 
-      throw new Error(`Failed to send notification: ${error.message}`);
+      throw new Error(`Failed to send notification: ${errorMessage}`);
     }
   }
 
-  async getHistory(limit: number, offset: number): Promise<any[]> {
+  async getHistory(limit: number, offset: number): Promise<NotificationHistoryItem[]> {
     const notifications = await this.notificationRepository.find({
       take: limit,
       skip: offset,
@@ -124,7 +162,7 @@ export class NotificationsService {
     }));
   }
 
-  async getStatus(id: string): Promise<any> {
+  async getStatus(id: string): Promise<NotificationStatusResult> {
     const notification = await this.notificationRepository.findOne({
       where: { id },
     });

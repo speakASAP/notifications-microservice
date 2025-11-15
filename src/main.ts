@@ -24,9 +24,10 @@ async function bootstrap() {
     }),
   );
 
-  const port = process.env.PORT || 3010;
+  const port = process.env.PORT || 3368;
   await app.listen(port);
 
+  // eslint-disable-next-line no-console
   console.log(`Notification Microservice is running on: http://localhost:${port}`);
 }
 

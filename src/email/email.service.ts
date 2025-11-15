@@ -11,7 +11,14 @@ export interface EmailOptions {
   to: string;
   subject: string;
   message: string;
-  templateData?: Record<string, any>;
+  templateData?: Record<string, unknown>;
+}
+
+export interface EmailSendResult {
+  success: boolean;
+  messageId: string | undefined;
+  channel: string;
+  recipient: string;
 }
 
 @Injectable()
@@ -32,7 +39,7 @@ export class EmailService {
     this.fromName = process.env.SENDGRID_FROM_NAME || 'FlipFlop.cz';
   }
 
-  async send(options: EmailOptions): Promise<any> {
+  async send(options: EmailOptions): Promise<EmailSendResult> {
     this.logger.log(`Sending email to ${options.to} with subject: ${options.subject}`, 'EmailService');
 
     try {
@@ -58,13 +65,15 @@ export class EmailService {
         channel: 'email',
         recipient: options.to,
       };
-    } catch (error: any) {
-      this.logger.error(`Email sending failed to ${options.to}: ${error.message}`, error.stack, 'EmailService');
-      throw new Error(`Email sending failed: ${error.message}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`Email sending failed to ${options.to}: ${errorMessage}`, errorStack, 'EmailService');
+      throw new Error(`Email sending failed: ${errorMessage}`);
     }
   }
 
-  private formatHtmlMessage(message: string, templateData?: Record<string, any>): string {
+  private formatHtmlMessage(message: string, templateData?: Record<string, unknown>): string {
     // Simple HTML formatting
     let html = message.replace(/\n/g, '<br>');
 

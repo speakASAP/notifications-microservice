@@ -26,11 +26,13 @@ Centralized notification service for the FlipFlop.cz e-commerce platform. Handle
 ## API Endpoints
 
 ### Send Notification
-```
+
+```text
 POST /notifications/send
 ```
 
 **Request Body**:
+
 ```json
 {
   "channel": "email|telegram|whatsapp",
@@ -40,11 +42,34 @@ POST /notifications/send
   "message": "Notification message with {{template}} variables",
   "templateData": {
     "template": "value"
-  }
+  },
+  "botToken": "optional-per-request-bot-token",
+  "chatId": "optional-chat-id-alternative-to-recipient",
+  "parseMode": "HTML|Markdown|MarkdownV2",
+  "inlineKeyboard": [
+    [
+      {
+        "text": "Button Text",
+        "url": "https://example.com"
+      }
+    ]
+  ]
 }
 ```
 
+**Telegram-Specific Fields** (optional):
+
+- `botToken`: Per-request bot token (overrides global TELEGRAM_BOT_TOKEN from .env)
+- `chatId`: Chat ID (alternative to recipient field for Telegram)
+- `parseMode`: Message parse mode - "HTML", "Markdown", or "MarkdownV2" (default: "HTML")
+- `inlineKeyboard`: Array of button rows, each row is an array of button objects with:
+  - `text`: Button text (required)
+  - `url`: URL to open when button is clicked
+  - `callback_data`: Data to send in callback query
+  - Other Telegram button options (web_app, login_url, etc.)
+
 **Response**:
+
 ```json
 {
   "success": true,
@@ -59,11 +84,13 @@ POST /notifications/send
 ```
 
 ### Get Notification History
-```
+
+```text
 GET /notifications/history?limit=50&offset=0
 ```
 
 **Response**:
+
 ```json
 {
   "success": true,
@@ -83,11 +110,13 @@ GET /notifications/history?limit=50&offset=0
 ```
 
 ### Get Notification Status
-```
+
+```text
 GET /notifications/status/:id
 ```
 
 **Response**:
+
 ```json
 {
   "success": true,
@@ -110,7 +139,7 @@ See `.env.example` for all required environment variables. Key variables:
 
 ```env
 # Service Configuration
-PORT=3010
+PORT=3368
 NODE_ENV=production
 CORS_ORIGIN=*
 
@@ -129,6 +158,9 @@ SENDGRID_FROM_NAME=FlipFlop.cz
 
 # Telegram Configuration
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+TELEGRAM_BOT_USERNAME=YourBotName
+TELEGRAM_CHAT_ID=default_chat_id
+TELEGRAM_API_URL=https://api.telegram.org/bot
 
 # WhatsApp Configuration
 WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id
@@ -142,18 +174,21 @@ LOG_LEVEL=info
 ## Running the Service
 
 ### Development
+
 ```bash
 npm install
 npm run start:dev
 ```
 
 ### Production
+
 ```bash
 npm run build
 npm run start:prod
 ```
 
 ### Docker (Development)
+
 ```bash
 docker compose up -d
 ```
@@ -178,26 +213,92 @@ CREATE DATABASE notifications;
 
 The service will automatically create the `notifications` table on first run if `DB_SYNC=true` (development only). For production, use migrations or manually create the table schema.
 
-## Integration with E-commerce Platform
+## Integration Examples
 
-The e-commerce platform integrates with this service via HTTP:
+### Basic Telegram Notification
 
 ```typescript
-// Example integration
-const response = await fetch('http://notification-microservice:3010/notifications/send', {
+// Example: Basic Telegram notification
+const response = await fetch('https://notifications.statex.cz/notifications/send', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
-    channel: 'email',
-    type: 'order_confirmation',
-    recipient: 'customer@example.com',
-    subject: 'Order Confirmation',
-    message: 'Your order #{{orderNumber}} has been confirmed.',
-    templateData: {
-      orderNumber: '12345'
-    }
+    channel: 'telegram',
+    type: 'custom',
+    recipient: '694579866',
+    message: 'Hello! This is a test message.'
   })
 });
+```
+
+### Telegram with Inline Keyboard
+
+```typescript
+// Example: Telegram notification with inline keyboard buttons
+const response = await fetch('https://notifications.statex.cz/notifications/send', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    channel: 'telegram',
+    type: 'custom',
+    recipient: '694579866',
+    message: 'Your prototype is ready!',
+    inlineKeyboard: [
+      [
+        { text: '📊 View Dashboard', url: 'https://statex.ai/dashboard' }
+      ],
+      [
+        { text: '🤖 View Results', url: 'https://statex.ai/prototype/123' }
+      ]
+    ]
+  })
+});
+```
+
+### Telegram with User-Specific Bot Token
+
+```typescript
+// Example: Using per-request bot token (for user-specific credentials)
+const response = await fetch('https://notifications.statex.cz/notifications/send', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    channel: 'telegram',
+    type: 'custom',
+    recipient: 'user_chat_id',
+    message: 'Price alert triggered!',
+    botToken: 'user_specific_bot_token',  // Overrides global token
+    parseMode: 'HTML'
+  })
+});
+```
+
+### Python Integration (statex/crypto-ai-agent)
+
+```python
+import requests
+
+# Send Telegram notification via microservice
+payload = {
+    "channel": "telegram",
+    "type": "custom",
+    "recipient": chat_id,
+    "chatId": chat_id,
+    "message": message,
+    "botToken": bot_token,  # Optional: user-specific token
+    "parseMode": "HTML",
+    "inlineKeyboard": [
+        [
+            {"text": "View Dashboard", "url": "https://statex.ai/dashboard"}
+        ]
+    ]
+}
+
+response = requests.post(
+    "https://notifications.statex.cz/notifications/send",
+    json=payload,
+    timeout=10
+)
 ```
 
 ## Production Deployment
@@ -208,11 +309,12 @@ For production deployment instructions, see [DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 The service provides a health check endpoint:
 
-```
+```text
 GET /health
 ```
 
 Returns:
+
 ```json
 {
   "success": true,
@@ -225,6 +327,7 @@ Returns:
 ## Logs
 
 Logs are stored in the `./logs/` directory:
+
 - `info.log` - Info level logs
 - `error.log` - Error level logs
 - `all.log` - All logs combined

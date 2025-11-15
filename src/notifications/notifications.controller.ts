@@ -16,9 +16,10 @@ export class NotificationsController {
     try {
       const result = await this.notificationsService.send(sendNotificationDto);
       return ApiResponseUtil.success(result);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new HttpException(
-        ApiResponseUtil.error('SEND_FAILED', error.message),
+        ApiResponseUtil.error('SEND_FAILED', errorMessage),
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
@@ -35,9 +36,10 @@ export class NotificationsController {
         offset || 0,
       );
       return ApiResponseUtil.success(history);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new HttpException(
-        ApiResponseUtil.error('HISTORY_FAILED', error.message),
+        ApiResponseUtil.error('HISTORY_FAILED', errorMessage),
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
@@ -48,15 +50,16 @@ export class NotificationsController {
     try {
       const status = await this.notificationsService.getStatus(id);
       return ApiResponseUtil.success(status);
-    } catch (error: any) {
-      if (error.message.includes('not found')) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (error instanceof Error && error.message.includes('not found')) {
         throw new HttpException(
-          ApiResponseUtil.error('NOT_FOUND', error.message),
+          ApiResponseUtil.error('NOT_FOUND', errorMessage),
           HttpStatus.NOT_FOUND,
         );
       }
       throw new HttpException(
-        ApiResponseUtil.error('STATUS_FAILED', error.message),
+        ApiResponseUtil.error('STATUS_FAILED', errorMessage),
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

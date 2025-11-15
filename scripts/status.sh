@@ -24,9 +24,9 @@ fi
 # Check health endpoint
 echo ""
 echo "🏥 Health Check:"
-if docker exec notification-microservice wget --quiet --tries=1 --spider http://localhost:3010/health 2>/dev/null; then
+if docker exec notification-microservice wget --quiet --tries=1 --spider http://localhost:3368/health 2>/dev/null; then
   echo "✅ Health endpoint is responding"
-  docker exec notification-microservice wget -qO- http://localhost:3010/health | jq . 2>/dev/null || docker exec notification-microservice wget -qO- http://localhost:3010/health
+  docker exec notification-microservice wget -qO- http://localhost:3368/health | jq . 2>/dev/null || docker exec notification-microservice wget -qO- http://localhost:3368/health
 else
   echo "❌ Health endpoint is not responding"
 fi
