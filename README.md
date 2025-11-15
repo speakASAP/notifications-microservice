@@ -12,7 +12,7 @@ Centralized notification service for the FlipFlop.cz e-commerce platform. Handle
 - ✅ **Notification History** - Complete history of all sent notifications
 - ✅ **Status Tracking** - Track notification status (pending, sent, failed)
 - ✅ **Database Integration** - PostgreSQL storage for notification records
-- ✅ **Comprehensive Logging** - Centralized logging for all operations
+- ✅ **Comprehensive Logging** - Centralized logging via external logging microservice with local fallback
 
 ## Technology Stack
 
@@ -21,7 +21,7 @@ Centralized notification service for the FlipFlop.cz e-commerce platform. Handle
 - **Email**: SendGrid
 - **Telegram**: Telegram Bot API
 - **WhatsApp**: WhatsApp Business API (Meta)
-- **Logging**: Custom logger service
+- **Logging**: External centralized logging microservice with local file fallback
 
 ## API Endpoints
 
@@ -169,6 +169,7 @@ WHATSAPP_API_URL=https://graph.facebook.com/v18.0
 
 # Logging Configuration
 LOG_LEVEL=info
+LOGGING_SERVICE_URL=http://logging-microservice:3268
 ```
 
 ## Running the Service
@@ -326,11 +327,31 @@ Returns:
 
 ## Logs
 
-Logs are stored in the `./logs/` directory:
+The service uses a centralized logging system that integrates with the external logging microservice (`../logging-microservice/`). Logs are sent to the logging microservice via HTTP API and also stored locally as a fallback.
+
+### Logging Configuration
+
+- **External Logging**: Logs are sent to `http://logging-microservice:3268/api/logs` (configured via `LOGGING_SERVICE_URL`)
+- **Local Fallback**: If the logging service is unavailable, logs are written to local files in `./logs/` directory
+- **Service Name**: All logs are tagged with service name `notification-microservice`
+
+### Local Log Files
+
+Logs are stored in the `./logs/` directory as fallback:
 
 - `info.log` - Info level logs
 - `error.log` - Error level logs
 - `all.log` - All logs combined
+
+### Log Format
+
+Logs sent to the external service include:
+
+- **level**: `error`, `warn`, `info`, `debug`
+- **message**: Log message text
+- **service**: `notification-microservice`
+- **timestamp**: ISO 8601 timestamp
+- **metadata**: Additional context (service name, stack traces for errors)
 
 ## Support
 
