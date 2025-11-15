@@ -1,5 +1,5 @@
 {
-  "name": "notification-microservice",
+  "name": "notifications-microservice",
   "version": "1.0.0",
   "description": "Centralized notification service for multi-channel notifications",
   "main": "dist/main.js",

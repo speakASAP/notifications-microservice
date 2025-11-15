@@ -16,7 +16,7 @@ echo "=================================================="
 # Check if notification service is running
 echo ""
 echo "1. Checking Notification Service Status..."
-if docker ps | grep -q notification-microservice; then
+if docker ps | grep -q notifications-microservice; then
   echo "✅ Notification service container is running"
 else
   echo "❌ Notification service container is not running"
@@ -55,7 +55,7 @@ if [ -n "$ECOMMERCE_CONTAINERS" ]; then
   echo "4. Testing Connectivity from E-commerce Services..."
   echo "$ECOMMERCE_CONTAINERS" | while read container; do
     echo "   Testing from $container..."
-    if docker exec "$container" curl -s http://notification-microservice:3368/health >/dev/null 2>&1; then
+    if docker exec "$container" curl -s http://notifications-microservice:3368/health >/dev/null 2>&1; then
       echo "   ✅ $container can reach notification service"
     else
       echo "   ❌ $container cannot reach notification service"
@@ -116,11 +116,11 @@ echo ""
 echo "8. Checking Network Configuration..."
 if docker network inspect nginx-network >/dev/null 2>&1; then
   echo "✅ nginx-network exists"
-  if docker network inspect nginx-network | grep -q notification-microservice; then
+  if docker network inspect nginx-network | grep -q notifications-microservice; then
     echo "✅ Notification service is on nginx-network"
   else
     echo "❌ Notification service is not on nginx-network"
-    echo "   Connect it: docker network connect nginx-network notification-microservice"
+    echo "   Connect it: docker network connect nginx-network notifications-microservice"
   fi
 else
   echo "❌ nginx-network does not exist"
@@ -142,7 +142,7 @@ fi
 echo ""
 echo "📝 Next Steps:"
 echo "   1. Ensure e-commerce services have NOTIFICATION_SERVICE_URL in .env:"
-echo "      NOTIFICATION_SERVICE_URL=http://notification-microservice:3368"
+echo "      NOTIFICATION_SERVICE_URL=http://notifications-microservice:3368"
 echo "   2. Ensure e-commerce services are on nginx-network"
 echo "   3. Test order creation to verify notification sending"
 echo ""

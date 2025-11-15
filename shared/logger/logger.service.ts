@@ -13,7 +13,7 @@ import * as path from 'path';
 export class LoggerService implements NestLoggerService {
   private logDir: string;
   private loggingServiceUrl: string | undefined;
-  private readonly serviceName = 'notification-microservice';
+  private readonly serviceName = 'notifications-microservice';
   private readonly httpTimeout = 5000; // 5 seconds
 
   constructor(

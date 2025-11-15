@@ -27,7 +27,7 @@ BASIC_PAYLOAD=$(cat <<EOF
   "channel": "telegram",
   "type": "custom",
   "recipient": "$CHAT_ID",
-  "message": "🧪 Test message from notification-microservice - Basic test"
+  "message": "🧪 Test message from notifications-microservice - Basic test"
 }
 EOF
 )

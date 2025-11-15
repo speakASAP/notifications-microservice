@@ -12,7 +12,7 @@ export class HealthController {
       success: true,
       status: 'ok',
       timestamp: new Date().toISOString(),
-      service: 'notification-microservice',
+      service: 'notifications-microservice',
     };
   }
 }

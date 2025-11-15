@@ -321,7 +321,7 @@ Returns:
   "success": true,
   "status": "ok",
   "timestamp": "2024-01-01T00:00:00.000Z",
-  "service": "notification-microservice"
+  "service": "notifications-microservice"
 }
 ```
 
@@ -333,7 +333,7 @@ The service uses a centralized logging system that integrates with the external 
 
 - **External Logging**: Logs are sent to `http://logging-microservice:3268/api/logs` (configured via `LOGGING_SERVICE_URL`)
 - **Local Fallback**: If the logging service is unavailable, logs are written to local files in `./logs/` directory
-- **Service Name**: All logs are tagged with service name `notification-microservice`
+- **Service Name**: All logs are tagged with service name `notifications-microservice`
 
 ### Local Log Files
 
@@ -349,7 +349,7 @@ Logs sent to the external service include:
 
 - **level**: `error`, `warn`, `info`, `debug`
 - **message**: Log message text
-- **service**: `notification-microservice`
+- **service**: `notifications-microservice`
 - **timestamp**: ISO 8601 timestamp
 - **metadata**: Additional context (service name, stack traces for errors)
 

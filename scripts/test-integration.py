@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script for notification-microservice Telegram integration
+Test script for notifications-microservice Telegram integration
 Tests the service from Python (like statex and crypto-ai-agent)
 """
 

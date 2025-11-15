@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: notification-microservice
+    container_name: notifications-microservice
     ports:
       - "3368:3368"
     env_file:
