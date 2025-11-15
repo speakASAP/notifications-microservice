@@ -198,11 +198,11 @@ docker compose up -d
 
 The project includes deployment scripts in the `scripts/` directory:
 
-- `./scripts/deploy.sh` - Full deployment with health checks
-- `./scripts/start.sh` - Start the service
-- `./scripts/stop.sh` - Stop the service
-- `./scripts/restart.sh` - Restart the service
-- `./scripts/status.sh` - Check service status and health
+- `./scripts/deploy.sh` - Full deployment with health checks (builds Docker image, starts container, verifies health)
+- `./scripts/status.sh` - Check service status and health endpoint
+- `./scripts/test-telegram.sh` - Test Telegram notification integration
+- `./scripts/test-integration.py` - Python integration test script
+- `./scripts/verify-integration.sh` - Verify service integration with other microservices
 
 ## Database Setup
 
@@ -230,6 +230,9 @@ const response = await fetch('https://notifications.statex.cz/notifications/send
     message: 'Hello! This is a test message.'
   })
 });
+
+const result = await response.json();
+console.log(result);
 ```
 
 ### Telegram with Inline Keyboard
@@ -254,6 +257,9 @@ const response = await fetch('https://notifications.statex.cz/notifications/send
     ]
   })
 });
+
+const result = await response.json();
+console.log(result);
 ```
 
 ### Telegram with User-Specific Bot Token
@@ -272,6 +278,9 @@ const response = await fetch('https://notifications.statex.cz/notifications/send
     parseMode: 'HTML'
   })
 });
+
+const result = await response.json();
+console.log(result);
 ```
 
 ### Python Integration (statex/crypto-ai-agent)
@@ -300,11 +309,78 @@ response = requests.post(
     json=payload,
     timeout=10
 )
+
+result = response.json()
+print(result)
+```
+
+### Email Notification
+
+```typescript
+// Example: Email notification
+const response = await fetch('https://notifications.statex.cz/notifications/send', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    channel: 'email',
+    type: 'order_confirmation',
+    recipient: 'customer@example.com',
+    subject: 'Order Confirmation #12345',
+    message: 'Thank you for your order! Your order #12345 has been confirmed.',
+    templateData: {
+      orderNumber: '12345',
+      customerName: 'John Doe'
+    }
+  })
+});
+
+const result = await response.json();
+console.log(result);
 ```
 
 ## Production Deployment
 
-For production deployment instructions, see [DEPLOYMENT.md](docs/DEPLOYMENT.md).
+The service is deployed and available at:
+
+- **Production URL**: `https://notifications.statex.cz`
+- **Internal URL**: `http://notifications-microservice:3368` (within Docker network)
+- **Port**: `3368`
+
+### Quick Deployment Steps
+
+1. **Pull latest code**:
+
+   ```bash
+   ssh statex "cd /home/statex/notifications-microservice && git pull origin master"
+   ```
+
+2. **Deploy service**:
+
+   ```bash
+   ssh statex "cd /home/statex/notifications-microservice && ./scripts/deploy.sh"
+   ```
+
+3. **Register domain** (if not already registered):
+
+   ```bash
+   ssh statex "cd /home/statex/nginx-microservice && ./scripts/add-domain.sh notifications.statex.cz notifications-microservice 3368 admin@statex.cz"
+   ```
+
+4. **Verify deployment**:
+
+   ```bash
+   curl https://notifications.statex.cz/health
+   ```
+
+### Production Environment
+
+- **Server**: Production server accessible via `ssh statex`
+- **Container Name**: `notifications-microservice`
+- **Network**: Connected to `nginx-network` for internal service communication
+- **SSL Certificate**: Managed via Let's Encrypt (auto-renewal configured)
+- **Nginx Configuration**: `/home/statex/nginx-microservice/nginx/conf.d/notifications.statex.cz.conf`
+
+For detailed deployment instructions, see [DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Health Check
 
