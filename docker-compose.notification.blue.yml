@@ -28,7 +28,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - LOGGING_SERVICE_URL=${LOGGING_SERVICE_URL:-http://logging-microservice:3268}
     volumes:
-      - ./logs:/app/logs
+      - /srv/storagebox/statex/docker-volumes/notifications-microservice/logs:/app/logs
     networks:
       - nginx-network
     restart: unless-stopped
