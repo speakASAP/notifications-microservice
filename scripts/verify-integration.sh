@@ -23,10 +23,16 @@ else
   exit 1
 fi
 
+# Load PORT from .env if available
+if [ -f .env ]; then
+  source .env
+fi
+PORT=${PORT:-3368}
+
 # Check health endpoint
 echo ""
 echo "2. Testing Health Endpoint..."
-HEALTH_RESPONSE=$(curl -s http://localhost:3368/health 2>/dev/null || echo "FAILED")
+HEALTH_RESPONSE=$(curl -s "http://localhost:${PORT}/health" 2>/dev/null || echo "FAILED")
 if echo "$HEALTH_RESPONSE" | grep -q "success"; then
   echo "✅ Health endpoint is responding"
   echo "$HEALTH_RESPONSE" | jq . 2>/dev/null || echo "$HEALTH_RESPONSE"
@@ -55,7 +61,7 @@ if [ -n "$ECOMMERCE_CONTAINERS" ]; then
   echo "4. Testing Connectivity from E-commerce Services..."
   echo "$ECOMMERCE_CONTAINERS" | while read container; do
     echo "   Testing from $container..."
-    if docker exec "$container" curl -s http://notifications-microservice:3368/health >/dev/null 2>&1; then
+    if docker exec "$container" curl -s "http://notifications-microservice:${PORT}/health" >/dev/null 2>&1; then
       echo "   ✅ $container can reach notification service"
     else
       echo "   ❌ $container cannot reach notification service"
@@ -68,7 +74,7 @@ fi
 # Test notification sending
 echo ""
 echo "5. Testing Notification Sending..."
-TEST_RESPONSE=$(curl -s -X POST http://localhost:3368/notifications/send \
+TEST_RESPONSE=$(curl -s -X POST "http://localhost:${PORT}/notifications/send" \
   -H 'Content-Type: application/json' \
   -d '{
     "channel": "email",
@@ -87,7 +93,7 @@ if echo "$TEST_RESPONSE" | grep -q "success"; then
     # Check notification status
     echo ""
     echo "6. Checking Notification Status..."
-    STATUS_RESPONSE=$(curl -s "http://localhost:3368/notifications/status/$NOTIFICATION_ID" 2>/dev/null || echo "FAILED")
+    STATUS_RESPONSE=$(curl -s "http://localhost:${PORT}/notifications/status/$NOTIFICATION_ID" 2>/dev/null || echo "FAILED")
     if echo "$STATUS_RESPONSE" | grep -q "success"; then
       echo "✅ Notification status retrieved"
       echo "$STATUS_RESPONSE" | jq '.data | {id, status, channel, recipient}' 2>/dev/null || echo "$STATUS_RESPONSE"
@@ -103,7 +109,7 @@ fi
 # Check notification history
 echo ""
 echo "7. Testing Notification History..."
-HISTORY_RESPONSE=$(curl -s "http://localhost:3368/notifications/history?limit=5" 2>/dev/null || echo "FAILED")
+HISTORY_RESPONSE=$(curl -s "http://localhost:${PORT}/notifications/history?limit=5" 2>/dev/null || echo "FAILED")
 if echo "$HISTORY_RESPONSE" | grep -q "success"; then
   COUNT=$(echo "$HISTORY_RESPONSE" | jq '.data | length' 2>/dev/null || echo "0")
   echo "✅ Notification history retrieved ($COUNT notifications)"
@@ -142,7 +148,7 @@ fi
 echo ""
 echo "📝 Next Steps:"
 echo "   1. Ensure e-commerce services have NOTIFICATION_SERVICE_URL in .env:"
-echo "      NOTIFICATION_SERVICE_URL=http://notifications-microservice:3368"
+echo "      NOTIFICATION_SERVICE_URL=http://notifications-microservice:\${PORT:-3368}  # PORT configured in notifications-microservice/.env"
 echo "   2. Ensure e-commerce services are on nginx-network"
 echo "   3. Test order creation to verify notification sending"
 echo ""

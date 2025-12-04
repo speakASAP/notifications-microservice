@@ -37,7 +37,13 @@ MAX_RETRIES=10
 RETRY_COUNT=0
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-  if docker exec notifications-microservice wget --quiet --tries=1 --spider http://localhost:3368/health 2>/dev/null; then
+  # Load PORT from .env if available
+  if [ -f .env ]; then
+    source .env
+  fi
+  PORT=${PORT:-3368}
+  
+  if docker exec notifications-microservice wget --quiet --tries=1 --spider "http://localhost:${PORT}/health" 2>/dev/null; then
     echo "✅ Service is healthy!"
     break
   fi

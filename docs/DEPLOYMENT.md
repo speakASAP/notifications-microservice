@@ -14,10 +14,10 @@ This guide covers the complete production deployment process for the notificatio
 - **Server**: Production server (accessible via `ssh statex`)
 - **Service Path**: `/home/statex/notifications-microservice`
 - **Container Name**: `notifications-microservice`
-- **Port**: `3368`
+- **Port**: `${PORT:-3368}` (configured in `notifications-microservice/.env`)
 - **Network**: `nginx-network` (Docker network)
 - **External URL**: `https://notifications.statex.cz`
-- **Internal URL**: `http://notifications-microservice:3368`
+- **Internal URL**: `http://notifications-microservice:${PORT:-3368}` (port configured in `notifications-microservice/.env`)
 
 ## Deployment Steps
 
@@ -45,7 +45,7 @@ ssh statex "cd /home/statex/notifications-microservice && ./scripts/deploy.sh"
 If the domain is not already registered:
 
 ```bash
-ssh statex "cd /home/statex/nginx-microservice && ./scripts/add-domain.sh notifications.statex.cz notifications-microservice 3368 admin@statex.cz"
+ssh statex "cd /home/statex/nginx-microservice && ./scripts/add-domain.sh notifications.statex.cz notifications-microservice \${PORT:-3368} admin@statex.cz"  # PORT configured in notifications-microservice/.env
 ```
 
 This script will:
@@ -88,7 +88,8 @@ Check both external and internal access:
 ssh statex "curl -s https://notifications.statex.cz/health"
 
 # Internal Docker network access
-ssh statex "docker run --rm --network nginx-network alpine/curl:latest curl -s http://notifications-microservice:3368/health"
+# Port configured in notifications-microservice/.env: PORT (default: 3368)
+ssh statex "docker run --rm --network nginx-network alpine/curl:latest curl -s http://notifications-microservice:\${PORT:-3368}/health"
 ```
 
 Expected response:
@@ -125,10 +126,10 @@ ssh statex "cd /home/statex/notifications-microservice && cat .env | grep -v PAS
 
 Key variables:
 
-- `PORT=3368` - Service port
+- `PORT=3368` - Service port (configured in `notifications-microservice/.env`, default: 3368)
 - `NODE_ENV=production` - Environment mode
 - `DB_HOST=db-server-postgres` - Database host
-- `LOGGING_SERVICE_URL=http://logging-microservice:3268` - Logging service URL
+- `LOGGING_SERVICE_URL=http://logging-microservice:3367` - Logging service URL
 
 ## Troubleshooting
 
@@ -149,7 +150,8 @@ Key variables:
 3. Verify port availability:
 
    ```bash
-   ssh statex "lsof -i :3368"
+   # Port configured in notifications-microservice/.env: PORT (default: 3368)
+   ssh statex "lsof -i :\${PORT:-3368}"
    ```
 
 ### Nginx Configuration Issues
@@ -169,7 +171,8 @@ Key variables:
 3. Verify upstream connectivity:
 
    ```bash
-   ssh statex "docker exec nginx-microservice curl -s http://notifications-microservice:3368/health"
+   # Port configured in notifications-microservice/.env: PORT (default: 3368)
+   ssh statex "docker exec nginx-microservice curl -s http://notifications-microservice:\${PORT:-3368}/health"
    ```
 
 ### SSL Certificate Issues
@@ -268,7 +271,7 @@ If deployment fails, you can rollback to a previous version:
 Deployment is successful when:
 
 - ✅ Service accessible: `https://notifications.statex.cz/health` returns success
-- ✅ Internal access: `http://notifications-microservice:3368/health` returns success
+- ✅ Internal access: `http://notifications-microservice:${PORT:-3368}/health` returns success (port configured in `notifications-microservice/.env`)
 - ✅ Container status: `docker ps` shows `(healthy)` status
 - ✅ No errors in logs: `docker logs notifications-microservice | grep -i error`
 - ✅ Nginx configuration valid: `docker exec nginx-microservice nginx -t` succeeds

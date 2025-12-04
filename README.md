@@ -139,7 +139,7 @@ See `.env.example` for all required environment variables. Key variables:
 
 ```env
 # Service Configuration
-PORT=3368
+PORT=3368  # Configured in notifications-microservice/.env (default: 3368)
 NODE_ENV=production
 CORS_ORIGIN=*
 
@@ -169,7 +169,7 @@ WHATSAPP_API_URL=https://graph.facebook.com/v18.0
 
 # Logging Configuration
 LOG_LEVEL=info
-LOGGING_SERVICE_URL=http://logging-microservice:3268
+LOGGING_SERVICE_URL=http://logging-microservice:${PORT:-3367}  # PORT configured in logging-microservice/.env
 ```
 
 ## Running the Service
@@ -338,13 +338,27 @@ const result = await response.json();
 console.log(result);
 ```
 
+## 🔌 Port Configuration
+
+**Port Range**: 33xx (shared microservices)
+
+| Service | Host Port | Container Port | .env Variable | Description |
+|---------|-----------|----------------|---------------|-------------|
+| **Notification Service** | `${PORT:-3368}` | `${PORT:-3368}` | `PORT` (notifications-microservice/.env) | Multi-channel notification service |
+
+**Note**:
+
+- All ports are configured in `notifications-microservice/.env`. The values shown are defaults.
+- All ports are exposed on `127.0.0.1` only (localhost) for security
+- External access is provided via nginx-microservice reverse proxy at `https://notifications.statex.cz`
+
 ## Production Deployment
 
 The service is deployed and available at:
 
 - **Production URL**: `https://notifications.statex.cz`
-- **Internal URL**: `http://notifications-microservice:3368` (within Docker network)
-- **Port**: `3368`
+- **Internal URL**: `http://notifications-microservice:${PORT:-3368}` (within Docker network, port configured in `notifications-microservice/.env`)
+- **Port**: `${PORT:-3368}` (configured in `notifications-microservice/.env`)
 
 ### Quick Deployment Steps
 
@@ -363,7 +377,8 @@ The service is deployed and available at:
 3. **Register domain** (if not already registered):
 
    ```bash
-   ssh statex "cd /home/statex/nginx-microservice && ./scripts/add-domain.sh notifications.statex.cz notifications-microservice 3368 admin@statex.cz"
+   # Port configured in notifications-microservice/.env: PORT (default: 3368)
+   ssh statex "cd /home/statex/nginx-microservice && ./scripts/add-domain.sh notifications.statex.cz notifications-microservice \${PORT:-3368} admin@statex.cz"
    ```
 
 4. **Verify deployment**:
@@ -407,7 +422,7 @@ The service uses a centralized logging system that integrates with the external 
 
 ### Logging Configuration
 
-- **External Logging**: Logs are sent to `http://logging-microservice:3268/api/logs` (configured via `LOGGING_SERVICE_URL`)
+- **External Logging**: Logs are sent to `http://logging-microservice:${PORT:-3367}/api/logs` (port configured in `logging-microservice/.env`, configured via `LOGGING_SERVICE_URL`)
 - **Local Fallback**: If the logging service is unavailable, logs are written to local files in `./logs/` directory
 - **Service Name**: All logs are tagged with service name `notifications-microservice`
 

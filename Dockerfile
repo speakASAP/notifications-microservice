@@ -29,8 +29,8 @@ RUN npm ci --only=production
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 
-# Expose port
-EXPOSE 3368
+# Expose port (default: 3368, configured via PORT env var)
+EXPOSE ${PORT:-3368}
 
 # Start application
 CMD ["node", "dist/src/main"]

@@ -21,12 +21,18 @@ else
   exit 1
 fi
 
+# Load PORT from .env if available
+if [ -f .env ]; then
+  source .env
+fi
+PORT=${PORT:-3368}
+
 # Check health endpoint
 echo ""
 echo "🏥 Health Check:"
-if docker exec notifications-microservice wget --quiet --tries=1 --spider http://localhost:3368/health 2>/dev/null; then
+if docker exec notifications-microservice wget --quiet --tries=1 --spider "http://localhost:${PORT}/health" 2>/dev/null; then
   echo "✅ Health endpoint is responding"
-  docker exec notifications-microservice wget -qO- http://localhost:3368/health | jq . 2>/dev/null || docker exec notifications-microservice wget -qO- http://localhost:3368/health
+  docker exec notifications-microservice wget -qO- "http://localhost:${PORT}/health" | jq . 2>/dev/null || docker exec notifications-microservice wget -qO- "http://localhost:${PORT}/health"
 else
   echo "❌ Health endpoint is not responding"
 fi
