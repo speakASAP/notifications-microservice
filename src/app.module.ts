@@ -6,6 +6,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { NotificationsModule } from './notifications/notifications.module';
 import { HealthController } from './health/health.controller';
+import { InfoController } from './info/info.controller';
 import { DatabaseModule } from '../shared/database/database.module';
 import { LoggerModule } from '../shared/logger/logger.module';
 
@@ -19,7 +20,7 @@ import { LoggerModule } from '../shared/logger/logger.module';
     LoggerModule,
     NotificationsModule,
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, InfoController],
   providers: [],
 })
 export class AppModule {}
