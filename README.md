@@ -365,7 +365,7 @@ The service is deployed and available at:
 1. **Pull latest code**:
 
    ```bash
-   ssh statex "cd /home/statex/notifications-microservice && git pull origin master"
+   ssh statex "cd /home/statex/notifications-microservice && git pull origin main"
    ```
 
 2. **Deploy service**:

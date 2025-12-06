@@ -24,7 +24,7 @@ This guide covers the complete production deployment process for the notificatio
 ### 1. Pull Latest Code
 
 ```bash
-ssh statex "cd /home/statex/notifications-microservice && git pull origin master"
+ssh statex "cd /home/statex/notifications-microservice && git pull origin main"
 ```
 
 ### 2. Deploy Service
