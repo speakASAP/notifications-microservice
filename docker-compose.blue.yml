@@ -31,6 +31,12 @@ services:
       - /srv/storagebox/statex/docker-volumes/notifications-microservice/logs:/app/logs
     networks:
       - nginx-network
+    deploy:
+      resources:
+        limits:
+          memory: 150M
+        reservations:
+          memory: 40M
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:${PORT:-3368}/health"]
