@@ -1,6 +1,6 @@
 # Notification Microservice
 
-Centralized notification service for the FlipFlop.cz e-commerce platform. Handles multi-channel notifications via Email, Telegram, and WhatsApp with full history tracking and status monitoring.
+Centralized notification service for the FlipFlop.cz flipflop platform. Handles multi-channel notifications via Email, Telegram, and WhatsApp with full history tracking and status monitoring.
 
 ## Features
 
@@ -138,6 +138,12 @@ GET /notifications/status/:id
 See `.env.example` for all required environment variables. Key variables:
 
 ```env
+# Service Domain - Used by nginx-microservice for auto-registry (required for correct domain detection)
+DOMAIN=notifications.statex.cz
+
+# Service Name - Used for logging and service identification
+SERVICE_NAME=notifications-microservice
+
 # Service Configuration
 PORT=3368  # Configured in notifications-microservice/.env (default: 3368)
 NODE_ENV=production
