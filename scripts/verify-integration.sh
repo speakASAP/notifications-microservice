@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Notification Microservice Integration Verification Script
-# Tests connectivity and integration with e-commerce services
+# Tests connectivity and integration with flipflop services
 
 set -e
 
@@ -41,25 +41,25 @@ else
   exit 1
 fi
 
-# Check if e-commerce services are running
+# Check if flipflop services are running
 echo ""
-echo "3. Checking E-commerce Services..."
-ECOMMERCE_CONTAINERS=$(docker ps --format '{{.Names}}' | grep -E 'e-commerce|commerce' || echo "")
-if [ -z "$ECOMMERCE_CONTAINERS" ]; then
-  echo "⚠️  No e-commerce containers found running"
-  echo "   E-commerce services need to be deployed for full integration testing"
+echo "3. Checking flipflop Services..."
+flipflop_CONTAINERS=$(docker ps --format '{{.Names}}' | grep -E 'flipflop|commerce' || echo "")
+if [ -z "$flipflop_CONTAINERS" ]; then
+  echo "⚠️  No flipflop containers found running"
+  echo "   flipflop services need to be deployed for full integration testing"
 else
-  echo "✅ Found e-commerce containers:"
-  echo "$ECOMMERCE_CONTAINERS" | while read container; do
+  echo "✅ Found flipflop containers:"
+  echo "$flipflop_CONTAINERS" | while read container; do
     echo "   - $container"
   done
 fi
 
-# Test connectivity from e-commerce containers
-if [ -n "$ECOMMERCE_CONTAINERS" ]; then
+# Test connectivity from flipflop containers
+if [ -n "$flipflop_CONTAINERS" ]; then
   echo ""
-  echo "4. Testing Connectivity from E-commerce Services..."
-  echo "$ECOMMERCE_CONTAINERS" | while read container; do
+  echo "4. Testing Connectivity from flipflop Services..."
+  echo "$flipflop_CONTAINERS" | while read container; do
     echo "   Testing from $container..."
     if docker exec "$container" curl -s "http://notifications-microservice:${PORT}/health" >/dev/null 2>&1; then
       echo "   ✅ $container can reach notification service"
@@ -139,17 +139,17 @@ echo "📊 Integration Verification Summary"
 echo "=================================================="
 echo "✅ Notification service is running and healthy"
 echo "✅ API endpoints are responding"
-if [ -z "$ECOMMERCE_CONTAINERS" ]; then
-  echo "⚠️  E-commerce services are not running"
-  echo "   Deploy e-commerce services to complete integration testing"
+if [ -z "$flipflop_CONTAINERS" ]; then
+  echo "⚠️  flipflop services are not running"
+  echo "   Deploy flipflop services to complete integration testing"
 else
-  echo "✅ E-commerce services are running"
+  echo "✅ flipflop services are running"
 fi
 echo ""
 echo "📝 Next Steps:"
-echo "   1. Ensure e-commerce services have NOTIFICATION_SERVICE_URL in .env:"
+echo "   1. Ensure flipflop services have NOTIFICATION_SERVICE_URL in .env:"
 echo "      NOTIFICATION_SERVICE_URL=http://notifications-microservice:\${PORT:-3368}  # PORT configured in notifications-microservice/.env"
-echo "   2. Ensure e-commerce services are on nginx-network"
+echo "   2. Ensure flipflop services are on nginx-network"
 echo "   3. Test order creation to verify notification sending"
 echo ""
 
