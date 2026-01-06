@@ -96,6 +96,20 @@ export class Notification {
   })
   messageId: string | null;
 
+  @Column({
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
+  provider: string | null; // Email provider used: 'sendgrid', 'ses', etc.
+
+  @Column({
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
+  direction: string | null; // 'inbound' | 'outbound'
+
   @CreateDateColumn()
   @Index('idx_notifications_created_at')
   createdAt: Date;

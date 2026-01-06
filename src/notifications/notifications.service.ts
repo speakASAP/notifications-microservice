@@ -83,6 +83,7 @@ export class NotificationsService {
             subject: subject || this.getDefaultSubject(type),
             message,
             templateData,
+            emailProvider: sendNotificationDto.emailProvider, // Pass provider selection
           });
           break;
 

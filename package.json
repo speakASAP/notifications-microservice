@@ -24,6 +24,7 @@
     "@nestjs/axios": "^3.0.1",
     "@nestjs/schedule": "^4.0.0",
     "@sendgrid/mail": "^8.1.0",
+    "@aws-sdk/client-ses": "^3.0.0",
     "typeorm": "^0.3.17",
     "pg": "^8.11.3",
     "axios": "^1.6.2",

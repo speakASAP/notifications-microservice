@@ -34,6 +34,12 @@ export enum TelegramParseMode {
   MARKDOWNV2 = 'MarkdownV2',
 }
 
+export enum EmailProvider {
+  SENDGRID = 'sendgrid',
+  SES = 'ses',
+  AUTO = 'auto',
+}
+
 /**
  * Telegram Web App interface
  */
@@ -144,4 +150,9 @@ export class SendNotificationDto {
   @Type(() => Array)
   @IsOptional()
   inlineKeyboard?: InlineKeyboardButton[][]; // Optional inline keyboard
+
+  // Email provider selection (optional, defaults to environment variable or 'sendgrid')
+  @IsEnum(EmailProvider)
+  @IsOptional()
+  emailProvider?: EmailProvider;
 }
