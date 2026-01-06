@@ -4,7 +4,9 @@ Centralized notification service for the FlipFlop.cz flipflop platform. Handles 
 
 ## Features
 
-- ✅ **Email Notifications** - Via SendGrid API
+- ✅ **Email Notifications** - Via SendGrid API and AWS SES (multi-provider support)
+- ✅ **Inbound Email Handling** - Receive emails via AWS SES SNS webhook
+- ✅ **Email Provider Selection** - Choose provider per-request or via environment variable
 - ✅ **Telegram Notifications** - Via Telegram Bot API
 - ✅ **WhatsApp Notifications** - Via WhatsApp Business API
 - ✅ **Template Support** - Dynamic message templating with variable substitution
@@ -18,7 +20,7 @@ Centralized notification service for the FlipFlop.cz flipflop platform. Handles 
 
 - **Framework**: NestJS (TypeScript)
 - **Database**: PostgreSQL (via TypeORM)
-- **Email**: SendGrid
+- **Email**: SendGrid and AWS SES (multi-provider support)
 - **Telegram**: Telegram Bot API
 - **WhatsApp**: WhatsApp Business API (Meta)
 - **Logging**: External centralized logging microservice with local file fallback
@@ -43,6 +45,7 @@ POST /notifications/send
   "templateData": {
     "template": "value"
   },
+  "emailProvider": "sendgrid|ses|auto",
   "botToken": "optional-per-request-bot-token",
   "chatId": "optional-chat-id-alternative-to-recipient",
   "parseMode": "HTML|Markdown|MarkdownV2",
@@ -56,6 +59,14 @@ POST /notifications/send
   ]
 }
 ```
+
+**Email Provider Selection** (optional, for email channel only):
+
+- `emailProvider`: Choose email provider for this request
+  - `"sendgrid"` - Use SendGrid (default if not specified)
+  - `"ses"` - Use AWS SES
+  - `"auto"` - Try AWS SES first, fallback to SendGrid on failure
+  - If not specified, uses `EMAIL_PROVIDER` environment variable or defaults to `"sendgrid"`
 
 **Telegram-Specific Fields** (optional):
 
@@ -133,6 +144,31 @@ GET /notifications/status/:id
 }
 ```
 
+### Inbound Email Webhook (AWS SES SNS)
+
+```text
+POST /email/inbound
+```
+
+**Description**: AWS SES SNS webhook endpoint for receiving inbound emails. AWS SES sends notifications via Amazon SNS when emails are received.
+
+**Request**: AWS SNS notification (handled automatically)
+
+**Response**:
+
+```json
+{
+  "status": "processed",
+  "message": "Email notification processed"
+}
+```
+
+**Setup**:
+1. Configure AWS SES to send notifications to an SNS topic
+2. Configure SNS topic to send HTTP(S) POST requests to `https://notifications.statex.cz/email/inbound`
+3. The service will automatically confirm SNS subscription and process inbound emails
+4. Inbound emails are stored in the `inbound_emails` database table
+
 ## Environment Variables
 
 See `.env.example` for all required environment variables. Key variables:
@@ -157,10 +193,21 @@ DB_PASSWORD=your_password
 DB_NAME=notifications
 DB_SYNC=false
 
+# Email Provider Selection (sendgrid|ses|auto)
+EMAIL_PROVIDER=auto
+
 # SendGrid Configuration
 SENDGRID_API_KEY=your_sendgrid_api_key
 SENDGRID_FROM_EMAIL=noreply@flipflop.cz
 SENDGRID_FROM_NAME=FlipFlop.cz
+
+# AWS SES Configuration
+AWS_SES_REGION=us-east-1
+AWS_SES_ACCESS_KEY_ID=your_aws_access_key_id
+AWS_SES_SECRET_ACCESS_KEY=your_aws_secret_access_key
+AWS_SES_FROM_EMAIL=noreply@speakasap.com
+AWS_SES_FROM_NAME=SpeakASAP
+AWS_SES_SNS_TOPIC_ARN=arn:aws:sns:us-east-1:123456789012:inbound-email
 
 # Telegram Configuration
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
@@ -218,7 +265,65 @@ The service requires a PostgreSQL database. Create the database:
 CREATE DATABASE notifications;
 ```
 
-The service will automatically create the `notifications` table on first run if `DB_SYNC=true` (development only). For production, use migrations or manually create the table schema.
+The service will automatically create the `notifications` and `inbound_emails` tables on first run if `DB_SYNC=true` (development only). For production, use migrations or manually create the table schema.
+
+## AWS SES Configuration
+
+### Email Sending Setup
+
+1. **Create AWS SES credentials**:
+   - Go to AWS IAM Console
+   - Create a new user with SES sending permissions
+   - Generate access key ID and secret access key
+   - Add credentials to `.env`:
+     ```env
+     AWS_SES_REGION=us-east-1
+     AWS_SES_ACCESS_KEY_ID=your_access_key_id
+     AWS_SES_SECRET_ACCESS_KEY=your_secret_access_key
+     AWS_SES_FROM_EMAIL=noreply@speakasap.com
+     AWS_SES_FROM_NAME=SpeakASAP
+     ```
+
+2. **Verify sender email**:
+   - In AWS SES Console, verify the sender email address (`AWS_SES_FROM_EMAIL`)
+   - If in sandbox mode, also verify recipient email addresses
+
+3. **Provider Selection**:
+   - Set `EMAIL_PROVIDER` environment variable to `ses`, `sendgrid`, or `auto`
+   - Or specify `emailProvider` per-request in API calls
+   - `auto` mode tries SES first, falls back to SendGrid on failure
+
+### Inbound Email Setup
+
+1. **Create SNS Topic**:
+   - Go to AWS SNS Console
+   - Create a new topic (e.g., `inbound-email`)
+   - Note the topic ARN
+
+2. **Configure SES to send to SNS**:
+   - Go to AWS SES Console → Email Receiving → Rule Sets
+   - Create a new rule set (or use default)
+   - Create a rule that:
+     - Matches all recipients (or specific domain)
+     - Action: Publish to SNS topic
+     - Select the SNS topic created above
+
+3. **Configure SNS to send to webhook**:
+   - Go to AWS SNS Console → Subscriptions
+   - Create subscription:
+     - Protocol: HTTPS
+     - Endpoint: `https://notifications.statex.cz/email/inbound`
+     - Enable raw message delivery: No (needed for SES notifications)
+
+4. **Confirm Subscription**:
+   - AWS SNS will send a subscription confirmation to the webhook
+   - The service automatically confirms the subscription
+   - Check SNS console to verify subscription is confirmed
+
+5. **Test Inbound Email**:
+   - Send an email to the verified recipient
+   - Check the `inbound_emails` table in the database
+   - Check service logs for processing status
 
 ## Integration Examples
 
@@ -323,7 +428,7 @@ print(result)
 ### Email Notification
 
 ```typescript
-// Example: Email notification
+// Example: Email notification via SendGrid (default)
 const response = await fetch('https://notifications.statex.cz/notifications/send', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
@@ -333,6 +438,56 @@ const response = await fetch('https://notifications.statex.cz/notifications/send
     recipient: 'customer@example.com',
     subject: 'Order Confirmation #12345',
     message: 'Thank you for your order! Your order #12345 has been confirmed.',
+    templateData: {
+      orderNumber: '12345',
+      customerName: 'John Doe'
+    }
+  })
+});
+
+const result = await response.json();
+console.log(result);
+```
+
+### Email via AWS SES
+
+```typescript
+// Example: Email notification via AWS SES
+const response = await fetch('https://notifications.statex.cz/notifications/send', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    channel: 'email',
+    type: 'order_confirmation',
+    recipient: 'customer@example.com',
+    subject: 'Order Confirmation #12345',
+    message: 'Thank you for your order! Your order #12345 has been confirmed.',
+    emailProvider: 'ses', // Use AWS SES
+    templateData: {
+      orderNumber: '12345',
+      customerName: 'John Doe'
+    }
+  })
+});
+
+const result = await response.json();
+console.log(result);
+```
+
+### Email with Auto Provider Selection
+
+```typescript
+// Example: Email with auto provider (tries SES first, falls back to SendGrid)
+const response = await fetch('https://notifications.statex.cz/notifications/send', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    channel: 'email',
+    type: 'order_confirmation',
+    recipient: 'customer@example.com',
+    subject: 'Order Confirmation #12345',
+    message: 'Thank you for your order! Your order #12345 has been confirmed.',
+    emailProvider: 'auto', // Try SES, fallback to SendGrid
     templateData: {
       orderNumber: '12345',
       customerName: 'John Doe'
