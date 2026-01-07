@@ -3,7 +3,8 @@
  * Handles AWS SES SNS webhook for inbound emails
  */
 
-import { Controller, Post, Body, Headers, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, Headers, HttpCode, HttpStatus, Req } from '@nestjs/common';
+import { Request } from 'express';
 import { InboundEmailService, SNSMessage } from './inbound-email.service';
 import { LoggerService } from '../../shared/logger/logger.service';
 import { Inject } from '@nestjs/common';
@@ -23,9 +24,12 @@ export class InboundEmailController {
    */
   @Post('inbound')
   @HttpCode(HttpStatus.OK)
-  async handleInbound(@Body() body: SNSMessage, @Headers() headers: any): Promise<{ status: string; message?: string }> {
+  async handleInbound(@Req() req: Request, @Body() body: SNSMessage, @Headers() headers: any): Promise<{ status: string; message?: string }> {
     this.logger.log(`Received inbound email webhook request`, 'InboundEmailController');
+    this.logger.log(`Request method: ${req.method}, URL: ${req.url}`, 'InboundEmailController');
     this.logger.log(`Request headers: ${JSON.stringify(headers)}`, 'InboundEmailController');
+    this.logger.log(`Request body (raw): ${JSON.stringify(req.body)}`, 'InboundEmailController');
+    this.logger.log(`Request body (parsed): ${JSON.stringify(body)}`, 'InboundEmailController');
     this.logger.log(`Request body type: ${body?.Type}, SubscribeURL: ${body?.SubscribeURL?.substring(0, 100)}...`, 'InboundEmailController');
 
     try {
