@@ -67,6 +67,7 @@ export class NotificationsService {
       message,
       templateData: templateData || null,
       status: NotificationStatus.PENDING,
+      provider: channel === NotificationChannel.EMAIL ? (sendNotificationDto.emailProvider || null) : null,
     });
 
     await this.notificationRepository.save(notification);
@@ -113,10 +114,14 @@ export class NotificationsService {
           throw new Error(`Unsupported notification channel: ${channel}`);
       }
 
-      // Update notification with success status
+      // Update notification with success status and provider
       notification.status = NotificationStatus.SENT;
       notification.messageId = result.messageId || null;
       notification.error = null;
+      // Update provider if it was determined during sending (for email channel)
+      if (channel === NotificationChannel.EMAIL && sendNotificationDto.emailProvider) {
+        notification.provider = sendNotificationDto.emailProvider;
+      }
       await this.notificationRepository.save(notification);
 
       this.logger.log(`Notification ${notification.id} sent successfully`, 'NotificationsService');

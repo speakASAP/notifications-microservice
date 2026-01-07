@@ -16,6 +16,8 @@ import { Notification } from '../../src/notifications/entities/notification.enti
       password: process.env.DB_PASSWORD || '',
       database: process.env.DB_NAME || 'notifications',
       entities: [Notification],
+      migrations: ['dist/src/migrations/*.js'],
+      migrationsRun: process.env.RUN_MIGRATIONS === 'true',
       synchronize: process.env.DB_SYNC === 'true',
       logging: process.env.NODE_ENV === 'development',
     }),
