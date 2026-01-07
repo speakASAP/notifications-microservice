@@ -468,14 +468,18 @@ export class InboundEmailService {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error(`[FORWARD] ❌ Failed to forward email ${email.id} to helpdesk: ${errorMessage}`, errorStack);
       this.logger.error(`[FORWARD] ❌ Failed to forward email ${email.id} to helpdesk: ${errorMessage}`, errorStack, 'InboundEmailService');
       
       if (error && typeof error === 'object' && 'response' in error) {
         const httpError = error as any;
+        console.error(`[FORWARD] HTTP Error - Status: ${httpError.response?.status}, StatusText: ${httpError.response?.statusText}`);
+        console.error(`[FORWARD] HTTP Error - Response body: ${JSON.stringify(httpError.response?.data)?.substring(0, 500)}`);
         this.logger.error(`[FORWARD] HTTP Error - Status: ${httpError.response?.status}, StatusText: ${httpError.response?.statusText}`, undefined, 'InboundEmailService');
         this.logger.error(`[FORWARD] HTTP Error - Response body: ${JSON.stringify(httpError.response?.data)?.substring(0, 500)}`, undefined, 'InboundEmailService');
       }
       
+      console.log(`[FORWARD] ===== FORWARD TO HELPDESK END (ERROR - non-critical) =====`);
       this.logger.log(`[FORWARD] ===== FORWARD TO HELPDESK END (ERROR - non-critical) =====`, 'InboundEmailService');
       // Don't throw - email is already stored, helpdesk forwarding failure is not critical
     }
