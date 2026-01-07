@@ -51,47 +51,71 @@ export class InboundEmailService {
    * Handle SNS notification (subscription confirmation or email notification)
    */
   async handleSNSNotification(snsMessage: SNSMessage): Promise<void> {
-    this.logger.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION START =====`, 'InboundEmailService');
-    this.logger.log(`[SERVICE] SNS notification type: ${snsMessage.Type}`, 'InboundEmailService');
-    this.logger.log(`[SERVICE] MessageId: ${snsMessage.MessageId}`, 'InboundEmailService');
-    this.logger.log(`[SERVICE] TopicArn: ${snsMessage.TopicArn}`, 'InboundEmailService');
-    this.logger.log(`[SERVICE] Has Message field: ${!!snsMessage.Message}, Message length: ${snsMessage.Message?.length || 0}`, 'InboundEmailService');
+    console.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION START =====`);
+    console.log(`[SERVICE] SNS notification type: ${snsMessage.Type}`);
+    console.log(`[SERVICE] MessageId: ${snsMessage.MessageId}`);
+    console.log(`[SERVICE] TopicArn: ${snsMessage.TopicArn}`);
+    console.log(`[SERVICE] Has Message field: ${!!snsMessage.Message}, Message length: ${snsMessage.Message?.length || 0}`);
+    
+    try {
+      this.logger.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION START =====`, 'InboundEmailService');
+      this.logger.log(`[SERVICE] SNS notification type: ${snsMessage.Type}`, 'InboundEmailService');
+      this.logger.log(`[SERVICE] MessageId: ${snsMessage.MessageId}`, 'InboundEmailService');
+      this.logger.log(`[SERVICE] TopicArn: ${snsMessage.TopicArn}`, 'InboundEmailService');
+      this.logger.log(`[SERVICE] Has Message field: ${!!snsMessage.Message}, Message length: ${snsMessage.Message?.length || 0}`, 'InboundEmailService');
+    } catch (e) {
+      console.error(`[SERVICE] ERROR in this.logger.log: ${e}`);
+    }
 
     if (snsMessage.Type === 'SubscriptionConfirmation') {
+      console.log(`[SERVICE] SubscriptionConfirmation - handled by controller, skipping`);
       this.logger.log(`[SERVICE] SubscriptionConfirmation - handled by controller, skipping`, 'InboundEmailService');
       this.logger.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION END =====`, 'InboundEmailService');
       return;
     }
 
     if (snsMessage.Type === 'Notification' && snsMessage.Message) {
+      console.log(`[SERVICE] Processing Notification with Message field`);
       this.logger.log(`[SERVICE] Processing Notification with Message field`, 'InboundEmailService');
       try {
         // Parse SES notification from SNS Message field (JSON string)
+        console.log(`[SERVICE] Parsing Message field as JSON...`);
         this.logger.log(`[SERVICE] Parsing Message field as JSON...`, 'InboundEmailService');
         const sesNotification: SESNotification = JSON.parse(snsMessage.Message);
+        console.log(`[SERVICE] ✅ Parsed SES notification successfully`);
         this.logger.log(`[SERVICE] ✅ Parsed SES notification successfully`, 'InboundEmailService');
+        console.log(`[SERVICE] SES notification - source: ${sesNotification.mail?.source}, destination: ${JSON.stringify(sesNotification.mail?.destination)}`);
         this.logger.log(`[SERVICE] SES notification - source: ${sesNotification.mail?.source}, destination: ${JSON.stringify(sesNotification.mail?.destination)}, messageId: ${sesNotification.mail?.messageId}`, 'InboundEmailService');
         
+        console.log(`[SERVICE] Calling parseEmailContent...`);
         this.logger.log(`[SERVICE] Calling parseEmailContent...`, 'InboundEmailService');
         const inboundEmail = await this.parseEmailContent(sesNotification);
+        console.log(`[SERVICE] ✅ Parsed email content, email ID: ${inboundEmail.id || 'NEW'}, from: ${inboundEmail.from}, to: ${inboundEmail.to}`);
         this.logger.log(`[SERVICE] ✅ Parsed email content, email ID: ${inboundEmail.id || 'NEW'}, from: ${inboundEmail.from}, to: ${inboundEmail.to}`, 'InboundEmailService');
         
+        console.log(`[SERVICE] Calling storeInboundEmail...`);
         this.logger.log(`[SERVICE] Calling storeInboundEmail...`, 'InboundEmailService');
         await this.storeInboundEmail(inboundEmail);
+        console.log(`[SERVICE] ✅ Stored inbound email, ID: ${inboundEmail.id}`);
         this.logger.log(`[SERVICE] ✅ Stored inbound email, ID: ${inboundEmail.id}`, 'InboundEmailService');
         
+        console.log(`[SERVICE] Calling processInboundEmail...`);
         this.logger.log(`[SERVICE] Calling processInboundEmail...`, 'InboundEmailService');
         await this.processInboundEmail(inboundEmail);
+        console.log(`[SERVICE] ✅ Processed inbound email successfully`);
         this.logger.log(`[SERVICE] ✅ Processed inbound email successfully`, 'InboundEmailService');
+        console.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION END (SUCCESS) =====`);
         this.logger.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION END (SUCCESS) =====`, 'InboundEmailService');
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         const errorStack = error instanceof Error ? error.stack : undefined;
+        console.error(`[SERVICE] ❌ Failed to process SNS notification: ${errorMessage}`, errorStack);
         this.logger.error(`[SERVICE] ❌ Failed to process SNS notification: ${errorMessage}`, errorStack, 'InboundEmailService');
         this.logger.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION END (ERROR) =====`, 'InboundEmailService');
         throw error;
       }
     } else {
+      console.warn(`[SERVICE] ⚠️ Unknown SNS message type or missing Message field: Type=${snsMessage.Type}, HasMessage=${!!snsMessage.Message}`);
       this.logger.warn(`[SERVICE] ⚠️ Unknown SNS message type or missing Message field: Type=${snsMessage.Type}, HasMessage=${!!snsMessage.Message}`, 'InboundEmailService');
       this.logger.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION END (IGNORED) =====`, 'InboundEmailService');
     }
