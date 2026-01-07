@@ -44,22 +44,21 @@ export class InboundEmailController {
       
       const body: SNSMessage = req.body as SNSMessage;
       console.log(`[CONTROLLER] body extracted, Type: ${body?.Type}`);
-    
-    this.logger.log(`[CONTROLLER] Body extracted, Type: ${body?.Type}, MessageId: ${body?.MessageId}`, 'InboundEmailController');
-    this.logger.log(`[CONTROLLER] Body keys: ${Object.keys(body || {}).join(', ')}`, 'InboundEmailController');
-    this.logger.log(`[CONTROLLER] Body Type check: ${body?.Type === 'Notification' ? 'NOTIFICATION' : body?.Type === 'SubscriptionConfirmation' ? 'SUBSCRIPTION_CONFIRMATION' : 'UNKNOWN'}`, 'InboundEmailController');
-    
-    if (body?.Message) {
-      this.logger.log(`[CONTROLLER] Message field exists, length: ${body.Message.length}`, 'InboundEmailController');
-      try {
-        const messagePreview = JSON.parse(body.Message);
-        this.logger.log(`[CONTROLLER] Message preview - notificationType: ${messagePreview?.notificationType}, source: ${messagePreview?.mail?.source}, destination: ${JSON.stringify(messagePreview?.mail?.destination)}`, 'InboundEmailController');
-      } catch (e) {
-        this.logger.warn(`[CONTROLLER] Failed to parse Message field: ${e}`, 'InboundEmailController');
+      
+      this.logger.log(`[CONTROLLER] Body extracted, Type: ${body?.Type}, MessageId: ${body?.MessageId}`, 'InboundEmailController');
+      this.logger.log(`[CONTROLLER] Body keys: ${Object.keys(body || {}).join(', ')}`, 'InboundEmailController');
+      this.logger.log(`[CONTROLLER] Body Type check: ${body?.Type === 'Notification' ? 'NOTIFICATION' : body?.Type === 'SubscriptionConfirmation' ? 'SUBSCRIPTION_CONFIRMATION' : 'UNKNOWN'}`, 'InboundEmailController');
+      
+      if (body?.Message) {
+        this.logger.log(`[CONTROLLER] Message field exists, length: ${body.Message.length}`, 'InboundEmailController');
+        try {
+          const messagePreview = JSON.parse(body.Message);
+          this.logger.log(`[CONTROLLER] Message preview - notificationType: ${messagePreview?.notificationType}, source: ${messagePreview?.mail?.source}, destination: ${JSON.stringify(messagePreview?.mail?.destination)}`, 'InboundEmailController');
+        } catch (e) {
+          this.logger.warn(`[CONTROLLER] Failed to parse Message field: ${e}`, 'InboundEmailController');
+        }
       }
-    }
 
-    try {
       // Handle SNS subscription confirmation
       if (body.Type === 'SubscriptionConfirmation') {
         this.logger.log(`[CONTROLLER] Processing SubscriptionConfirmation`, 'InboundEmailController');
