@@ -1,5 +1,6 @@
 import { DataSource } from 'typeorm';
 import { Notification } from './notifications/entities/notification.entity';
+import { InboundEmail } from './email/entities/inbound-email.entity';
 import * as dotenv from 'dotenv';
 
 // Load environment variables
@@ -12,7 +13,7 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USER || 'dbadmin',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'notifications',
-  entities: [Notification],
+  entities: [Notification, InboundEmail],
   migrations: ['src/migrations/*.ts'],
   synchronize: false,
   logging: process.env.NODE_ENV === 'development',
