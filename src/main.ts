@@ -5,9 +5,21 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { Logger } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const logger = new Logger('Bootstrap');
+
+  // Logging middleware for debugging
+  app.use((req: any, res: any, next: any) => {
+    if (req.path === '/email/inbound') {
+      logger.log(`[MIDDLEWARE] ${req.method} ${req.path}`, 'RequestLogger');
+      logger.log(`[MIDDLEWARE] Headers: ${JSON.stringify(req.headers)}`, 'RequestLogger');
+      logger.log(`[MIDDLEWARE] Body: ${JSON.stringify(req.body)}`, 'RequestLogger');
+    }
+    next();
+  });
 
   // Enable CORS
   app.enableCors({
