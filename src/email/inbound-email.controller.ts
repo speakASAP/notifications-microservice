@@ -25,51 +25,83 @@ export class InboundEmailController {
   @Post('inbound')
   @HttpCode(HttpStatus.OK)
   async handleInbound(@Req() req: Request, @Headers() headers: any): Promise<{ status: string; message?: string }> {
+    this.logger.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST START =====`, 'InboundEmailController');
+    this.logger.log(`[CONTROLLER] Request method: ${req.method}, URL: ${req.url}`, 'InboundEmailController');
+    this.logger.log(`[CONTROLLER] Request headers: ${JSON.stringify(headers)}`, 'InboundEmailController');
+    this.logger.log(`[CONTROLLER] Request body type: ${typeof req.body}, is string: ${typeof req.body === 'string'}`, 'InboundEmailController');
+    
     // Get body directly from req.body to bypass ValidationPipe
     const body: SNSMessage = req.body as SNSMessage;
     
-    this.logger.log(`Received inbound email webhook request`, 'InboundEmailController');
-    this.logger.log(`Request method: ${req.method}, URL: ${req.url}`, 'InboundEmailController');
-    this.logger.log(`Request headers: ${JSON.stringify(headers)}`, 'InboundEmailController');
-    this.logger.log(`Request body (raw): ${JSON.stringify(req.body)}`, 'InboundEmailController');
-    this.logger.log(`Request body type: ${body?.Type}, SubscribeURL: ${body?.SubscribeURL?.substring(0, 100)}...`, 'InboundEmailController');
+    this.logger.log(`[CONTROLLER] Body extracted, Type: ${body?.Type}, MessageId: ${body?.MessageId}`, 'InboundEmailController');
+    this.logger.log(`[CONTROLLER] Body keys: ${Object.keys(body || {}).join(', ')}`, 'InboundEmailController');
+    this.logger.log(`[CONTROLLER] Body Type check: ${body?.Type === 'Notification' ? 'NOTIFICATION' : body?.Type === 'SubscriptionConfirmation' ? 'SUBSCRIPTION_CONFIRMATION' : 'UNKNOWN'}`, 'InboundEmailController');
+    
+    if (body?.Message) {
+      this.logger.log(`[CONTROLLER] Message field exists, length: ${body.Message.length}`, 'InboundEmailController');
+      try {
+        const messagePreview = JSON.parse(body.Message);
+        this.logger.log(`[CONTROLLER] Message preview - notificationType: ${messagePreview?.notificationType}, source: ${messagePreview?.mail?.source}, destination: ${JSON.stringify(messagePreview?.mail?.destination)}`, 'InboundEmailController');
+      } catch (e) {
+        this.logger.warn(`[CONTROLLER] Failed to parse Message field: ${e}`, 'InboundEmailController');
+      }
+    }
 
     try {
       // Handle SNS subscription confirmation
       if (body.Type === 'SubscriptionConfirmation') {
-        this.logger.log('SNS subscription confirmation received', 'InboundEmailController');
+        this.logger.log(`[CONTROLLER] Processing SubscriptionConfirmation`, 'InboundEmailController');
 
         // Confirm subscription by visiting SubscribeURL
         if (body.SubscribeURL) {
+          this.logger.log(`[CONTROLLER] SubscribeURL found: ${body.SubscribeURL.substring(0, 100)}...`, 'InboundEmailController');
           try {
+            this.logger.log(`[CONTROLLER] Attempting to confirm subscription...`, 'InboundEmailController');
             await this.confirmSubscription(body.SubscribeURL);
-            this.logger.log('SNS subscription confirmed successfully', 'InboundEmailController');
+            this.logger.log(`[CONTROLLER] ✅ SNS subscription confirmed successfully`, 'InboundEmailController');
+            this.logger.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST END (SUCCESS) =====`, 'InboundEmailController');
             return { status: 'confirmed', message: 'Subscription confirmed' };
           } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            this.logger.error(`Failed to confirm SNS subscription: ${errorMessage}`, undefined, 'InboundEmailController');
+            const errorStack = error instanceof Error ? error.stack : undefined;
+            this.logger.error(`[CONTROLLER] ❌ Failed to confirm SNS subscription: ${errorMessage}`, errorStack, 'InboundEmailController');
+            this.logger.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST END (ERROR) =====`, 'InboundEmailController');
             return { status: 'error', message: `Failed to confirm subscription: ${errorMessage}` };
           }
         } else {
-          this.logger.warn('SNS subscription confirmation received but no SubscribeURL provided', 'InboundEmailController');
+          this.logger.warn(`[CONTROLLER] ⚠️ SubscribeURL not provided in SubscriptionConfirmation`, 'InboundEmailController');
+          this.logger.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST END (ERROR) =====`, 'InboundEmailController');
           return { status: 'error', message: 'SubscribeURL not provided' };
         }
       }
 
       // Handle SNS notification (actual email)
       if (body.Type === 'Notification') {
-        this.logger.log('SNS notification received, processing inbound email', 'InboundEmailController');
-        await this.inboundEmailService.handleSNSNotification(body);
-        return { status: 'processed', message: 'Email notification processed' };
+        this.logger.log(`[CONTROLLER] Processing Notification type`, 'InboundEmailController');
+        this.logger.log(`[CONTROLLER] Calling inboundEmailService.handleSNSNotification...`, 'InboundEmailController');
+        try {
+          await this.inboundEmailService.handleSNSNotification(body);
+          this.logger.log(`[CONTROLLER] ✅ Successfully processed inbound email notification`, 'InboundEmailController');
+          this.logger.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST END (SUCCESS) =====`, 'InboundEmailController');
+          return { status: 'processed', message: 'Email notification processed' };
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          const errorStack = error instanceof Error ? error.stack : undefined;
+          this.logger.error(`[CONTROLLER] ❌ Error in handleSNSNotification: ${errorMessage}`, errorStack, 'InboundEmailController');
+          this.logger.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST END (ERROR) =====`, 'InboundEmailController');
+          throw error;
+        }
       }
 
       // Unknown message type
-      this.logger.warn(`Unknown SNS message type: ${body.Type}`, 'InboundEmailController');
+      this.logger.warn(`[CONTROLLER] ⚠️ Unknown SNS message type: ${body.Type}`, 'InboundEmailController');
+      this.logger.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST END (IGNORED) =====`, 'InboundEmailController');
       return { status: 'ignored', message: `Unknown message type: ${body.Type}` };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const errorStack = error instanceof Error ? error.stack : undefined;
-      this.logger.error(`Failed to handle inbound email webhook: ${errorMessage}`, errorStack, 'InboundEmailController');
+      this.logger.error(`[CONTROLLER] ❌❌❌ CRITICAL ERROR in handleInbound: ${errorMessage}`, errorStack, 'InboundEmailController');
+      this.logger.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST END (CRITICAL ERROR) =====`, 'InboundEmailController');
       return { status: 'error', message: errorMessage };
     }
   }
