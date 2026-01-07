@@ -327,18 +327,25 @@ export class InboundEmailService {
    * Store inbound email in database
    */
   async storeInboundEmail(email: InboundEmail): Promise<void> {
+    console.log(`[STORE] ===== STORE INBOUND EMAIL START =====`);
+    console.log(`[STORE] Email data - from: ${email.from}, to: ${email.to}, subject: ${email.subject}`);
+    console.log(`[STORE] Status: ${email.status}, has rawData: ${!!email.rawData}`);
     this.logger.log(`[STORE] ===== STORE INBOUND EMAIL START =====`, 'InboundEmailService');
     this.logger.log(`[STORE] Email data - from: ${email.from}, to: ${email.to}, subject: ${email.subject}`, 'InboundEmailService');
     this.logger.log(`[STORE] Status: ${email.status}, has rawData: ${!!email.rawData}`, 'InboundEmailService');
     
     try {
+      console.log(`[STORE] Saving to database...`);
       this.logger.log(`[STORE] Saving to database...`, 'InboundEmailService');
       await this.inboundEmailRepository.save(email);
+      console.log(`[STORE] ✅ Stored inbound email successfully - ID: ${email.id}, from: ${email.from}`);
       this.logger.log(`[STORE] ✅ Stored inbound email successfully - ID: ${email.id}, from: ${email.from}`, 'InboundEmailService');
+      console.log(`[STORE] ===== STORE INBOUND EMAIL END (SUCCESS) =====`);
       this.logger.log(`[STORE] ===== STORE INBOUND EMAIL END (SUCCESS) =====`, 'InboundEmailService');
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error(`[STORE] ❌ Failed to store inbound email: ${errorMessage}`, errorStack);
       this.logger.error(`[STORE] ❌ Failed to store inbound email: ${errorMessage}`, errorStack, 'InboundEmailService');
       this.logger.log(`[STORE] ===== STORE INBOUND EMAIL END (ERROR) =====`, 'InboundEmailService');
       throw error;
