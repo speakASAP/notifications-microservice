@@ -25,6 +25,8 @@ export class InboundEmailController {
   @Post('inbound')
   @HttpCode(HttpStatus.OK)
   async handleInbound(@Req() req: Request, @Headers() headers: any): Promise<{ status: string; message?: string }> {
+    // Log immediately to confirm controller is called
+    console.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST START =====`);
     this.logger.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST START =====`, 'InboundEmailController');
     this.logger.log(`[CONTROLLER] Request method: ${req.method}, URL: ${req.url}`, 'InboundEmailController');
     this.logger.log(`[CONTROLLER] Request headers: ${JSON.stringify(headers)}`, 'InboundEmailController');
