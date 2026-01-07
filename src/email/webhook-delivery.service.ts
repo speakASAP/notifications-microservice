@@ -241,6 +241,7 @@ export class WebhookDeliveryService {
 
   /**
    * Check if email matches subscription filters
+   * Supports wildcard patterns like "*@speakasap.com"
    */
   private matchesFilters(payload: ProcessedEmailPayload, filters: any): boolean {
     if (!filters) {
@@ -249,22 +250,44 @@ export class WebhookDeliveryService {
 
     // Filter by 'to' email
     if (filters.to && Array.isArray(filters.to)) {
-      if (!filters.to.includes(payload.to)) {
+      const matchesTo = filters.to.some((filterTo: string) => {
+        if (filterTo.startsWith('*@')) {
+          // Wildcard domain match (e.g., "*@speakasap.com")
+          const domain = filterTo.substring(2);
+          return payload.to.endsWith(`@${domain}`);
+        }
+        return payload.to === filterTo;
+      });
+      if (!matchesTo) {
         return false;
       }
     }
 
     // Filter by 'from' email
     if (filters.from && Array.isArray(filters.from)) {
-      if (!filters.from.includes(payload.from)) {
+      const matchesFrom = filters.from.some((filterFrom: string) => {
+        if (filterFrom.startsWith('*@')) {
+          // Wildcard domain match
+          const domain = filterFrom.substring(2);
+          return payload.from.endsWith(`@${domain}`);
+        }
+        return payload.from === filterFrom;
+      });
+      if (!matchesFrom) {
         return false;
       }
     }
 
     // Filter by subject pattern
     if (filters.subjectPattern && payload.subject) {
-      const regex = new RegExp(filters.subjectPattern);
-      if (!regex.test(payload.subject)) {
+      try {
+        const regex = new RegExp(filters.subjectPattern, 'i'); // Case-insensitive
+        if (!regex.test(payload.subject)) {
+          return false;
+        }
+      } catch (e) {
+        this.logger.error(`[WEBHOOK_DELIVERY] Invalid subjectPattern regex: ${filters.subjectPattern}, error: ${e}`, undefined, 'WebhookDeliveryService');
+        // If regex is invalid, treat as no match to be safe
         return false;
       }
     }
