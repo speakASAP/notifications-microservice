@@ -5,6 +5,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Notification } from '../../src/notifications/entities/notification.entity';
+import { InboundEmail } from '../../src/email/entities/inbound-email.entity';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { Notification } from '../../src/notifications/entities/notification.enti
       username: process.env.DB_USER || 'dbadmin',
       password: process.env.DB_PASSWORD || '',
       database: process.env.DB_NAME || 'notifications',
-      entities: [Notification],
+      entities: [Notification, InboundEmail],
       migrations: ['dist/src/migrations/*.js'],
       migrationsRun: process.env.RUN_MIGRATIONS === 'true',
       synchronize: process.env.DB_SYNC === 'true',
