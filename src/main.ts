@@ -51,7 +51,7 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      forbidNonWhitelisted: true,
+      forbidNonWhitelisted: false, // Changed to false to allow AWS SNS messages with extra fields
       transform: true,
     }),
   );
