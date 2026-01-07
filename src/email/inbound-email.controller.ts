@@ -25,15 +25,25 @@ export class InboundEmailController {
   @Post('inbound')
   @HttpCode(HttpStatus.OK)
   async handleInbound(@Req() req: Request, @Headers() headers: any): Promise<{ status: string; message?: string }> {
-    // Log immediately to confirm controller is called
-    console.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST START =====`);
-    this.logger.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST START =====`, 'InboundEmailController');
-    this.logger.log(`[CONTROLLER] Request method: ${req.method}, URL: ${req.url}`, 'InboundEmailController');
-    this.logger.log(`[CONTROLLER] Request headers: ${JSON.stringify(headers)}`, 'InboundEmailController');
-    this.logger.log(`[CONTROLLER] Request body type: ${typeof req.body}, is string: ${typeof req.body === 'string'}`, 'InboundEmailController');
-    
-    // Get body directly from req.body to bypass ValidationPipe
-    const body: SNSMessage = req.body as SNSMessage;
+    try {
+      // Log immediately to confirm controller is called
+      console.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST START =====`);
+      console.log(`[CONTROLLER] req.body exists: ${!!req.body}, type: ${typeof req.body}`);
+      
+      this.logger.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST START =====`, 'InboundEmailController');
+      this.logger.log(`[CONTROLLER] Request method: ${req.method}, URL: ${req.url}`, 'InboundEmailController');
+      this.logger.log(`[CONTROLLER] Request headers: ${JSON.stringify(headers)}`, 'InboundEmailController');
+      this.logger.log(`[CONTROLLER] Request body type: ${typeof req.body}, is string: ${typeof req.body === 'string'}`, 'InboundEmailController');
+      
+      // Get body directly from req.body to bypass ValidationPipe
+      if (!req.body) {
+        console.log(`[CONTROLLER] ERROR: req.body is null or undefined`);
+        this.logger.error(`[CONTROLLER] req.body is null or undefined`, undefined, 'InboundEmailController');
+        return { status: 'error', message: 'Request body is missing' };
+      }
+      
+      const body: SNSMessage = req.body as SNSMessage;
+      console.log(`[CONTROLLER] body extracted, Type: ${body?.Type}`);
     
     this.logger.log(`[CONTROLLER] Body extracted, Type: ${body?.Type}, MessageId: ${body?.MessageId}`, 'InboundEmailController');
     this.logger.log(`[CONTROLLER] Body keys: ${Object.keys(body || {}).join(', ')}`, 'InboundEmailController');
@@ -102,6 +112,7 @@ export class InboundEmailController {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error(`[CONTROLLER] ❌❌❌ CRITICAL ERROR: ${errorMessage}`, errorStack);
       this.logger.error(`[CONTROLLER] ❌❌❌ CRITICAL ERROR in handleInbound: ${errorMessage}`, errorStack, 'InboundEmailController');
       this.logger.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST END (CRITICAL ERROR) =====`, 'InboundEmailController');
       return { status: 'error', message: errorMessage };
