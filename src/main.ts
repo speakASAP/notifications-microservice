@@ -37,6 +37,7 @@ async function bootstrap() {
       logger.log(`[MIDDLEWARE] ${req.method} ${req.path}`, 'RequestLogger');
       logger.log(`[MIDDLEWARE] Headers: ${JSON.stringify(req.headers)}`, 'RequestLogger');
       logger.log(`[MIDDLEWARE] Body: ${JSON.stringify(req.body)}`, 'RequestLogger');
+      logger.log(`[MIDDLEWARE] Body type: ${typeof req.body}`, 'RequestLogger');
     }
     next();
   });
@@ -47,12 +48,15 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Global validation pipe
+  // Global validation pipe - configured to allow extra fields
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: false, // Changed to false to allow AWS SNS messages with extra fields
-      transform: true,
+      whitelist: false, // Don't strip extra fields
+      forbidNonWhitelisted: false, // Allow AWS SNS messages with extra fields
+      transform: false, // Don't transform - we handle parsing manually
+      skipMissingProperties: true,
+      skipNullProperties: true,
+      skipUndefinedProperties: true,
     }),
   );
 
