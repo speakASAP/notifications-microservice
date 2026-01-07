@@ -25,6 +25,8 @@ export class InboundEmailController {
   @HttpCode(HttpStatus.OK)
   async handleInbound(@Body() body: SNSMessage, @Headers() headers: any): Promise<{ status: string; message?: string }> {
     this.logger.log(`Received inbound email webhook request`, 'InboundEmailController');
+    this.logger.log(`Request headers: ${JSON.stringify(headers)}`, 'InboundEmailController');
+    this.logger.log(`Request body type: ${body?.Type}, SubscribeURL: ${body?.SubscribeURL?.substring(0, 100)}...`, 'InboundEmailController');
 
     try {
       // Handle SNS subscription confirmation
