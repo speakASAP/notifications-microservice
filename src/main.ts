@@ -6,10 +6,30 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { Logger } from '@nestjs/common';
+import * as express from 'express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    bodyParser: true,
+    rawBody: true,
+  });
   const logger = new Logger('Bootstrap');
+
+  // Configure body parser to handle text/plain as JSON (for AWS SNS)
+  app.use(express.text({ type: 'text/plain' }));
+  app.use((req: any, res: any, next: any) => {
+    // If content-type is text/plain, parse as JSON
+    if (req.path === '/email/inbound' && req.headers['content-type']?.includes('text/plain')) {
+      try {
+        if (typeof req.body === 'string') {
+          req.body = JSON.parse(req.body);
+        }
+      } catch (e) {
+        logger.error(`Failed to parse text/plain body as JSON: ${e}`, 'RequestLogger');
+      }
+    }
+    next();
+  });
 
   // Logging middleware for debugging
   app.use((req: any, res: any, next: any) => {
