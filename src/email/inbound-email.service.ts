@@ -356,27 +356,36 @@ export class InboundEmailService {
    * Process inbound email (routing, webhook handlers, etc.)
    */
   async processInboundEmail(email: InboundEmail): Promise<void> {
+    console.log(`[PROCESS] ===== PROCESS INBOUND EMAIL START =====`);
+    console.log(`[PROCESS] Email ID: ${email.id}, from: ${email.from}, to: ${email.to}`);
     this.logger.log(`[PROCESS] ===== PROCESS INBOUND EMAIL START =====`, 'InboundEmailService');
     this.logger.log(`[PROCESS] Email ID: ${email.id}, from: ${email.from}, to: ${email.to}`, 'InboundEmailService');
 
     try {
       // Mark as processed
+      console.log(`[PROCESS] Marking email as processed...`);
       this.logger.log(`[PROCESS] Marking email as processed...`, 'InboundEmailService');
       email.status = 'processed';
       email.processedAt = new Date();
       await this.inboundEmailRepository.save(email);
+      console.log(`[PROCESS] ✅ Email marked as processed`);
       this.logger.log(`[PROCESS] ✅ Email marked as processed`, 'InboundEmailService');
 
       // Forward to helpdesk for ticket creation
+      console.log(`[PROCESS] Forwarding to helpdesk...`);
       this.logger.log(`[PROCESS] Forwarding to helpdesk...`, 'InboundEmailService');
       await this.forwardToHelpdesk(email);
+      console.log(`[PROCESS] ✅ Successfully processed inbound email ${email.id}`);
       this.logger.log(`[PROCESS] ✅ Successfully processed inbound email ${email.id}`, 'InboundEmailService');
+      console.log(`[PROCESS] ===== PROCESS INBOUND EMAIL END (SUCCESS) =====`);
       this.logger.log(`[PROCESS] ===== PROCESS INBOUND EMAIL END (SUCCESS) =====`, 'InboundEmailService');
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error(`[PROCESS] ❌ Failed to process inbound email ${email.id}: ${errorMessage}`, errorStack);
       this.logger.error(`[PROCESS] ❌ Failed to process inbound email ${email.id}: ${errorMessage}`, errorStack, 'InboundEmailService');
       
+      console.log(`[PROCESS] Marking email as failed...`);
       this.logger.log(`[PROCESS] Marking email as failed...`, 'InboundEmailService');
       email.status = 'failed';
       email.error = errorMessage;
@@ -391,11 +400,14 @@ export class InboundEmailService {
    * Forward inbound email to helpdesk system for ticket creation
    */
   private async forwardToHelpdesk(email: InboundEmail): Promise<void> {
-    this.logger.log(`[FORWARD] ===== FORWARD TO HELPDESK START =====`, 'InboundEmailService');
+    console.log(`[FORWARD] ===== FORWARD TO HELPDESK START =====`);
     const helpdeskUrl = process.env.HELPDESK_WEBHOOK_URL || 'https://speakasap.com/helpdesk/api/email/inbound/';
+    console.log(`[FORWARD] Helpdesk URL: ${helpdeskUrl}`);
+    this.logger.log(`[FORWARD] ===== FORWARD TO HELPDESK START =====`, 'InboundEmailService');
     this.logger.log(`[FORWARD] Helpdesk URL: ${helpdeskUrl}`, 'InboundEmailService');
     
     if (!helpdeskUrl) {
+      console.warn(`[FORWARD] ⚠️ HELPDESK_WEBHOOK_URL not configured, skipping helpdesk forwarding`);
       this.logger.warn(`[FORWARD] ⚠️ HELPDESK_WEBHOOK_URL not configured, skipping helpdesk forwarding`, 'InboundEmailService');
       this.logger.log(`[FORWARD] ===== FORWARD TO HELPDESK END (SKIPPED) =====`, 'InboundEmailService');
       return;
@@ -403,6 +415,9 @@ export class InboundEmailService {
 
     try {
       // Reconstruct SNS message format that helpdesk expects
+      console.log(`[FORWARD] Reconstructing SNS message format...`);
+      console.log(`[FORWARD] Email ID: ${email.id}, from: ${email.from}, to: ${email.to}`);
+      console.log(`[FORWARD] Has rawData: ${!!email.rawData}, has rawData.mail: ${!!email.rawData?.mail}`);
       this.logger.log(`[FORWARD] Reconstructing SNS message format...`, 'InboundEmailService');
       this.logger.log(`[FORWARD] Email ID: ${email.id}, from: ${email.from}, to: ${email.to}`, 'InboundEmailService');
       this.logger.log(`[FORWARD] Has rawData: ${!!email.rawData}, has rawData.mail: ${!!email.rawData?.mail}`, 'InboundEmailService');
@@ -432,6 +447,9 @@ export class InboundEmailService {
         TopicArn: process.env.AWS_SES_SNS_TOPIC_ARN || '',
       };
 
+      console.log(`[FORWARD] SNS message prepared - Type: ${snsMessage.Type}, MessageId: ${snsMessage.MessageId}`);
+      console.log(`[FORWARD] Message data preview - source: ${messageData.mail.source}, destination: ${JSON.stringify(messageData.mail.destination)}`);
+      console.log(`[FORWARD] Sending POST request to helpdesk...`);
       this.logger.log(`[FORWARD] SNS message prepared - Type: ${snsMessage.Type}, MessageId: ${snsMessage.MessageId}`, 'InboundEmailService');
       this.logger.log(`[FORWARD] Message data preview - source: ${messageData.mail.source}, destination: ${JSON.stringify(messageData.mail.destination)}`, 'InboundEmailService');
       this.logger.log(`[FORWARD] Sending POST request to helpdesk...`, 'InboundEmailService');
@@ -441,6 +459,9 @@ export class InboundEmailService {
         timeout: 10000,
       }).toPromise();
 
+      console.log(`[FORWARD] ✅ Forwarded inbound email ${email.id} to helpdesk - Status: ${response?.status}`);
+      console.log(`[FORWARD] Response status: ${response?.status}, statusText: ${response?.statusText}`);
+      console.log(`[FORWARD] ===== FORWARD TO HELPDESK END (SUCCESS) =====`);
       this.logger.log(`[FORWARD] ✅ Forwarded inbound email ${email.id} to helpdesk - Status: ${response?.status}`, 'InboundEmailService');
       this.logger.log(`[FORWARD] Response status: ${response?.status}, statusText: ${response?.statusText}`, 'InboundEmailService');
       this.logger.log(`[FORWARD] ===== FORWARD TO HELPDESK END (SUCCESS) =====`, 'InboundEmailService');
