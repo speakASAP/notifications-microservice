@@ -3,11 +3,12 @@
  * Handles AWS SES SNS webhook for inbound emails
  */
 
-import { Controller, Post, Body, Headers, HttpCode, HttpStatus, Req } from '@nestjs/common';
+import { Controller, Post, Body, Headers, HttpCode, HttpStatus, Req, UsePipes } from '@nestjs/common';
 import { Request } from 'express';
 import { InboundEmailService, SNSMessage } from './inbound-email.service';
 import { LoggerService } from '../../shared/logger/logger.service';
 import { Inject } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import * as https from 'https';
 
 @Controller('email')
@@ -24,6 +25,7 @@ export class InboundEmailController {
    */
   @Post('inbound')
   @HttpCode(HttpStatus.OK)
+  @UsePipes(new ValidationPipe({ whitelist: false, forbidNonWhitelisted: false })) // Disable validation for AWS SNS messages
   async handleInbound(@Req() req: Request, @Body() body: SNSMessage, @Headers() headers: any): Promise<{ status: string; message?: string }> {
     this.logger.log(`Received inbound email webhook request`, 'InboundEmailController');
     this.logger.log(`Request method: ${req.method}, URL: ${req.url}`, 'InboundEmailController');
