@@ -398,4 +398,59 @@ export class InboundEmailService {
     }
   }
 
+  /**
+   * Find inbound emails with filters
+   */
+  async findInboundEmails(filters: {
+    limit?: number;
+    toFilter?: string;
+    excludeTo?: string[];
+    status?: string;
+  }): Promise<any[]> {
+    const queryBuilder = this.inboundEmailRepository.createQueryBuilder('email');
+
+    // Filter by status
+    if (filters.status) {
+      queryBuilder.where('email.status = :status', { status: filters.status });
+    }
+
+    // Filter by 'to' email (LIKE pattern)
+    if (filters.toFilter) {
+      if (filters.status) {
+        queryBuilder.andWhere('email.to LIKE :toFilter', { toFilter: `%${filters.toFilter}` });
+      } else {
+        queryBuilder.where('email.to LIKE :toFilter', { toFilter: `%${filters.toFilter}` });
+      }
+    }
+
+    // Exclude specific 'to' addresses
+    if (filters.excludeTo && filters.excludeTo.length > 0) {
+      queryBuilder.andWhere('email.to NOT IN (:...excludeTo)', { excludeTo: filters.excludeTo });
+    }
+
+    // Order by receivedAt descending
+    queryBuilder.orderBy('email.receivedAt', 'DESC');
+
+    // Limit results
+    if (filters.limit) {
+      queryBuilder.limit(filters.limit);
+    }
+
+    const emails = await queryBuilder.getMany();
+
+    // Format response to match webhook payload format
+    return emails.map((email) => ({
+      id: email.id,
+      from: email.from,
+      to: email.to,
+      subject: email.subject || 'Email ticket',
+      bodyText: email.bodyText || '',
+      bodyHtml: email.bodyHtml || null,
+      attachments: email.attachments || [],
+      receivedAt: email.receivedAt,
+      messageId: email.rawData?.mail?.messageId || `inbound-${email.id}`,
+      status: email.status,
+    }));
+  }
+
 }
