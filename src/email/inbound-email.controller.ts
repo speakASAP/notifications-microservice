@@ -3,7 +3,7 @@
  * Handles AWS SES SNS webhook for inbound emails
  */
 
-import { Controller, Post, Headers, HttpCode, HttpStatus, Req } from '@nestjs/common';
+import { Controller, Post, Get, Headers, HttpCode, HttpStatus, Req, Query } from '@nestjs/common';
 import { Request } from 'express';
 import { InboundEmailService, SNSMessage } from './inbound-email.service';
 import { LoggerService } from '../../shared/logger/logger.service';
@@ -124,6 +124,41 @@ export class InboundEmailController {
       this.logger.error(`[CONTROLLER] ❌❌❌ CRITICAL ERROR in handleInbound: ${errorMessage}`, errorStack, 'InboundEmailController');
       this.logger.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST END (CRITICAL ERROR) =====`, 'InboundEmailController');
       return { status: 'error', message: errorMessage };
+    }
+  }
+
+  /**
+   * Get list of inbound emails
+   * GET /email/inbound?limit=100&toFilter=@speakasap.com&excludeTo=support@speakasap.com&status=processed
+   */
+  @Get('inbound')
+  async getInboundEmails(
+    @Query('limit') limit?: string,
+    @Query('toFilter') toFilter?: string,
+    @Query('excludeTo') excludeTo?: string | string[],
+    @Query('status') status?: string,
+  ): Promise<{ success: boolean; data: any[]; count: number }> {
+    try {
+      const limitNum = limit ? parseInt(limit, 10) : 100;
+      const excludeToList = Array.isArray(excludeTo) ? excludeTo : excludeTo ? [excludeTo] : [];
+      const statusFilter = status || 'processed';
+
+      const emails = await this.inboundEmailService.findInboundEmails({
+        limit: limitNum,
+        toFilter: toFilter || '@speakasap.com',
+        excludeTo: excludeToList,
+        status: statusFilter,
+      });
+
+      return {
+        success: true,
+        data: emails,
+        count: emails.length,
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Error getting inbound emails: ${errorMessage}`, undefined, 'InboundEmailController');
+      throw error;
     }
   }
 
