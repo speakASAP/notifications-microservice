@@ -131,7 +131,7 @@ export class WebhookDeliveryService {
             'X-Notification-Service': 'notifications-microservice',
             'X-Subscription-Id': subscription.id,
           },
-          timeout: 10000, // 10 seconds timeout
+          timeout: 20000, // 20 seconds timeout
         }),
       );
 
