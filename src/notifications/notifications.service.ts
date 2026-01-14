@@ -6,7 +6,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { SendNotificationDto, NotificationChannel } from './dto/send-notification.dto';
+import { SendNotificationDto, NotificationChannel, EmailContentType } from './dto/send-notification.dto';
 import { EmailService } from '../email/email.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
@@ -85,6 +85,7 @@ export class NotificationsService {
             message,
             templateData,
             emailProvider: sendNotificationDto.emailProvider, // Pass provider selection
+            contentType: sendNotificationDto.contentType, // Pass content type
           });
           break;
 

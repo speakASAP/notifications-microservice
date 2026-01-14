@@ -46,6 +46,7 @@ POST /notifications/send
     "template": "value"
   },
   "emailProvider": "sendgrid|ses|auto",
+  "contentType": "text/html|text/plain",
   "botToken": "optional-per-request-bot-token",
   "chatId": "optional-chat-id-alternative-to-recipient",
   "parseMode": "HTML|Markdown|MarkdownV2",
@@ -67,6 +68,14 @@ POST /notifications/send
   - `"ses"` - Use AWS SES
   - `"auto"` - Try AWS SES first, fallback to SendGrid on failure
   - If not specified, uses `EMAIL_PROVIDER` environment variable or defaults to `"sendgrid"`
+
+**Email Content Type** (optional, for email channel only):
+
+- `contentType`: Specify the content type of the message
+  - `"text/html"` - Message is HTML (will be sent as HTML, plain text version auto-generated)
+  - `"text/plain"` - Message is plain text (will be converted to HTML for email clients)
+  - If not specified, will auto-detect based on message content (checks for HTML tags)
+  - Auto-detection: If message contains HTML tags (`<tag>`), treats as `"text/html"`, otherwise `"text/plain"`
 
 **Telegram-Specific Fields** (optional):
 
@@ -428,7 +437,7 @@ print(result)
 ### Email Notification
 
 ```typescript
-// Example: Email notification via SendGrid (default)
+// Example: Email notification via SendGrid (default) - plain text
 const response = await fetch('https://notifications.statex.cz/notifications/send', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
@@ -438,6 +447,32 @@ const response = await fetch('https://notifications.statex.cz/notifications/send
     recipient: 'customer@example.com',
     subject: 'Order Confirmation #12345',
     message: 'Thank you for your order! Your order #12345 has been confirmed.',
+    contentType: 'text/plain', // Optional: auto-detected if not specified
+    templateData: {
+      orderNumber: '12345',
+      customerName: 'John Doe'
+    }
+  })
+});
+
+const result = await response.json();
+console.log(result);
+```
+
+### Email with HTML Content
+
+```typescript
+// Example: Email notification with HTML content
+const response = await fetch('https://notifications.statex.cz/notifications/send', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    channel: 'email',
+    type: 'order_confirmation',
+    recipient: 'customer@example.com',
+    subject: 'Order Confirmation #12345',
+    message: '<html><body><h1>Thank you for your order!</h1><p>Your order #12345 has been confirmed.</p></body></html>',
+    contentType: 'text/html', // Explicitly specify HTML content
     templateData: {
       orderNumber: '12345',
       customerName: 'John Doe'
