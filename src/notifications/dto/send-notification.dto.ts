@@ -40,6 +40,11 @@ export enum EmailProvider {
   AUTO = 'auto',
 }
 
+export enum EmailContentType {
+  TEXT = 'text/plain',
+  HTML = 'text/html',
+}
+
 /**
  * Telegram Web App interface
  */
@@ -155,4 +160,9 @@ export class SendNotificationDto {
   @IsEnum(EmailProvider)
   @IsOptional()
   emailProvider?: EmailProvider;
+
+  // Email content type (optional, defaults to 'text/plain' - will auto-detect HTML if message contains HTML tags)
+  @IsEnum(EmailContentType)
+  @IsOptional()
+  contentType?: EmailContentType;
 }
