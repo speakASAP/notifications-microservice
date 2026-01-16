@@ -35,7 +35,7 @@ export class WebhookSubscriptionService {
       secret: createDto.secret || null,
       filters: createDto.filters || null,
       status: 'active',
-      maxRetries: createDto.maxRetries || 3,
+      maxRetries: createDto.maxRetries || 8,
     });
 
     const saved = await this.subscriptionRepository.save(subscription);
