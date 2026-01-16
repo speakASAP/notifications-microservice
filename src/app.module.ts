@@ -4,6 +4,7 @@
 
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { NotificationsModule } from './notifications/notifications.module';
 import { HealthController } from './health/health.controller';
 import { InfoController } from './info/info.controller';
@@ -16,6 +17,7 @@ import { LoggerModule } from '../shared/logger/logger.module';
       isGlobal: true,
       envFilePath: ['.env'],
     }),
+    ScheduleModule.forRoot(),
     DatabaseModule,
     LoggerModule,
     NotificationsModule,
