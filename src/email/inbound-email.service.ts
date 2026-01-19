@@ -362,8 +362,13 @@ export class InboundEmailService {
         // 2. Replace =XX sequences with the actual byte value
         // 3. The result is a UTF-8 encoded string
         
-        // Step 1: Remove soft line breaks (= followed by CRLF or LF)
-        let processed = content.replace(/=\r\n/g, '').replace(/=\n/g, '');
+        // Step 1: Remove soft line breaks (= at end of line, with optional whitespace)
+        // Handle all variations: =\r\n, =\n, = \r\n, = \n, =\r, etc.
+        // Soft line breaks in quoted-printable: = at end of line means line continues
+        let processed = content
+          .replace(/=\s*\r\n/g, '')  // = followed by optional whitespace and CRLF
+          .replace(/=\s*\n/g, '')    // = followed by optional whitespace and LF
+          .replace(/=\s*\r/g, '');   // = followed by optional whitespace and CR (just in case)
         
         // Step 2: Decode =XX sequences
         // Replace =XX with the actual byte (as a character with that char code)
