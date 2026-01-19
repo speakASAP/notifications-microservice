@@ -168,8 +168,24 @@ export class InboundEmailService {
         this.logger.warn(`[PARSE] Email content length: ${emailContent.length}, preview: ${emailContent.substring(0, 500)}`, 'InboundEmailService');
       }
       
-      const from = sesNotification.mail.source;
-      const to = sesNotification.mail.destination[0] || sesNotification.receipt.recipients[0] || '';
+      // Extract From header from email content if available (more accurate than SES source)
+      let from = sesNotification.mail.source;
+      const fromHeaderMatch = emailContent.match(/^From:\s*(.+)$/im);
+      if (fromHeaderMatch) {
+        const fromHeader = this.decodeHeader(fromHeaderMatch[1].trim());
+        // Extract email address from "Name <email@domain.com>" or just "email@domain.com"
+        const emailMatch = fromHeader.match(/<([^>]+)>/) || fromHeader.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+        if (emailMatch) {
+          from = emailMatch[1];
+          this.logger.log(`[PARSE] Extracted From header: ${from}`, 'InboundEmailService');
+        }
+      }
+      
+      // Decode email addresses (may contain quoted-printable sequences)
+      from = this.decodeEmailAddress(from);
+      const toRaw = sesNotification.mail.destination[0] || sesNotification.receipt.recipients[0] || '';
+      const to = this.decodeEmailAddress(toRaw);
+      
       const subject = emailParts.subject || null;
       const bodyText = emailParts.bodyText || '';
       const bodyHtml = emailParts.bodyHtml || null;
@@ -340,6 +356,43 @@ export class InboundEmailService {
       }
       return text;
     });
+  }
+
+  /**
+   * Decode email address that may contain quoted-printable sequences
+   * Handles cases like: SRS0=ZQ05=7Y=news.asourcingic.com=rachel@srs.websupport.sk
+   * Where =ZQ05=7Y= should be decoded to actual characters
+   */
+  private decodeEmailAddress(email: string): string {
+    if (!email) {
+      return email;
+    }
+
+    // Check if email contains quoted-printable sequences (=XX where XX is hex)
+    // Pattern: = followed by exactly 2 hex digits (0-9A-F)
+    if (!email.match(/=[0-9A-F]{2}/i)) {
+      // No quoted-printable sequences, return as-is
+      return email;
+    }
+
+    try {
+      // Decode quoted-printable sequences in email address
+      // Replace =XX with the actual character
+      let decoded = email.replace(/=([0-9A-F]{2})/gi, (match, hex) => {
+        const charCode = parseInt(hex, 16);
+        return String.fromCharCode(charCode);
+      });
+
+      // Also handle RFC 2047 encoded addresses (less common but possible)
+      decoded = this.decodeHeader(decoded);
+
+      this.logger.log(`[PARSE] Decoded email address: ${email} -> ${decoded}`, 'InboundEmailService');
+      return decoded;
+    } catch (error) {
+      // If decoding fails, return original
+      this.logger.warn(`[PARSE] Failed to decode email address ${email}: ${error}`, 'InboundEmailService');
+      return email;
+    }
   }
 
   /**
