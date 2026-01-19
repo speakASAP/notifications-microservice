@@ -162,6 +162,12 @@ export class InboundEmailService {
       const emailParts = this.parseEmailParts(emailContent);
       this.logger.log(`[PARSE] ✅ Parsed email parts - subject: ${emailParts.subject || 'N/A'}, bodyText length: ${emailParts.bodyText?.length || 0}, bodyHtml length: ${emailParts.bodyHtml?.length || 0}, attachments: ${emailParts.attachments?.length || 0}`, 'InboundEmailService');
       
+      // Validate that we have body content
+      if (!emailParts.bodyText && !emailParts.bodyHtml) {
+        this.logger.warn(`[PARSE] ⚠️⚠️⚠️ EMPTY BODY DETECTED - subject: ${emailParts.subject || 'N/A'}`, 'InboundEmailService');
+        this.logger.warn(`[PARSE] Email content length: ${emailContent.length}, preview: ${emailContent.substring(0, 500)}`, 'InboundEmailService');
+      }
+      
       const from = sesNotification.mail.source;
       const to = sesNotification.mail.destination[0] || sesNotification.receipt.recipients[0] || '';
       const subject = emailParts.subject || null;
@@ -226,6 +232,10 @@ export class InboundEmailService {
       parts.subject = this.decodeHeader(subjectMatch[1]);
     }
 
+    // Check Content-Transfer-Encoding for non-multipart messages
+    const transferEncodingMatch = headers.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
+    const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim() : '';
+
     // Check if multipart message
     if (headers.includes('Content-Type: multipart')) {
       // Parse multipart message
@@ -234,6 +244,7 @@ export class InboundEmailService {
         const boundary = boundaryMatch[1];
         const multipartParts = this.parseMultipart(body, boundary);
         for (const part of multipartParts) {
+          // Content is already decoded in parseMultipart
           if (part.contentType?.includes('text/plain')) {
             parts.bodyText = part.content || '';
           } else if (part.contentType?.includes('text/html')) {
@@ -248,12 +259,14 @@ export class InboundEmailService {
         }
       }
     } else {
-      // Simple message, check content type
+      // Simple message, decode content first, then check content type
+      const decodedBody = this.decodeContent(body, transferEncoding);
+      
       if (headers.includes('Content-Type: text/html')) {
-        parts.bodyHtml = body;
-        parts.bodyText = this.stripHtml(body);
+        parts.bodyHtml = decodedBody;
+        parts.bodyText = this.stripHtml(decodedBody);
       } else {
-        parts.bodyText = body;
+        parts.bodyText = decodedBody;
       }
     }
 
@@ -284,11 +297,22 @@ export class InboundEmailService {
       if (headerBodySplit === -1) continue;
 
       const partHeaders = section.substring(0, headerBodySplit);
-      const partContent = section.substring(headerBodySplit + 4);
+      let partContent = section.substring(headerBodySplit + 4);
 
       const contentTypeMatch = partHeaders.match(/Content-Type:\s*([^;\r\n]+)/i);
       const contentDispositionMatch = partHeaders.match(/Content-Disposition:\s*([^;\r\n]+)/i);
       const filenameMatch = partHeaders.match(/filename="?([^";\r\n]+)"?/i);
+      const transferEncodingMatch = partHeaders.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
+
+      // Decode content based on Content-Transfer-Encoding
+      const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim().toLowerCase() : '';
+      const originalLength = partContent.length;
+      partContent = this.decodeContent(partContent, transferEncoding);
+      
+      // Log decoding result for debugging
+      if (transferEncoding && originalLength !== partContent.length) {
+        this.logger.log(`[PARSE] Decoded ${transferEncoding} content in part: ${originalLength} -> ${partContent.length} bytes`, 'InboundEmailService');
+      }
 
       parts.push({
         contentType: contentTypeMatch ? contentTypeMatch[1].trim() : undefined,
@@ -316,6 +340,98 @@ export class InboundEmailService {
       }
       return text;
     });
+  }
+
+  /**
+   * Decode email content based on Content-Transfer-Encoding
+   * Handles quoted-printable, base64, and 7bit/8bit/binary (no decoding needed)
+   */
+  private decodeContent(content: string, transferEncoding: string): string {
+    if (!content) {
+      return content;
+    }
+
+    const encoding = transferEncoding.toLowerCase().trim();
+
+    try {
+      if (encoding === 'quoted-printable' || encoding === 'qp') {
+        // Decode quoted-printable encoding
+        // Quoted-printable uses =XX for bytes and = at end of line for soft breaks
+        // Algorithm:
+        // 1. Remove soft line breaks (= followed by CRLF or LF)
+        // 2. Replace =XX sequences with the actual byte value
+        // 3. The result is a UTF-8 encoded string
+        
+        // Step 1: Remove soft line breaks (= followed by CRLF or LF)
+        let processed = content.replace(/=\r\n/g, '').replace(/=\n/g, '');
+        
+        // Step 2: Decode =XX sequences
+        // Replace =XX with the actual byte (as a character with that char code)
+        // Then we'll convert the whole thing to a buffer and decode as UTF-8
+        const bytes: number[] = [];
+        let i = 0;
+        
+        while (i < processed.length) {
+          if (processed[i] === '=' && i + 2 < processed.length) {
+            const hex = processed.substring(i + 1, i + 3);
+            if (/^[0-9A-Fa-f]{2}$/.test(hex)) {
+              // Valid hex sequence - decode to byte
+              bytes.push(parseInt(hex, 16));
+              i += 3;
+            } else {
+              // Invalid sequence - log warning
+              this.logger.warn(`[PARSE] Invalid quoted-printable sequence: =${hex}`, 'InboundEmailService');
+              // Treat as literal character
+              const charBytes = Buffer.from(processed[i], 'utf-8');
+              bytes.push(...Array.from(charBytes));
+              i++;
+            }
+          } else {
+            // Regular character - get its UTF-8 byte representation
+            const charBytes = Buffer.from(processed[i], 'utf-8');
+            bytes.push(...Array.from(charBytes));
+            i++;
+          }
+        }
+        
+        // Step 3: Convert bytes to UTF-8 string
+        try {
+          const buffer = Buffer.from(bytes);
+          const decoded = buffer.toString('utf-8');
+          this.logger.log(`[PARSE] Decoded quoted-printable: ${content.length} chars -> ${bytes.length} bytes -> ${decoded.length} chars`, 'InboundEmailService');
+          return decoded;
+        } catch (e) {
+          this.logger.error(`[PARSE] Failed to decode quoted-printable bytes as UTF-8: ${e}`, 'InboundEmailService');
+          // Fallback: try to return as string from bytes (limited to prevent memory issues)
+          if (bytes.length > 100000) {
+            this.logger.warn(`[PARSE] Quoted-printable content too large (${bytes.length} bytes), truncating`, 'InboundEmailService');
+            return Buffer.from(bytes.slice(0, 100000)).toString('utf-8') + '...[truncated]';
+          }
+          return Buffer.from(bytes).toString('utf-8');
+        }
+      } else if (encoding === 'base64' || encoding === 'b') {
+        // Decode base64
+        try {
+          // Remove whitespace that might interfere with base64 decoding
+          const cleanContent = content.replace(/\s/g, '');
+          const decoded = Buffer.from(cleanContent, 'base64').toString('utf-8');
+          return decoded;
+        } catch (e) {
+          this.logger.warn(`[PARSE] Failed to decode base64 content: ${e}`, 'InboundEmailService');
+          return content;
+        }
+      } else if (encoding === '7bit' || encoding === '8bit' || encoding === 'binary' || !encoding) {
+        // No decoding needed for 7bit, 8bit, binary, or no encoding specified
+        return content;
+      } else {
+        // Unknown encoding - log warning but return as-is
+        this.logger.warn(`[PARSE] Unknown Content-Transfer-Encoding: ${encoding}, returning content as-is`, 'InboundEmailService');
+        return content;
+      }
+    } catch (e) {
+      this.logger.error(`[PARSE] Error decoding content with encoding ${encoding}: ${e}`, 'InboundEmailService');
+      return content;
+    }
   }
 
   /**

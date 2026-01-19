@@ -120,6 +120,7 @@ WHERE webhook_url LIKE '%speakasap.com%';
 ### Test Auto-Resume
 
 1. Manually suspend a subscription:
+
    ```sql
    UPDATE webhook_subscriptions SET status = 'suspended' WHERE id = '...';
    ```
@@ -137,6 +138,7 @@ curl https://speakasap.com/helpdesk/health/
 ```
 
 Expected response:
+
 ```json
 {
   "status": "ok",
@@ -154,6 +156,7 @@ Expected response:
 ## Deployment
 
 Changes have been committed and pushed to:
+
 - `notifications-microservice` repository (main branch)
 - `speakasap-portal` repository (release branch)
 
