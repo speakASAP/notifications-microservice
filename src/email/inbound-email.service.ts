@@ -10,6 +10,7 @@ import { HttpService } from '@nestjs/axios';
 import { LoggerService } from '../../shared/logger/logger.service';
 import { InboundEmail } from './entities/inbound-email.entity';
 import { WebhookDeliveryService } from './webhook-delivery.service';
+import { EmailService } from './email.service';
 
 export interface SNSMessage {
   Type: string;
@@ -69,6 +70,7 @@ export class InboundEmailService {
     private logger: LoggerService,
     private httpService: HttpService,
     private webhookDeliveryService: WebhookDeliveryService,
+    private emailService: EmailService,
   ) {}
 
   /**
@@ -670,6 +672,9 @@ export class InboundEmailService {
       await this.inboundEmailRepository.save(email);
       this.logger.log(`[PROCESS] ✅ Email marked as processed`, 'InboundEmailService');
 
+      // Check and forward email if forwarding rule exists
+      await this.forwardEmailIfNeeded(email);
+
       // Deliver to all subscribed services via webhooks
       this.logger.log(`[PROCESS] Delivering to subscribed services...`, 'InboundEmailService');
       await this.webhookDeliveryService.deliverToSubscriptions(email);
@@ -688,6 +693,122 @@ export class InboundEmailService {
       this.logger.log(`[PROCESS] ===== PROCESS INBOUND EMAIL END (ERROR) =====`, 'InboundEmailService');
       throw error;
     }
+  }
+
+  /**
+   * Get email forwarding rules from environment variable
+   * Format: JSON object like {"stashok@speakasap.com": "ssfskype@gmail.com"}
+   */
+  private getForwardingRules(): Record<string, string> {
+    const forwardingRulesEnv = process.env.EMAIL_FORWARDING_RULES;
+    if (!forwardingRulesEnv) {
+      return {};
+    }
+
+    try {
+      const rules = JSON.parse(forwardingRulesEnv);
+      if (typeof rules !== 'object' || Array.isArray(rules)) {
+        this.logger.warn(`[FORWARD] Invalid EMAIL_FORWARDING_RULES format, expected object`, 'InboundEmailService');
+        return {};
+      }
+      return rules;
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`[FORWARD] Failed to parse EMAIL_FORWARDING_RULES: ${errorMessage}`, undefined, 'InboundEmailService');
+      return {};
+    }
+  }
+
+  /**
+   * Forward email if forwarding rule exists for the recipient
+   */
+  private async forwardEmailIfNeeded(email: InboundEmail): Promise<void> {
+    const forwardingRules = this.getForwardingRules();
+    const forwardTo = forwardingRules[email.to];
+
+    if (!forwardTo) {
+      return; // No forwarding rule for this recipient
+    }
+
+    this.logger.log(`[FORWARD] Forwarding email from ${email.to} to ${forwardTo}`, 'InboundEmailService');
+
+    try {
+      // Prepare forwarded email subject
+      const forwardedSubject = email.subject
+        ? `Fwd: ${email.subject}`
+        : 'Fwd: (no subject)';
+
+      // Prepare forwarded email body
+      const forwardedBody = this.prepareForwardedEmailBody(email);
+
+      // Send forwarded email
+      await this.emailService.send({
+        to: forwardTo,
+        subject: forwardedSubject,
+        message: forwardedBody,
+        contentType: 'text/html',
+        emailProvider: 'auto', // Use auto provider selection
+      });
+
+      this.logger.log(`[FORWARD] ✅ Successfully forwarded email from ${email.to} to ${forwardTo}`, 'InboundEmailService');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`[FORWARD] ❌ Failed to forward email from ${email.to} to ${forwardTo}: ${errorMessage}`, errorStack, 'InboundEmailService');
+      // Don't throw - forwarding failure shouldn't break email processing
+    }
+  }
+
+  /**
+   * Prepare HTML body for forwarded email
+   */
+  private prepareForwardedEmailBody(email: InboundEmail): string {
+    const from = email.from || 'unknown@speakasap.com';
+    const to = email.to || 'unknown@speakasap.com';
+    const subject = email.subject || '(no subject)';
+    const receivedAt = email.receivedAt ? email.receivedAt.toISOString() : new Date().toISOString();
+
+    // Use HTML body if available, otherwise use text body
+    const emailBody = email.bodyHtml || email.bodyText || '';
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .forward-header { background-color: #f5f5f5; padding: 15px; border-left: 4px solid #007bff; margin-bottom: 20px; }
+    .forward-header p { margin: 5px 0; }
+    .forward-label { font-weight: bold; color: #666; }
+    .email-body { padding: 15px; background-color: #fafafa; border: 1px solid #ddd; }
+  </style>
+</head>
+<body>
+  <div class="forward-header">
+    <p><span class="forward-label">From:</span> ${this.escapeHtml(from)}</p>
+    <p><span class="forward-label">To:</span> ${this.escapeHtml(to)}</p>
+    <p><span class="forward-label">Subject:</span> ${this.escapeHtml(subject)}</p>
+    <p><span class="forward-label">Date:</span> ${this.escapeHtml(receivedAt)}</p>
+  </div>
+  <div class="email-body">
+    ${emailBody}
+  </div>
+</body>
+</html>
+    `.trim();
+  }
+
+  /**
+   * Escape HTML special characters
+   */
+  private escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   /**
