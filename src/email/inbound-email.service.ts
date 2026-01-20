@@ -26,6 +26,9 @@ export interface SESNotification {
     destination: string[];
     messageId: string;
     timestamp: string;
+    // Use any here to stay compatible with full SES payload without over-typing
+    // commonHeaders contains already decoded subject which we can trust for encoding
+    commonHeaders?: any;
   };
   receipt: {
     recipients: string[];
@@ -182,10 +185,42 @@ export class InboundEmailService {
       const toRaw = sesNotification.mail.destination[0] || sesNotification.receipt.recipients[0] || '';
       const to = this.decodeEmailAddress(toRaw);
       
-      const subject = emailParts.subject || null;
+      // Prefer subject from parsed email parts, but fall back to SES commonHeaders.subject
+      // SES already provides correctly decoded subject, so we also use it to fix encoding mismatches
+      let subject = emailParts.subject || null;
+      const sesSubject =
+        (sesNotification as any).mail &&
+        (sesNotification as any).mail.commonHeaders &&
+        (sesNotification as any).mail.commonHeaders.subject;
+      if (sesSubject) {
+        if (!subject) {
+          subject = sesSubject;
+          this.logger.log(
+            `[PARSE] Using SES commonHeaders.subject as subject: ${subject}`,
+            'InboundEmailService',
+          );
+        } else if (subject !== sesSubject) {
+          this.logger.log(
+            `[PARSE] Subject mismatch detected, replacing parsed subject with SES commonHeaders.subject to avoid encoding issues. Parsed: ${subject}, SES: ${sesSubject}`,
+            'InboundEmailService',
+          );
+          subject = sesSubject;
+        }
+      }
+
       const bodyText = emailParts.bodyText || '';
-      const bodyHtml = emailParts.bodyHtml || null;
+      let bodyHtml = emailParts.bodyHtml || null;
       const attachments = emailParts.attachments || [];
+
+      // For plain-text emails, generate a simple HTML body that preserves line breaks.
+      // This ensures that ticket view in helpdesk shows readable paragraphs instead of a single long line.
+      if (!bodyHtml && bodyText) {
+        bodyHtml = bodyText.replace(/\r\n|\r|\n/g, '<br>');
+        this.logger.log(
+          `[PARSE] Generated HTML body from plain text to preserve line breaks (length: ${bodyHtml.length})`,
+          'InboundEmailService',
+        );
+      }
 
       this.logger.log(`[PARSE] Creating InboundEmail entity...`, 'InboundEmailService');
       const inboundEmail = new InboundEmail();
