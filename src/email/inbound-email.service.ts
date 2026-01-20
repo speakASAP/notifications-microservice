@@ -38,6 +38,25 @@ export interface SESNotification {
   content: string; // Base64 encoded email content
 }
 
+export interface ParsedEmailAttachment {
+  filename: string;
+  contentType: string;
+  content: string; // Raw string content from email parsing
+}
+
+export interface InboundEmailSummary {
+  id: string;
+  from: string;
+  to: string;
+  subject: string;
+  bodyText: string;
+  bodyHtml: string | null;
+  attachments: ParsedEmailAttachment[];
+  receivedAt: Date;
+  messageId: string;
+  status: string;
+}
+
 @Injectable()
 export class InboundEmailService {
   constructor(
@@ -53,71 +72,48 @@ export class InboundEmailService {
    * Handle SNS notification (subscription confirmation or email notification)
    */
   async handleSNSNotification(snsMessage: SNSMessage): Promise<void> {
-    console.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION START =====`);
-    console.log(`[SERVICE] SNS notification type: ${snsMessage.Type}`);
-    console.log(`[SERVICE] MessageId: ${snsMessage.MessageId}`);
-    console.log(`[SERVICE] TopicArn: ${snsMessage.TopicArn}`);
-    console.log(`[SERVICE] Has Message field: ${!!snsMessage.Message}, Message length: ${snsMessage.Message?.length || 0}`);
-    
-    try {
-      this.logger.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION START =====`, 'InboundEmailService');
-      this.logger.log(`[SERVICE] SNS notification type: ${snsMessage.Type}`, 'InboundEmailService');
-      this.logger.log(`[SERVICE] MessageId: ${snsMessage.MessageId}`, 'InboundEmailService');
-      this.logger.log(`[SERVICE] TopicArn: ${snsMessage.TopicArn}`, 'InboundEmailService');
-      this.logger.log(`[SERVICE] Has Message field: ${!!snsMessage.Message}, Message length: ${snsMessage.Message?.length || 0}`, 'InboundEmailService');
-    } catch (e) {
-      console.error(`[SERVICE] ERROR in this.logger.log: ${e}`);
-    }
+    this.logger.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION START =====`, 'InboundEmailService');
+    this.logger.log(`[SERVICE] SNS notification type: ${snsMessage.Type}`, 'InboundEmailService');
+    this.logger.log(`[SERVICE] MessageId: ${snsMessage.MessageId}`, 'InboundEmailService');
+    this.logger.log(`[SERVICE] TopicArn: ${snsMessage.TopicArn}`, 'InboundEmailService');
+    this.logger.log(`[SERVICE] Has Message field: ${!!snsMessage.Message}, Message length: ${snsMessage.Message?.length || 0}`, 'InboundEmailService');
 
     if (snsMessage.Type === 'SubscriptionConfirmation') {
-      console.log(`[SERVICE] SubscriptionConfirmation - handled by controller, skipping`);
       this.logger.log(`[SERVICE] SubscriptionConfirmation - handled by controller, skipping`, 'InboundEmailService');
       this.logger.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION END =====`, 'InboundEmailService');
       return;
     }
 
     if (snsMessage.Type === 'Notification' && snsMessage.Message) {
-      console.log(`[SERVICE] Processing Notification with Message field`);
       this.logger.log(`[SERVICE] Processing Notification with Message field`, 'InboundEmailService');
       try {
         // Parse SES notification from SNS Message field (JSON string)
-        console.log(`[SERVICE] Parsing Message field as JSON...`);
         this.logger.log(`[SERVICE] Parsing Message field as JSON...`, 'InboundEmailService');
         const sesNotification: SESNotification = JSON.parse(snsMessage.Message);
-        console.log(`[SERVICE] ✅ Parsed SES notification successfully`);
         this.logger.log(`[SERVICE] ✅ Parsed SES notification successfully`, 'InboundEmailService');
-        console.log(`[SERVICE] SES notification - source: ${sesNotification.mail?.source}, destination: ${JSON.stringify(sesNotification.mail?.destination)}`);
         this.logger.log(`[SERVICE] SES notification - source: ${sesNotification.mail?.source}, destination: ${JSON.stringify(sesNotification.mail?.destination)}, messageId: ${sesNotification.mail?.messageId}`, 'InboundEmailService');
         
-        console.log(`[SERVICE] Calling parseEmailContent...`);
         this.logger.log(`[SERVICE] Calling parseEmailContent...`, 'InboundEmailService');
         const inboundEmail = await this.parseEmailContent(sesNotification);
-        console.log(`[SERVICE] ✅ Parsed email content, email ID: ${inboundEmail.id || 'NEW'}, from: ${inboundEmail.from}, to: ${inboundEmail.to}`);
         this.logger.log(`[SERVICE] ✅ Parsed email content, email ID: ${inboundEmail.id || 'NEW'}, from: ${inboundEmail.from}, to: ${inboundEmail.to}`, 'InboundEmailService');
         
-        console.log(`[SERVICE] Calling storeInboundEmail...`);
         this.logger.log(`[SERVICE] Calling storeInboundEmail...`, 'InboundEmailService');
         await this.storeInboundEmail(inboundEmail);
-        console.log(`[SERVICE] ✅ Stored inbound email, ID: ${inboundEmail.id}`);
         this.logger.log(`[SERVICE] ✅ Stored inbound email, ID: ${inboundEmail.id}`, 'InboundEmailService');
         
-        console.log(`[SERVICE] Calling processInboundEmail...`);
         this.logger.log(`[SERVICE] Calling processInboundEmail...`, 'InboundEmailService');
         await this.processInboundEmail(inboundEmail);
-        console.log(`[SERVICE] ✅ Processed inbound email successfully`);
         this.logger.log(`[SERVICE] ✅ Processed inbound email successfully`, 'InboundEmailService');
-        console.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION END (SUCCESS) =====`);
         this.logger.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION END (SUCCESS) =====`, 'InboundEmailService');
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         const errorStack = error instanceof Error ? error.stack : undefined;
-        console.error(`[SERVICE] ❌ Failed to process SNS notification: ${errorMessage}`, errorStack);
         this.logger.error(`[SERVICE] ❌ Failed to process SNS notification: ${errorMessage}`, errorStack, 'InboundEmailService');
         this.logger.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION END (ERROR) =====`, 'InboundEmailService');
         throw error;
       }
     } else {
-      console.warn(`[SERVICE] ⚠️ Unknown SNS message type or missing Message field: Type=${snsMessage.Type}, HasMessage=${!!snsMessage.Message}`);
+      this.logger.warn(`[SERVICE] ⚠️ Unknown SNS message type or missing Message field: Type=${snsMessage.Type}, HasMessage=${!!snsMessage.Message}`, 'InboundEmailService');
       this.logger.warn(`[SERVICE] ⚠️ Unknown SNS message type or missing Message field: Type=${snsMessage.Type}, HasMessage=${!!snsMessage.Message}`, 'InboundEmailService');
       this.logger.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION END (IGNORED) =====`, 'InboundEmailService');
     }
@@ -222,13 +218,13 @@ export class InboundEmailService {
     subject: string | null;
     bodyText: string;
     bodyHtml: string | null;
-    attachments: any[];
+    attachments: ParsedEmailAttachment[];
   } {
     const parts = {
       subject: null as string | null,
       bodyText: '',
       bodyHtml: null as string | null,
-      attachments: [] as any[],
+      attachments: [] as ParsedEmailAttachment[],
     };
 
     // Split headers and body
@@ -242,10 +238,52 @@ export class InboundEmailService {
     const headers = emailContent.substring(0, headerBodySplit);
     const body = emailContent.substring(headerBodySplit + 4);
 
-    // Extract subject from headers
-    const subjectMatch = headers.match(/^Subject:\s*(.+)$/im);
-    if (subjectMatch) {
-      parts.subject = this.decodeHeader(subjectMatch[1]);
+    // Extract subject from headers (handle multi-line headers)
+    // RFC 2047 allows headers to be split across multiple lines
+    // Continuation lines start with whitespace (space or tab)
+    const subjectLines: string[] = [];
+    const headerLines = headers.split(/\r?\n/);
+    let inSubject = false;
+    for (let i = 0; i < headerLines.length; i++) {
+      const line = headerLines[i];
+      if (line.match(/^Subject:\s*(.+)$/i)) {
+        // Start of Subject header
+        const match = line.match(/^Subject:\s*(.+)$/i);
+        if (match) {
+          subjectLines.push(match[1]);
+          inSubject = true;
+        }
+      } else if (inSubject && /^\s/.test(line)) {
+        // Continuation line (starts with whitespace)
+        subjectLines.push(line.trim());
+      } else if (inSubject && line.trim() === '') {
+        // Empty line - end of headers
+        break;
+      } else if (inSubject && /^[A-Za-z-]+:/.test(line)) {
+        // Next header starts - end of Subject
+        break;
+      } else if (inSubject) {
+        // Unexpected line, but might be part of subject if it doesn't look like a header
+        // Only continue if line doesn't look like a new header
+        if (!/^[A-Za-z-]+:\s*/.test(line)) {
+          subjectLines.push(line.trim());
+        } else {
+          break;
+        }
+      }
+    }
+
+    if (subjectLines.length > 0) {
+      // Join all subject lines and decode
+      const subjectRaw = subjectLines.join(' ').trim();
+      // Decode the header
+      parts.subject = this.decodeHeader(subjectRaw);
+      this.logger.log(`[PARSE] Extracted subject (raw length: ${subjectRaw.length}, decoded length: ${parts.subject?.length || 0})`, 'InboundEmailService');
+      if (subjectRaw.length > 100 || (parts.subject && parts.subject.length > 100)) {
+        this.logger.log(`[PARSE] Subject preview (raw): ${subjectRaw.substring(0, 100)}..., decoded: ${parts.subject?.substring(0, 100)}...`, 'InboundEmailService');
+      } else {
+        this.logger.log(`[PARSE] Subject (raw): ${subjectRaw}, decoded: ${parts.subject}`, 'InboundEmailService');
+      }
     }
 
     // Check Content-Transfer-Encoding for non-multipart messages
@@ -343,19 +381,80 @@ export class InboundEmailService {
 
   /**
    * Decode email header (handles quoted-printable and base64)
+   * Handles RFC 2047 encoded headers: =?charset?encoding?text?=
+   * Also handles multi-line encoded headers and proper charset conversion
    */
   private decodeHeader(header: string): string {
-    // Simple decode - handle =?charset?encoding?text?= format
-    return header.replace(/=\?([^?]+)\?([BQ])\?([^?]+)\?=/gi, (match, charset, encoding, text) => {
-      if (encoding.toUpperCase() === 'B') {
-        // Base64
-        return Buffer.from(text, 'base64').toString(charset || 'utf-8');
-      } else if (encoding.toUpperCase() === 'Q') {
-        // Quoted-printable
-        return text.replace(/=([0-9A-F]{2})/gi, (m, hex) => String.fromCharCode(parseInt(hex, 16)));
+    if (!header) {
+      return header;
+    }
+
+    let decoded = header;
+
+    // Handle RFC 2047 encoded headers: =?charset?encoding?text?=
+    // This can span multiple encoded segments and may be split across lines
+    // Pattern: =?charset?encoding?text?= (with optional whitespace between segments)
+    decoded = decoded.replace(/=\?([^?]+)\?([BQbq])\?([^?]+)\?=/gi, (match, charset, encoding, text) => {
+      try {
+        const encodingUpper = encoding.toUpperCase();
+        const charsetLower = (charset || 'utf-8').toLowerCase().trim();
+
+        if (encodingUpper === 'B') {
+          // Base64 encoding
+          const buffer = Buffer.from(text.replace(/\s/g, ''), 'base64');
+          // Try to decode with specified charset, fallback to utf-8
+          try {
+            return buffer.toString(charsetLower as BufferEncoding);
+          } catch (e) {
+            // If charset conversion fails, try utf-8
+            this.logger.warn(`[PARSE] Failed to decode base64 with charset ${charsetLower}, trying utf-8: ${e}`, 'InboundEmailService');
+            return buffer.toString('utf-8');
+          }
+        } else if (encodingUpper === 'Q') {
+          // Quoted-printable encoding
+          // Replace =XX with actual character, handle underscore as space
+          const decodedText = text.replace(/_/g, ' ').replace(/=([0-9A-F]{2})/gi, (m, hex) => {
+            const charCode = parseInt(hex, 16);
+            return String.fromCharCode(charCode);
+          });
+
+          // Convert from specified charset to UTF-8
+          try {
+            const buffer = Buffer.from(decodedText, charsetLower as BufferEncoding);
+            return buffer.toString('utf-8');
+          } catch (e) {
+            // If charset conversion fails, return as-is (might already be UTF-8)
+            this.logger.warn(`[PARSE] Failed to convert quoted-printable from charset ${charsetLower}, using as-is: ${e}`, 'InboundEmailService');
+            return decodedText;
+          }
+        }
+        return text;
+      } catch (error) {
+        this.logger.warn(`[PARSE] Failed to decode header segment: ${match}, error: ${error}`, 'InboundEmailService');
+        return match; // Return original if decoding fails
       }
-      return text;
     });
+
+    // If no RFC 2047 encoding found, check if header might be incorrectly encoded
+    // Some emails have UTF-8 bytes interpreted as ISO-8859-1
+    // Try to detect and fix common encoding issues
+    if (decoded === header && /[\x80-\xFF]/.test(decoded)) {
+      // Contains high-byte characters, might be encoding issue
+      try {
+        // Try to interpret as ISO-8859-1 and convert to UTF-8
+        const buffer = Buffer.from(decoded, 'latin1');
+        const utf8Decoded = buffer.toString('utf-8');
+        // Check if result looks more valid (contains fewer replacement characters)
+        if (utf8Decoded && !utf8Decoded.includes('\uFFFD')) {
+          this.logger.log(`[PARSE] Fixed encoding issue in header (latin1->utf8): ${decoded.substring(0, 50)} -> ${utf8Decoded.substring(0, 50)}`, 'InboundEmailService');
+          decoded = utf8Decoded;
+        }
+      } catch (e) {
+        // Ignore conversion errors, use original
+      }
+    }
+
+    return decoded;
   }
 
   /**
@@ -418,7 +517,7 @@ export class InboundEmailService {
         // Step 1: Remove soft line breaks (= at end of line, with optional whitespace)
         // Handle all variations: =\r\n, =\n, = \r\n, = \n, =\r, etc.
         // Soft line breaks in quoted-printable: = at end of line means line continues
-        let processed = content
+        const processed = content
           .replace(/=\s*\r\n/g, '')  // = followed by optional whitespace and CRLF
           .replace(/=\s*\n/g, '')    // = followed by optional whitespace and LF
           .replace(/=\s*\r/g, '');   // = followed by optional whitespace and CR (just in case)
@@ -503,25 +602,18 @@ export class InboundEmailService {
    * Store inbound email in database
    */
   async storeInboundEmail(email: InboundEmail): Promise<void> {
-    console.log(`[STORE] ===== STORE INBOUND EMAIL START =====`);
-    console.log(`[STORE] Email data - from: ${email.from}, to: ${email.to}, subject: ${email.subject}`);
-    console.log(`[STORE] Status: ${email.status}, has rawData: ${!!email.rawData}`);
     this.logger.log(`[STORE] ===== STORE INBOUND EMAIL START =====`, 'InboundEmailService');
     this.logger.log(`[STORE] Email data - from: ${email.from}, to: ${email.to}, subject: ${email.subject}`, 'InboundEmailService');
     this.logger.log(`[STORE] Status: ${email.status}, has rawData: ${!!email.rawData}`, 'InboundEmailService');
     
     try {
-      console.log(`[STORE] Saving to database...`);
       this.logger.log(`[STORE] Saving to database...`, 'InboundEmailService');
       await this.inboundEmailRepository.save(email);
-      console.log(`[STORE] ✅ Stored inbound email successfully - ID: ${email.id}, from: ${email.from}`);
       this.logger.log(`[STORE] ✅ Stored inbound email successfully - ID: ${email.id}, from: ${email.from}`, 'InboundEmailService');
-      console.log(`[STORE] ===== STORE INBOUND EMAIL END (SUCCESS) =====`);
       this.logger.log(`[STORE] ===== STORE INBOUND EMAIL END (SUCCESS) =====`, 'InboundEmailService');
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const errorStack = error instanceof Error ? error.stack : undefined;
-      console.error(`[STORE] ❌ Failed to store inbound email: ${errorMessage}`, errorStack);
       this.logger.error(`[STORE] ❌ Failed to store inbound email: ${errorMessage}`, errorStack, 'InboundEmailService');
       this.logger.log(`[STORE] ===== STORE INBOUND EMAIL END (ERROR) =====`, 'InboundEmailService');
       throw error;
@@ -532,36 +624,27 @@ export class InboundEmailService {
    * Process inbound email (routing, webhook handlers, etc.)
    */
   async processInboundEmail(email: InboundEmail): Promise<void> {
-    console.log(`[PROCESS] ===== PROCESS INBOUND EMAIL START =====`);
-    console.log(`[PROCESS] Email ID: ${email.id}, from: ${email.from}, to: ${email.to}`);
     this.logger.log(`[PROCESS] ===== PROCESS INBOUND EMAIL START =====`, 'InboundEmailService');
     this.logger.log(`[PROCESS] Email ID: ${email.id}, from: ${email.from}, to: ${email.to}`, 'InboundEmailService');
 
     try {
       // Mark as processed
-      console.log(`[PROCESS] Marking email as processed...`);
       this.logger.log(`[PROCESS] Marking email as processed...`, 'InboundEmailService');
       email.status = 'processed';
       email.processedAt = new Date();
       await this.inboundEmailRepository.save(email);
-      console.log(`[PROCESS] ✅ Email marked as processed`);
       this.logger.log(`[PROCESS] ✅ Email marked as processed`, 'InboundEmailService');
 
       // Deliver to all subscribed services via webhooks
-      console.log(`[PROCESS] Delivering to subscribed services...`);
       this.logger.log(`[PROCESS] Delivering to subscribed services...`, 'InboundEmailService');
       await this.webhookDeliveryService.deliverToSubscriptions(email);
-      console.log(`[PROCESS] ✅ Successfully processed inbound email ${email.id}`);
       this.logger.log(`[PROCESS] ✅ Successfully processed inbound email ${email.id}`, 'InboundEmailService');
-      console.log(`[PROCESS] ===== PROCESS INBOUND EMAIL END (SUCCESS) =====`);
       this.logger.log(`[PROCESS] ===== PROCESS INBOUND EMAIL END (SUCCESS) =====`, 'InboundEmailService');
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const errorStack = error instanceof Error ? error.stack : undefined;
-      console.error(`[PROCESS] ❌ Failed to process inbound email ${email.id}: ${errorMessage}`, errorStack);
       this.logger.error(`[PROCESS] ❌ Failed to process inbound email ${email.id}: ${errorMessage}`, errorStack, 'InboundEmailService');
       
-      console.log(`[PROCESS] Marking email as failed...`);
       this.logger.log(`[PROCESS] Marking email as failed...`, 'InboundEmailService');
       email.status = 'failed';
       email.error = errorMessage;
@@ -580,7 +663,7 @@ export class InboundEmailService {
     toFilter?: string;
     excludeTo?: string[];
     status?: string;
-  }): Promise<any[]> {
+  }): Promise<InboundEmailSummary[]> {
     const queryBuilder = this.inboundEmailRepository.createQueryBuilder('email');
 
     // Filter by status
