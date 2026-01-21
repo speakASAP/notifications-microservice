@@ -210,13 +210,27 @@ export class InboundEmailService {
         }
       }
 
-      const bodyText = emailParts.bodyText || '';
+      let bodyText = emailParts.bodyText || '';
       let bodyHtml = emailParts.bodyHtml || null;
       const attachments = emailParts.attachments || [];
 
+      // Validate parsed content - check if it looks corrupted (just punctuation, very short, or suspicious patterns)
+      const looksCorrupted = bodyText && (
+        bodyText.length < 10 ||
+        /^[,\s!?.\-:;]+$/.test(bodyText.trim()) || // Only punctuation
+        bodyText.includes('--Mail') && bodyText.length < 100 // Suspicious patterns
+      );
+
+      if (looksCorrupted && bodyText) {
+        this.logger.warn(
+          `[PARSE] ⚠️ Parsed bodyText looks corrupted (length: ${bodyText.length}, preview: ${bodyText.substring(0, 50)}). Raw MIME available in rawData.content for fallback.`,
+          'InboundEmailService',
+        );
+      }
+
       // For plain-text emails, generate a simple HTML body that preserves line breaks.
       // This ensures that ticket view in helpdesk shows readable paragraphs instead of a single long line.
-      if (!bodyHtml && bodyText) {
+      if (!bodyHtml && bodyText && !looksCorrupted) {
         bodyHtml = bodyText.replace(/\r\n|\r|\n/g, '<br>');
         this.logger.log(
           `[PARSE] Generated HTML body from plain text to preserve line breaks (length: ${bodyHtml.length})`,
@@ -380,15 +394,68 @@ export class InboundEmailService {
       content: string;
     }> = [];
 
-    const boundaryRegex = new RegExp(`--${boundary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g');
-    const sections = body.split(boundaryRegex).filter((s) => s.trim() && !s.includes('--'));
+    // Escape boundary for regex (boundary may already include -- prefix from header)
+    const escapedBoundary = boundary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Multipart boundaries in body are prefixed with --, so match both --boundary and ----boundary (if boundary already has --)
+    const boundaryPattern = `--${escapedBoundary}(?:--)?`;
+    const boundaryRegex = new RegExp(boundaryPattern, 'g');
+    
+    // Split by boundary markers
+    const sections = body.split(boundaryRegex);
+    
+    this.logger.log(`[PARSE] Split multipart into ${sections.length} sections using boundary pattern: ${boundaryPattern}`, 'InboundEmailService');
 
-    for (const section of sections) {
+    for (let i = 0; i < sections.length; i++) {
+      const section = sections[i].trim();
+      
+      // Skip empty sections and the final closing boundary (ends with --)
+      if (!section || section === '--' || section.endsWith('--')) {
+        continue;
+      }
+
+      // Find header/body separator
       const headerBodySplit = section.indexOf('\r\n\r\n');
-      if (headerBodySplit === -1) continue;
+      if (headerBodySplit === -1) {
+        // Try LF-only separator
+        const headerBodySplitLF = section.indexOf('\n\n');
+        if (headerBodySplitLF === -1) {
+          this.logger.warn(`[PARSE] No header/body separator found in multipart section ${i}, skipping`, 'InboundEmailService');
+          continue;
+        }
+        const partHeaders = section.substring(0, headerBodySplitLF);
+        let partContent = section.substring(headerBodySplitLF + 2);
+        
+        // Clean up part content: remove trailing boundary markers and whitespace
+        partContent = partContent.replace(/\r?\n--.*$/, '').trim();
+        
+        const contentTypeMatch = partHeaders.match(/Content-Type:\s*([^;\r\n]+)/i);
+        const contentDispositionMatch = partHeaders.match(/Content-Disposition:\s*([^;\r\n]+)/i);
+        const filenameMatch = partHeaders.match(/filename="?([^";\r\n]+)"?/i);
+        const transferEncodingMatch = partHeaders.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
+
+        const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim().toLowerCase() : '';
+        const originalLength = partContent.length;
+        partContent = this.decodeContent(partContent, transferEncoding);
+        
+        if (transferEncoding && originalLength !== partContent.length) {
+          this.logger.log(`[PARSE] Decoded ${transferEncoding} content in part ${i}: ${originalLength} -> ${partContent.length} bytes`, 'InboundEmailService');
+        }
+
+        parts.push({
+          contentType: contentTypeMatch ? contentTypeMatch[1].trim() : undefined,
+          contentDisposition: contentDispositionMatch ? contentDispositionMatch[1].trim() : undefined,
+          filename: filenameMatch ? this.decodeHeader(filenameMatch[1]) : undefined,
+          content: partContent,
+        });
+        continue;
+      }
 
       const partHeaders = section.substring(0, headerBodySplit);
       let partContent = section.substring(headerBodySplit + 4);
+
+      // Clean up part content: remove trailing boundary markers, newlines, and whitespace
+      // Boundary markers can appear at the end: \r\n--boundary or \n--boundary
+      partContent = partContent.replace(/\r?\n--[^\r\n]*$/, '').trim();
 
       const contentTypeMatch = partHeaders.match(/Content-Type:\s*([^;\r\n]+)/i);
       const contentDispositionMatch = partHeaders.match(/Content-Disposition:\s*([^;\r\n]+)/i);
@@ -402,17 +469,23 @@ export class InboundEmailService {
       
       // Log decoding result for debugging
       if (transferEncoding && originalLength !== partContent.length) {
-        this.logger.log(`[PARSE] Decoded ${transferEncoding} content in part: ${originalLength} -> ${partContent.length} bytes`, 'InboundEmailService');
+        this.logger.log(`[PARSE] Decoded ${transferEncoding} content in part ${i}: ${originalLength} -> ${partContent.length} bytes`, 'InboundEmailService');
       }
 
-      parts.push({
-        contentType: contentTypeMatch ? contentTypeMatch[1].trim() : undefined,
-        contentDisposition: contentDispositionMatch ? contentDispositionMatch[1].trim() : undefined,
-        filename: filenameMatch ? this.decodeHeader(filenameMatch[1]) : undefined,
-        content: partContent,
-      });
+      // Only add parts that have content
+      if (partContent) {
+        parts.push({
+          contentType: contentTypeMatch ? contentTypeMatch[1].trim() : undefined,
+          contentDisposition: contentDispositionMatch ? contentDispositionMatch[1].trim() : undefined,
+          filename: filenameMatch ? this.decodeHeader(filenameMatch[1]) : undefined,
+          content: partContent,
+        });
+        
+        this.logger.log(`[PARSE] Extracted multipart part ${i}: contentType=${contentTypeMatch?.[1] || 'N/A'}, contentDisposition=${contentDispositionMatch?.[1] || 'N/A'}, contentLength=${partContent.length}`, 'InboundEmailService');
+      }
     }
 
+    this.logger.log(`[PARSE] Parsed ${parts.length} valid parts from multipart message`, 'InboundEmailService');
     return parts;
   }
 
