@@ -733,82 +733,37 @@ export class InboundEmailService {
     this.logger.log(`[FORWARD] Forwarding email from ${email.to} to ${forwardTo}`, 'InboundEmailService');
 
     try {
-      // Prepare forwarded email subject
-      const forwardedSubject = email.subject
-        ? `Fwd: ${email.subject}`
-        : 'Fwd: (no subject)';
+      // If we have the raw MIME content from SES, forward it unchanged via SES
+      if (email.rawData?.content) {
+        await this.emailService.send({
+          to: forwardTo,
+          subject: email.subject || '(no subject)',
+          message: '', // Not used for raw
+          rawMessage: email.rawData.content, // Base64-encoded raw MIME from SES
+          emailProvider: 'ses',
+        });
 
-      // Prepare forwarded email body
-      const forwardedBody = this.prepareForwardedEmailBody(email);
+        this.logger.log(`[FORWARD] ✅ Successfully forwarded raw email from ${email.to} to ${forwardTo}`, 'InboundEmailService');
+        return;
+      }
 
-      // Send forwarded email
+      // Fallback: forward without modification using original body (no extra wrappers)
+      const originalBody = email.bodyHtml || email.bodyText || '';
       await this.emailService.send({
         to: forwardTo,
-        subject: forwardedSubject,
-        message: forwardedBody,
-        contentType: 'text/html',
-        emailProvider: 'auto', // Use auto provider selection
+        subject: email.subject || '(no subject)',
+        message: originalBody,
+        contentType: email.bodyHtml ? 'text/html' : 'text/plain',
+        emailProvider: 'auto',
       });
 
-      this.logger.log(`[FORWARD] ✅ Successfully forwarded email from ${email.to} to ${forwardTo}`, 'InboundEmailService');
+      this.logger.log(`[FORWARD] ✅ Successfully forwarded email (fallback) from ${email.to} to ${forwardTo}`, 'InboundEmailService');
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const errorStack = error instanceof Error ? error.stack : undefined;
       this.logger.error(`[FORWARD] ❌ Failed to forward email from ${email.to} to ${forwardTo}: ${errorMessage}`, errorStack, 'InboundEmailService');
       // Don't throw - forwarding failure shouldn't break email processing
     }
-  }
-
-  /**
-   * Prepare HTML body for forwarded email
-   */
-  private prepareForwardedEmailBody(email: InboundEmail): string {
-    const from = email.from || 'unknown@speakasap.com';
-    const to = email.to || 'unknown@speakasap.com';
-    const subject = email.subject || '(no subject)';
-    const receivedAt = email.receivedAt ? email.receivedAt.toISOString() : new Date().toISOString();
-
-    // Use HTML body if available, otherwise use text body
-    const emailBody = email.bodyHtml || email.bodyText || '';
-
-    return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-    .forward-header { background-color: #f5f5f5; padding: 15px; border-left: 4px solid #007bff; margin-bottom: 20px; }
-    .forward-header p { margin: 5px 0; }
-    .forward-label { font-weight: bold; color: #666; }
-    .email-body { padding: 15px; background-color: #fafafa; border: 1px solid #ddd; }
-  </style>
-</head>
-<body>
-  <div class="forward-header">
-    <p><span class="forward-label">From:</span> ${this.escapeHtml(from)}</p>
-    <p><span class="forward-label">To:</span> ${this.escapeHtml(to)}</p>
-    <p><span class="forward-label">Subject:</span> ${this.escapeHtml(subject)}</p>
-    <p><span class="forward-label">Date:</span> ${this.escapeHtml(receivedAt)}</p>
-  </div>
-  <div class="email-body">
-    ${emailBody}
-  </div>
-</body>
-</html>
-    `.trim();
-  }
-
-  /**
-   * Escape HTML special characters
-   */
-  private escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
   }
 
   /**
