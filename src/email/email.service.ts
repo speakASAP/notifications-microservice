@@ -5,7 +5,7 @@
 
 import { Injectable, Inject } from '@nestjs/common';
 import * as sgMail from '@sendgrid/mail';
-import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
+import { SESClient, SendEmailCommand, SendRawEmailCommand } from '@aws-sdk/client-ses';
 import { LoggerService } from '../../shared/logger/logger.service';
 
 export type EmailContentType = 'text/plain' | 'text/html';
@@ -17,6 +17,7 @@ export interface EmailOptions {
   templateData?: Record<string, unknown>;
   emailProvider?: 'sendgrid' | 'ses' | 'auto'; // Per-request provider selection
   contentType?: EmailContentType; // Content type: 'text/html' or 'text/plain' (default: auto-detect)
+  rawMessage?: string | Buffer; // When provided, send raw MIME via SES without modifications
 }
 
 export interface EmailSendResult {
@@ -68,6 +69,12 @@ export class EmailService {
   async send(options: EmailOptions): Promise<EmailSendResult> {
     this.logger.log(`Sending email to ${options.to} with subject: ${options.subject}`, 'EmailService');
 
+    // If rawMessage is provided, send raw email via SES without modifications
+    if (options.rawMessage) {
+      this.logger.log(`Raw email provided, sending via SES as-is`, 'EmailService');
+      return await this.sendRawViaSES(options);
+    }
+
     // Determine content type: explicit > auto-detect > default
     const contentType = options.contentType || this.detectContentType(options.message) || 'text/plain';
     this.logger.log(`Email content type: ${contentType}`, 'EmailService');
@@ -95,6 +102,44 @@ export class EmailService {
 
     // Default to SendGrid
     return await this.sendViaSendGrid({ ...options, contentType });
+  }
+
+  /**
+   * Send raw MIME email via AWS SES (no modifications)
+   */
+  private async sendRawViaSES(options: EmailOptions): Promise<EmailSendResult> {
+    if (!this.sesClient) {
+      throw new Error('AWS SES client not initialized. Please provide AWS_SES_REGION, AWS_SES_ACCESS_KEY_ID, and AWS_SES_SECRET_ACCESS_KEY');
+    }
+
+    try {
+      const rawBuffer = Buffer.isBuffer(options.rawMessage)
+        ? options.rawMessage
+        : Buffer.from(options.rawMessage as string, 'base64');
+
+      const command = new SendRawEmailCommand({
+        Source: this.fromEmail,
+        Destinations: [options.to],
+        RawMessage: { Data: rawBuffer },
+      });
+
+      const response = await this.sesClient.send(command);
+      const messageId = response.MessageId;
+
+      this.logger.log(`Raw email sent successfully via AWS SES to ${options.to}, messageId: ${messageId}`, 'EmailService');
+
+      return {
+        success: true,
+        messageId: messageId,
+        channel: 'email',
+        recipient: options.to,
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`AWS SES raw email sending failed to ${options.to}: ${errorMessage}`, errorStack, 'EmailService');
+      throw new Error(`AWS SES raw email sending failed: ${errorMessage}`);
+    }
   }
 
   /**
