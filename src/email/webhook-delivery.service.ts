@@ -24,6 +24,8 @@ export interface ProcessedEmailPayload {
   receivedAt: string;
   messageId: string;
   rawData?: any; // Full SES notification for advanced use cases
+  rawContentBase64?: string; // Original MIME content from SES (base64, untouched)
+  rawHeaders?: any[]; // Original headers array from SES (untouched)
 }
 
 export interface EmailAttachment {
@@ -265,9 +267,15 @@ export class WebhookDeliveryService {
       messageId: inboundEmail.rawData?.mail?.messageId || `email-${inboundEmail.id}`,
     };
 
-    // Include rawData if needed (for advanced use cases)
+    // Include rawData and raw MIME so downstream services can reconstruct the email exactly as SES delivered it
     if (inboundEmail.rawData) {
       payload.rawData = inboundEmail.rawData;
+      if (inboundEmail.rawData.content) {
+        payload.rawContentBase64 = inboundEmail.rawData.content; // already base64 from SES
+      }
+      if (inboundEmail.rawData.mail?.headers) {
+        payload.rawHeaders = inboundEmail.rawData.mail.headers; // untouched headers array
+      }
     }
 
     console.log(`[WEBHOOK_DELIVERY] ✅ Prepared payload - subject: ${payload.subject}, attachments: ${payload.attachments.length}`);
