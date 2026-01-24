@@ -7,6 +7,7 @@ import { Injectable, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { LoggerService } from '../../shared/logger/logger.service';
 import { InboundEmail } from './entities/inbound-email.entity';
 import { WebhookDeliveryService } from './webhook-delivery.service';
@@ -27,9 +28,11 @@ export interface SESNotification {
     destination: string[];
     messageId: string;
     timestamp: string;
-    // Use any here to stay compatible with full SES payload without over-typing
     // commonHeaders contains already decoded subject which we can trust for encoding
-    commonHeaders?: any;
+    commonHeaders?: {
+      subject?: string;
+      [key: string]: unknown; // Allow other headers without over-typing
+    };
   };
   receipt: {
     recipients: string[];
@@ -38,8 +41,15 @@ export interface SESNotification {
     spfVerdict?: { status: string };
     dkimVerdict?: { status: string };
     dmarcVerdict?: { status: string };
+    action?: {
+      type: string;
+      bucketName?: string;
+      objectKey?: string;
+      objectKeyPrefix?: string;
+      topicArn?: string;
+    };
   };
-  content: string; // Base64 encoded email content
+  content?: string; // Base64 encoded email content (optional - may be in S3)
 }
 
 export interface ParsedEmailAttachment {
@@ -63,6 +73,8 @@ export interface InboundEmailSummary {
 
 @Injectable()
 export class InboundEmailService {
+  private s3Client: S3Client;
+
   constructor(
     @InjectRepository(InboundEmail)
     private inboundEmailRepository: Repository<InboundEmail>,
@@ -71,7 +83,19 @@ export class InboundEmailService {
     private httpService: HttpService,
     private webhookDeliveryService: WebhookDeliveryService,
     private emailService: EmailService,
-  ) {}
+  ) {
+    // Initialize S3 client for fetching emails stored in S3
+    const awsRegion = process.env.AWS_SES_REGION || 'eu-central-1';
+    this.s3Client = new S3Client({
+      region: awsRegion,
+      credentials: process.env.AWS_SES_ACCESS_KEY_ID && process.env.AWS_SES_SECRET_ACCESS_KEY
+        ? {
+            accessKeyId: process.env.AWS_SES_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SES_SECRET_ACCESS_KEY,
+          }
+        : undefined, // Will use default AWS credentials if not provided
+    });
+  }
 
   /**
    * Handle SNS notification (subscription confirmation or email notification)
@@ -142,6 +166,30 @@ export class InboundEmailService {
   }
 
   /**
+   * Fetch email content from S3 if stored there
+   */
+  private async fetchEmailFromS3(bucketName: string, objectKey: string): Promise<string> {
+    this.logger.log(`[S3] Fetching email from S3: bucket=${bucketName}, key=${objectKey}`, 'InboundEmailService');
+    try {
+      const command = new GetObjectCommand({
+        Bucket: bucketName,
+        Key: objectKey,
+      });
+      const response = await this.s3Client.send(command);
+      if (!response.Body) {
+        throw new Error('S3 object body is empty');
+      }
+      const emailContent = await response.Body.transformToString();
+      this.logger.log(`[S3] ✅ Fetched email from S3, length: ${emailContent.length}`, 'InboundEmailService');
+      return emailContent;
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`[S3] ❌ Failed to fetch email from S3: ${errorMessage}`, undefined, 'InboundEmailService');
+      throw new Error(`Failed to fetch email from S3: ${errorMessage}`);
+    }
+  }
+
+  /**
    * Parse email content from SES notification
    */
   async parseEmailContent(sesNotification: SESNotification): Promise<InboundEmail> {
@@ -150,12 +198,29 @@ export class InboundEmailService {
     this.logger.log(`[PARSE] Source: ${sesNotification.mail.source}`, 'InboundEmailService');
     this.logger.log(`[PARSE] Destination: ${JSON.stringify(sesNotification.mail.destination)}`, 'InboundEmailService');
     this.logger.log(`[PARSE] Content length (base64): ${sesNotification.content?.length || 0}`, 'InboundEmailService');
+    this.logger.log(`[PARSE] Receipt action type: ${sesNotification.receipt?.action?.type || 'N/A'}`, 'InboundEmailService');
 
     try {
-      // Decode base64 email content
-      this.logger.log(`[PARSE] Decoding base64 content...`, 'InboundEmailService');
-      const emailContent = Buffer.from(sesNotification.content, 'base64').toString('utf-8');
-      this.logger.log(`[PARSE] ✅ Decoded content, length: ${emailContent.length}`, 'InboundEmailService');
+      let emailContent: string;
+
+      // Check if email content is in notification or needs to be fetched from S3
+      if (sesNotification.content) {
+        // Email content is directly in the notification (base64 encoded)
+        this.logger.log(`[PARSE] Email content found in notification, decoding base64...`, 'InboundEmailService');
+        emailContent = Buffer.from(sesNotification.content, 'base64').toString('utf-8');
+        this.logger.log(`[PARSE] ✅ Decoded content from notification, length: ${emailContent.length}`, 'InboundEmailService');
+      } else if (sesNotification.receipt?.action?.type === 'S3' && sesNotification.receipt.action.bucketName && sesNotification.receipt.action.objectKey) {
+        // Email is stored in S3, fetch it
+        this.logger.log(`[PARSE] Email content not in notification, fetching from S3...`, 'InboundEmailService');
+        emailContent = await this.fetchEmailFromS3(
+          sesNotification.receipt.action.bucketName,
+          sesNotification.receipt.action.objectKey,
+        );
+      } else {
+        // No content available
+        throw new Error('Email content not found in notification and S3 action not available');
+      }
+
       this.logger.log(`[PARSE] Content preview (first 200 chars): ${emailContent.substring(0, 200)}`, 'InboundEmailService');
 
       // Parse email headers and body
@@ -190,10 +255,7 @@ export class InboundEmailService {
       // Prefer subject from parsed email parts, but fall back to SES commonHeaders.subject
       // SES already provides correctly decoded subject, so we also use it to fix encoding mismatches
       let subject = emailParts.subject || null;
-      const sesSubject =
-        (sesNotification as any).mail &&
-        (sesNotification as any).mail.commonHeaders &&
-        (sesNotification as any).mail.commonHeaders.subject;
+      const sesSubject = sesNotification.mail.commonHeaders?.subject;
       if (sesSubject) {
         if (!subject) {
           subject = sesSubject;
@@ -210,7 +272,7 @@ export class InboundEmailService {
         }
       }
 
-      let bodyText = emailParts.bodyText || '';
+      const bodyText = emailParts.bodyText || '';
       let bodyHtml = emailParts.bodyHtml || null;
       const attachments = emailParts.attachments || [];
 
