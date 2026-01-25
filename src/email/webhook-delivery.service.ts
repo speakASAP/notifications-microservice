@@ -309,16 +309,29 @@ export class WebhookDeliveryService {
     }
 
     this.logger.log(`[WEBHOOK_DELIVERY] Constructing payload object...`, 'WebhookDeliveryService');
+    // Clean messageId: remove angle brackets if present (e.g., <message-id> -> message-id)
+    let messageId = inboundEmail.rawData?.mail?.messageId || `email-${inboundEmail.id}`;
+    if (messageId && messageId.startsWith('<') && messageId.endsWith('>')) {
+      messageId = messageId.slice(1, -1);
+      this.logger.log(`[WEBHOOK_DELIVERY] Cleaned messageId: removed angle brackets`, 'WebhookDeliveryService');
+    }
+    // Clean from field: extract email address from "Display Name <email@domain.com>" format
+    let fromEmail = inboundEmail.from;
+    const fromMatch = fromEmail.match(/<([^>]+)>/);
+    if (fromMatch) {
+      fromEmail = fromMatch[1];
+      this.logger.log(`[WEBHOOK_DELIVERY] Cleaned from field: extracted email from display name`, 'WebhookDeliveryService');
+    }
     const payload: ProcessedEmailPayload = {
       id: inboundEmail.id,
-      from: inboundEmail.from,
+      from: fromEmail,
       to: inboundEmail.to,
       subject: inboundEmail.subject,
       bodyText: inboundEmail.bodyText,
       bodyHtml: inboundEmail.bodyHtml,
       attachments: attachments,
       receivedAt: inboundEmail.receivedAt.toISOString(),
-      messageId: inboundEmail.rawData?.mail?.messageId || `email-${inboundEmail.id}`,
+      messageId: messageId,
     };
     this.logger.log(`[WEBHOOK_DELIVERY] Base payload created - messageId: ${payload.messageId}, bodyText length: ${payload.bodyText?.length || 0}, bodyHtml length: ${payload.bodyHtml?.length || 0}`, 'WebhookDeliveryService');
 
