@@ -8,6 +8,18 @@ This directory contains utility scripts for the notifications-microservice.
 
 - **`deploy.sh`** - Production deployment script using blue/green deployment system
 
+**Restart / rebuild after `git pull`** (service name is `notification-service`; container is `notifications-microservice-blue`):
+
+```bash
+cd ~/notifications-microservice
+# Rebuild and recreate (picks up new code)
+docker compose -f docker-compose.blue.yml up -d --build notification-service
+# Or only restart (no rebuild; same image)
+docker compose -f docker-compose.blue.yml restart notification-service
+```
+
+Use `up -d --build` after a pull; `restart` alone does not rebuild the image.
+
 ### Email Diagnostics
 
 - **`check-email-receiving.sh`** - Diagnostic tool for AWS SES email receiving configuration
