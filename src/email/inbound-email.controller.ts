@@ -10,6 +10,15 @@ import { LoggerService } from '../../shared/logger/logger.service';
 import { Inject } from '@nestjs/common';
 import * as https from 'https';
 
+/** Body shape for POST /email/inbound/s3 (SNS SubscriptionConfirmation, S3 event, or manual { bucket, key }) */
+interface S3EndpointBody {
+  Type?: string;
+  SubscribeURL?: string;
+  Records?: Array<{ s3?: { bucket?: { name: string }; object?: { key: string } } }>;
+  bucket?: string;
+  key?: string;
+}
+
 @Controller('email')
 export class InboundEmailController {
   constructor(
@@ -32,19 +41,20 @@ export class InboundEmailController {
       // Log immediately to confirm controller is called
       this.logger.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST START =====`, 'InboundEmailController');
       this.logger.log(`[CONTROLLER] Request method: ${req.method}, URL: ${req.url}`, 'InboundEmailController');
-      this.logger.log(`[CONTROLLER] Request headers: ${JSON.stringify(headers)}`, 'InboundEmailController');
+      const safeHeaders = this.getSafeHeadersForLogging(headers);
+      this.logger.log(`[CONTROLLER] Request headers (safe): ${JSON.stringify(safeHeaders)}`, 'InboundEmailController');
       this.logger.log(`[CONTROLLER] Request body type: ${typeof req.body}, is string: ${typeof req.body === 'string'}`, 'InboundEmailController');
-      
+
       // Get body directly from req.body to bypass ValidationPipe
       if (!req.body) {
         this.logger.error(`[CONTROLLER] req.body is null or undefined`, undefined, 'InboundEmailController');
         return { status: 'error', message: 'Request body is missing' };
       }
-      
+
       const body: SNSMessage = req.body as SNSMessage;
       this.logger.log(`[CONTROLLER] Body extracted, Type: ${body?.Type}, MessageId: ${body?.MessageId}`, 'InboundEmailController');
       this.logger.log(`[CONTROLLER] Body keys: ${Object.keys(body || {}).join(', ')}, Type: ${body?.Type === 'Notification' ? 'NOTIFICATION' : body?.Type === 'SubscriptionConfirmation' ? 'SUBSCRIPTION_CONFIRMATION' : 'UNKNOWN'}`, 'InboundEmailController');
-      
+
       if (body?.Message) {
         this.logger.log(`[CONTROLLER] Message field exists, length: ${body.Message.length}`, 'InboundEmailController');
         try {
@@ -126,11 +136,13 @@ export class InboundEmailController {
   ): Promise<{ success: boolean; data: InboundEmailSummary[]; count: number }> {
     try {
       const limitNum = limit ? parseInt(limit, 10) : 100;
+      const safeLimit =
+        Number.isNaN(limitNum) || limitNum < 1 ? 100 : Math.min(limitNum, 500);
       const excludeToList = Array.isArray(excludeTo) ? excludeTo : excludeTo ? [excludeTo] : [];
       const statusFilter = status || 'processed';
 
       const emails = await this.inboundEmailService.findInboundEmails({
-        limit: limitNum,
+        limit: safeLimit,
         toFilter: toFilter || '@speakasap.com',
         excludeTo: excludeToList,
         status: statusFilter,
@@ -180,7 +192,30 @@ export class InboundEmailController {
   @Post('inbound/s3')
   async processFromS3(@Req() req: Request): Promise<{ success: boolean; message: string; id?: string; attachments?: number }> {
     try {
-      this.logger.log(`[CONTROLLER] Processing email from S3`, 'InboundEmailController');
+      this.logger.log(`[CONTROLLER] Processing request to /email/inbound/s3`, 'InboundEmailController');
+
+      // Handle SNS subscription confirmation (for S3 event notifications)
+      const body = req.body as S3EndpointBody | undefined;
+      if (body && body.Type === 'SubscriptionConfirmation') {
+        this.logger.log(`[CONTROLLER] Processing SubscriptionConfirmation for S3 events`, 'InboundEmailController');
+        if (body.SubscribeURL) {
+          this.logger.log(`[CONTROLLER] SubscribeURL found: ${body.SubscribeURL.substring(0, 100)}...`, 'InboundEmailController');
+          try {
+            this.logger.log(`[CONTROLLER] Attempting to confirm S3 events subscription...`, 'InboundEmailController');
+            await this.confirmSubscription(body.SubscribeURL);
+            this.logger.log(`[CONTROLLER] ✅ SNS subscription for S3 events confirmed successfully`, 'InboundEmailController');
+            return { success: true, message: 'S3 events subscription confirmed' };
+          } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            const errorStack = error instanceof Error ? error.stack : undefined;
+            this.logger.error(`[CONTROLLER] ❌ Failed to confirm S3 events subscription: ${errorMessage}`, errorStack, 'InboundEmailController');
+            return { success: false, message: `Failed to confirm subscription: ${errorMessage}` };
+          }
+        } else {
+          this.logger.warn(`[CONTROLLER] ⚠️ SubscribeURL not provided in SubscriptionConfirmation`, 'InboundEmailController');
+          return { success: false, message: 'SubscribeURL not provided' };
+        }
+      }
 
       // Handle S3 event notification format (from SNS)
       if (req.body && req.body.Records && Array.isArray(req.body.Records)) {
@@ -239,6 +274,22 @@ export class InboundEmailController {
         message: errorMessage,
       };
     }
+  }
+
+  /**
+   * Return only allowlisted headers for logging (avoid Authorization, Cookie, etc.)
+   */
+  private getSafeHeadersForLogging(
+    headers: Record<string, string | string[] | undefined>,
+  ): Record<string, string | string[] | undefined> {
+    const allowlist = ['content-type', 'x-request-id'];
+    const out: Record<string, string | string[] | undefined> = {};
+    for (const [k, v] of Object.entries(headers)) {
+      if (v === undefined) continue;
+      const lower = k.toLowerCase();
+      if (allowlist.includes(lower)) out[lower] = v;
+    }
+    return out;
   }
 
   /**
