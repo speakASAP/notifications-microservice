@@ -173,6 +173,7 @@ POST /email/inbound
 ```
 
 **Setup**:
+
 1. Configure AWS SES to send notifications to an SNS topic
 2. Configure SNS topic to send HTTP(S) POST requests to `https://notifications.statex.cz/email/inbound`
 3. The service will automatically confirm SNS subscription and process inbound emails
@@ -211,12 +212,14 @@ SENDGRID_FROM_EMAIL=noreply@flipflop.cz
 SENDGRID_FROM_NAME=FlipFlop.cz
 
 # AWS SES Configuration
-AWS_SES_REGION=us-east-1
+AWS_SES_REGION=eu-central-1
 AWS_SES_ACCESS_KEY_ID=your_aws_access_key_id
 AWS_SES_SECRET_ACCESS_KEY=your_aws_secret_access_key
-AWS_SES_FROM_EMAIL=noreply@speakasap.com
+AWS_SES_FROM_EMAIL=contact@speakasap.com
 AWS_SES_FROM_NAME=SpeakASAP
-AWS_SES_SNS_TOPIC_ARN=arn:aws:sns:us-east-1:123456789012:inbound-email
+AWS_SES_SNS_TOPIC_ARN=arn:aws:sns:eu-central-1:{12-digits amazon-ID}}:inbound-email-speakasap
+AWS_SES_S3_BUCKET=speakasap-email-forward
+AWS_SES_S3_OBJECT_KEY_PREFIX=forwards/
 
 # Telegram Configuration
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
@@ -285,12 +288,15 @@ The service will automatically create the `notifications` and `inbound_emails` t
    - Create a new user with SES sending permissions
    - Generate access key ID and secret access key
    - Add credentials to `.env`:
+
      ```env
-     AWS_SES_REGION=us-east-1
+     AWS_SES_REGION=eu-central-1
      AWS_SES_ACCESS_KEY_ID=your_access_key_id
      AWS_SES_SECRET_ACCESS_KEY=your_secret_access_key
      AWS_SES_FROM_EMAIL=noreply@speakasap.com
      AWS_SES_FROM_NAME=SpeakASAP
+     AWS_SES_S3_BUCKET=speakasap-email-forward
+     AWS_SES_S3_OBJECT_KEY_PREFIX=forwards/
      ```
 
 2. **Verify sender email**:
@@ -304,35 +310,143 @@ The service will automatically create the `notifications` and `inbound_emails` t
 
 ### Inbound Email Setup
 
-1. **Create SNS Topic**:
+1. **Create S3 Bucket for Email Storage** (Recommended - prevents email loss):
+   - Go to AWS S3 Console
+   - Create a new bucket (e.g., `speakasap-inbound-emails`)
+   - Configure bucket policy to allow SES to write:
+
+     ```json
+     {
+       "Version": "2012-10-17",
+       "Statement": [
+         {
+           "Sid": "AllowSESPuts",
+           "Effect": "Allow",
+           "Principal": {
+             "Service": "ses.amazonaws.com"
+           },
+           "Action": "s3:PutObject",
+           "Resource": "arn:aws:s3:::speakasap-inbound-emails/*",
+           "Condition": {
+             "StringEquals": {
+               "aws:Referer": "YOUR_AWS_ACCOUNT_ID"
+             }
+           }
+         }
+       ]
+     }
+     ```
+
+   - Enable versioning (optional but recommended for recovery)
+   - Configure lifecycle policies if needed (e.g., move to Glacier after 90 days)
+
+2. **Create SNS Topic**:
    - Go to AWS SNS Console
    - Create a new topic (e.g., `inbound-email`)
    - Note the topic ARN
 
-2. **Configure SES to send to SNS**:
+3. **Configure SES Receiving Rule with S3 and SNS**:
    - Go to AWS SES Console → Email Receiving → Rule Sets
    - Create a new rule set (or use default)
    - Create a rule that:
-     - Matches all recipients (or specific domain)
-     - Action: Publish to SNS topic
-     - Select the SNS topic created above
+     - Matches all recipients (or specific domain like `@speakasap.com`)
+     - **Action 1: Save to S3 bucket** (IMPORTANT: Add this action FIRST):
+       - Action type: "Save to S3 bucket"
+       - S3 bucket: Select the bucket created in step 1 (e.g., `speakasap-email-forward`)
+       - Object key prefix: `forwards/` (optional, for organization - must match `AWS_SES_S3_OBJECT_KEY_PREFIX`)
+       - KMS key: (optional, for encryption)
+     - **Action 2: Publish to SNS topic** (Add this action SECOND):
+       - Action type: "Publish to SNS topic"
+       - SNS topic: Select the topic created in step 2
+   - **Important**: The order matters - S3 action should be before SNS action to ensure emails are saved even if SNS fails
+   - **Note**: When both S3 and SNS actions are configured:
+     - Emails are saved to S3 first, then notification is sent via SNS
+     - For emails > 150 KB, SNS notification may not include email content
+     - **S3-First Strategy**: The service automatically fetches email content from S3 if bucket is configured
+     - **Recommended**: Configure `AWS_SES_S3_BUCKET` and `AWS_SES_S3_OBJECT_KEY_PREFIX` in `.env` to ensure S3 fetching works even if bucket info is missing from notification
+     - This ensures all emails (including large ones with attachments) are processed correctly
+     - See [S3-First Strategy Guide](docs/S3_FIRST_STRATEGY.md) for details
 
-3. **Configure SNS to send to webhook**:
+4. **Configure SNS to send to webhook**:
    - Go to AWS SNS Console → Subscriptions
    - Create subscription:
      - Protocol: HTTPS
      - Endpoint: `https://notifications.statex.cz/email/inbound`
      - Enable raw message delivery: No (needed for SES notifications)
 
-4. **Confirm Subscription**:
+5. **Confirm Subscription**:
    - AWS SNS will send a subscription confirmation to the webhook
    - The service automatically confirms the subscription
    - Check SNS console to verify subscription is confirmed
 
-5. **Test Inbound Email**:
+6. **Test Inbound Email**:
    - Send an email to the verified recipient
    - Check the `inbound_emails` table in the database
    - Check service logs for processing status
+   - Verify email is saved in S3 bucket
+
+### Email Recovery from S3
+
+If an email was not processed correctly but was saved to S3:
+
+1. **Locate the email in S3**:
+   - Go to AWS S3 Console
+   - Navigate to your inbound emails bucket
+   - Find the email object (usually named with timestamp and message ID)
+
+2. **Download and inspect**:
+   - Download the email file from S3
+   - The file contains the raw MIME email content
+
+3. **Manual reprocessing** (if needed):
+   - **Option 1**: Use the API endpoint: `POST /email/inbound/s3` with body `{ "bucket": "bucket-name", "key": "object-key" }`
+   - **Option 2**: Use the script: `ts-node scripts/process-s3-email.ts <bucket-name> <object-key>`
+   - **Option 3**: Use the reparse endpoint: `POST /email/inbound/:id/reparse` (if email already exists in database)
+
+### S3 Event Notifications Setup (Recommended for Large Emails)
+
+For emails larger than 150 KB, AWS SES may not send SNS notifications. To ensure all emails are processed automatically:
+
+1. **Create SNS Topic for S3 Events** (or reuse existing):
+   - Go to AWS SNS Console
+   - Create a new topic (e.g., `s3-email-events`)
+   - Note the topic ARN
+
+2. **Configure S3 Bucket Event Notifications**:
+   - Go to AWS S3 Console → Your bucket (`speakasap-email-forward`)
+   - Go to Properties → Event notifications
+   - Create event notification:
+     - **Event name**: `ProcessInboundEmails`
+     - **Event types**: Select `s3:ObjectCreated:*` (or just `s3:ObjectCreated:Put`)
+     - **Prefix**: `forwards/` (matches your object key prefix)
+     - **Destination**: SNS topic → Select your SNS topic (`s3-email-events`)
+
+3. **Configure SNS Subscription**:
+   - Go to AWS SNS Console → Subscriptions
+   - Create subscription:
+     - Protocol: HTTPS
+     - Endpoint: `https://notifications.statex.cz/email/inbound/s3`
+     - Enable raw message delivery: **Yes** (for S3 events)
+
+4. **Verify Configuration**:
+   - Send a test email with attachment (>150 KB)
+   - Check S3 bucket for the email
+   - Check service logs for S3 event processing
+   - Verify email appears in database and helpdesk
+
+**How It Works**:
+
+- When an email is saved to S3, S3 sends an event notification to SNS
+- SNS forwards the notification to the service endpoint `/email/inbound/s3`
+- The service fetches the email from S3 and processes it
+- This ensures emails > 150 KB are processed even if SNS notification fails
+
+**Benefits of S3 Storage**:
+
+- ✅ **No email loss**: All emails are saved to S3 before processing
+- ✅ **Recovery**: Can recover emails even if processing fails
+- ✅ **Audit trail**: Complete history of all received emails
+- ✅ **Compliance**: Long-term storage for compliance requirements
 
 ## Integration Examples
 

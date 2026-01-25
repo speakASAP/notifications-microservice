@@ -5,7 +5,7 @@
 
 import { Controller, Post, Get, Headers, HttpCode, HttpStatus, Req, Query, Param } from '@nestjs/common';
 import { Request } from 'express';
-import { InboundEmailService, SNSMessage } from './inbound-email.service';
+import { InboundEmailService, InboundEmailSummary, SNSMessage } from './inbound-email.service';
 import { LoggerService } from '../../shared/logger/logger.service';
 import { Inject } from '@nestjs/common';
 import * as https from 'https';
@@ -24,12 +24,12 @@ export class InboundEmailController {
    */
   @Post('inbound')
   @HttpCode(HttpStatus.OK)
-  async handleInbound(@Req() req: Request, @Headers() headers: any): Promise<{ status: string; message?: string }> {
+  async handleInbound(
+    @Req() req: Request,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+  ): Promise<{ status: string; message?: string }> {
     try {
       // Log immediately to confirm controller is called
-      console.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST START =====`);
-      console.log(`[CONTROLLER] req.body exists: ${!!req.body}, type: ${typeof req.body}`);
-      
       this.logger.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST START =====`, 'InboundEmailController');
       this.logger.log(`[CONTROLLER] Request method: ${req.method}, URL: ${req.url}`, 'InboundEmailController');
       this.logger.log(`[CONTROLLER] Request headers: ${JSON.stringify(headers)}`, 'InboundEmailController');
@@ -37,37 +37,26 @@ export class InboundEmailController {
       
       // Get body directly from req.body to bypass ValidationPipe
       if (!req.body) {
-        console.log(`[CONTROLLER] ERROR: req.body is null or undefined`);
         this.logger.error(`[CONTROLLER] req.body is null or undefined`, undefined, 'InboundEmailController');
         return { status: 'error', message: 'Request body is missing' };
       }
       
       const body: SNSMessage = req.body as SNSMessage;
-      console.log(`[CONTROLLER] body extracted, Type: ${body?.Type}`);
-      console.log(`[CONTROLLER] About to call this.logger.log...`);
-      
-      try {
-        this.logger.log(`[CONTROLLER] Body extracted, Type: ${body?.Type}, MessageId: ${body?.MessageId}`, 'InboundEmailController');
-        console.log(`[CONTROLLER] this.logger.log succeeded`);
-      } catch (e) {
-        console.error(`[CONTROLLER] ERROR in this.logger.log: ${e}`);
-      }
-      
-      console.log(`[CONTROLLER] Body keys: ${Object.keys(body || {}).join(', ')}`);
-      console.log(`[CONTROLLER] Body Type check: ${body?.Type === 'Notification' ? 'NOTIFICATION' : body?.Type === 'SubscriptionConfirmation' ? 'SUBSCRIPTION_CONFIRMATION' : 'UNKNOWN'}`);
+      this.logger.log(`[CONTROLLER] Body extracted, Type: ${body?.Type}, MessageId: ${body?.MessageId}`, 'InboundEmailController');
+      this.logger.log(`[CONTROLLER] Body keys: ${Object.keys(body || {}).join(', ')}, Type: ${body?.Type === 'Notification' ? 'NOTIFICATION' : body?.Type === 'SubscriptionConfirmation' ? 'SUBSCRIPTION_CONFIRMATION' : 'UNKNOWN'}`, 'InboundEmailController');
       
       if (body?.Message) {
-        console.log(`[CONTROLLER] Message field exists, length: ${body.Message.length}`);
+        this.logger.log(`[CONTROLLER] Message field exists, length: ${body.Message.length}`, 'InboundEmailController');
         try {
           const messagePreview = JSON.parse(body.Message);
-          console.log(`[CONTROLLER] Message preview - notificationType: ${messagePreview?.notificationType}, source: ${messagePreview?.mail?.source}`);
+          this.logger.log(`[CONTROLLER] Message preview - notificationType: ${messagePreview?.notificationType}, source: ${messagePreview?.mail?.source}`, 'InboundEmailController');
         } catch (e) {
-          console.error(`[CONTROLLER] Failed to parse Message field: ${e}`);
+          this.logger.error(`[CONTROLLER] Failed to parse Message field: ${e}`, undefined, 'InboundEmailController');
         }
       }
 
       // Handle SNS subscription confirmation
-      console.log(`[CONTROLLER] Checking body.Type: ${body.Type}`);
+      this.logger.log(`[CONTROLLER] Checking body.Type: ${body.Type}`, 'InboundEmailController');
       if (body.Type === 'SubscriptionConfirmation') {
         this.logger.log(`[CONTROLLER] Processing SubscriptionConfirmation`, 'InboundEmailController');
 
@@ -96,17 +85,15 @@ export class InboundEmailController {
 
       // Handle SNS notification (actual email)
       if (body.Type === 'Notification') {
-        console.log(`[CONTROLLER] Processing Notification type`);
-        console.log(`[CONTROLLER] Calling inboundEmailService.handleSNSNotification...`);
+        this.logger.log(`[CONTROLLER] Processing Notification type, calling handleSNSNotification`, 'InboundEmailController');
         try {
           await this.inboundEmailService.handleSNSNotification(body);
-          console.log(`[CONTROLLER] ✅ Successfully processed inbound email notification`);
+          this.logger.log(`[CONTROLLER] ✅ Successfully processed inbound email notification`, 'InboundEmailController');
           this.logger.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST END (SUCCESS) =====`, 'InboundEmailController');
           return { status: 'processed', message: 'Email notification processed' };
         } catch (error: unknown) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           const errorStack = error instanceof Error ? error.stack : undefined;
-          console.error(`[CONTROLLER] ❌ Error in handleSNSNotification: ${errorMessage}`, errorStack);
           this.logger.error(`[CONTROLLER] ❌ Error in handleSNSNotification: ${errorMessage}`, errorStack, 'InboundEmailController');
           this.logger.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST END (ERROR) =====`, 'InboundEmailController');
           throw error;
@@ -120,7 +107,6 @@ export class InboundEmailController {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const errorStack = error instanceof Error ? error.stack : undefined;
-      console.error(`[CONTROLLER] ❌❌❌ CRITICAL ERROR: ${errorMessage}`, errorStack);
       this.logger.error(`[CONTROLLER] ❌❌❌ CRITICAL ERROR in handleInbound: ${errorMessage}`, errorStack, 'InboundEmailController');
       this.logger.log(`[CONTROLLER] ===== INBOUND EMAIL WEBHOOK REQUEST END (CRITICAL ERROR) =====`, 'InboundEmailController');
       return { status: 'error', message: errorMessage };
@@ -137,7 +123,7 @@ export class InboundEmailController {
     @Query('toFilter') toFilter?: string,
     @Query('excludeTo') excludeTo?: string | string[],
     @Query('status') status?: string,
-  ): Promise<{ success: boolean; data: any[]; count: number }> {
+  ): Promise<{ success: boolean; data: InboundEmailSummary[]; count: number }> {
     try {
       const limitNum = limit ? parseInt(limit, 10) : 100;
       const excludeToList = Array.isArray(excludeTo) ? excludeTo : excludeTo ? [excludeTo] : [];
@@ -179,6 +165,75 @@ export class InboundEmailController {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Error re-parsing email: ${errorMessage}`, undefined, 'InboundEmailController');
+      return {
+        success: false,
+        message: errorMessage,
+      };
+    }
+  }
+
+  /**
+   * Process email from S3 bucket (for S3 event notifications or manual processing)
+   * POST /email/inbound/s3
+   * Body: { bucket: string, key: string }
+   */
+  @Post('inbound/s3')
+  async processFromS3(@Req() req: Request): Promise<{ success: boolean; message: string; id?: string; attachments?: number }> {
+    try {
+      this.logger.log(`[CONTROLLER] Processing email from S3`, 'InboundEmailController');
+
+      // Handle S3 event notification format (from SNS)
+      if (req.body && req.body.Records && Array.isArray(req.body.Records)) {
+        // S3 event notification via SNS
+        const records = req.body.Records;
+        this.logger.log(`[CONTROLLER] Received S3 event notification with ${records.length} record(s)`, 'InboundEmailController');
+
+        const results = [];
+        for (const record of records) {
+          if (record.s3 && record.s3.bucket && record.s3.object) {
+            const bucketName = record.s3.bucket.name;
+            const objectKey = decodeURIComponent(record.s3.object.key.replace(/\+/g, ' '));
+            this.logger.log(`[CONTROLLER] Processing S3 event: bucket=${bucketName}, key=${objectKey}`, 'InboundEmailController');
+
+            try {
+              const result = await this.inboundEmailService.processEmailFromS3(bucketName, objectKey);
+              results.push({ success: true, id: result.id, attachments: result.attachmentsCount });
+            } catch (error: unknown) {
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+              this.logger.error(`[CONTROLLER] Failed to process S3 email: ${errorMessage}`, undefined, 'InboundEmailController');
+              results.push({ success: false, message: errorMessage });
+            }
+          }
+        }
+
+        return {
+          success: results.every((r) => r.success),
+          message: `Processed ${results.filter((r) => r.success).length} of ${results.length} email(s)`,
+          id: results.find((r) => r.id)?.id,
+          attachments: results.find((r) => r.attachments !== undefined)?.attachments,
+        };
+      }
+
+      // Handle manual processing format
+      const { bucket, key } = req.body;
+      if (!bucket || !key) {
+        return {
+          success: false,
+          message: 'Missing required parameters: bucket and key',
+        };
+      }
+
+      this.logger.log(`[CONTROLLER] Manual S3 processing: bucket=${bucket}, key=${key}`, 'InboundEmailController');
+      const result = await this.inboundEmailService.processEmailFromS3(bucket, key);
+      return {
+        success: true,
+        message: 'Email processed successfully from S3',
+        id: result.id,
+        attachments: result.attachmentsCount,
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`[CONTROLLER] Error processing email from S3: ${errorMessage}`, undefined, 'InboundEmailController');
       return {
         success: false,
         message: errorMessage,

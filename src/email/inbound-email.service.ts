@@ -74,6 +74,8 @@ export interface InboundEmailSummary {
 @Injectable()
 export class InboundEmailService {
   private s3Client: S3Client;
+  private defaultS3Bucket: string | undefined;
+  private defaultS3Prefix: string | undefined;
 
   constructor(
     @InjectRepository(InboundEmail)
@@ -95,6 +97,13 @@ export class InboundEmailService {
           }
         : undefined, // Will use default AWS credentials if not provided
     });
+
+    // Store default S3 bucket configuration (fallback if not in notification)
+    this.defaultS3Bucket = process.env.AWS_SES_S3_BUCKET;
+    this.defaultS3Prefix = process.env.AWS_SES_S3_OBJECT_KEY_PREFIX;
+    if (this.defaultS3Bucket) {
+      this.logger.log(`[SERVICE] Configured default S3 bucket: ${this.defaultS3Bucket}, prefix: ${this.defaultS3Prefix || 'none'}`, 'InboundEmailService');
+    }
   }
 
   /**
@@ -200,26 +209,87 @@ export class InboundEmailService {
     this.logger.log(`[PARSE] Destination: ${JSON.stringify(sesNotification.mail.destination)}`, 'InboundEmailService');
     this.logger.log(`[PARSE] Content length (base64): ${sesNotification.content?.length || 0}`, 'InboundEmailService');
     this.logger.log(`[PARSE] Receipt action type: ${sesNotification.receipt?.action?.type || 'N/A'}`, 'InboundEmailService');
+    this.logger.log(`[PARSE] Receipt action bucketName: ${sesNotification.receipt?.action?.bucketName || 'N/A'}`, 'InboundEmailService');
+    this.logger.log(`[PARSE] Receipt action objectKey: ${sesNotification.receipt?.action?.objectKey || 'N/A'}`, 'InboundEmailService');
+    this.logger.log(`[PARSE] Receipt action objectKeyPrefix: ${sesNotification.receipt?.action?.objectKeyPrefix || 'N/A'}`, 'InboundEmailService');
 
     try {
       let emailContent: string;
 
       // Check if email content is in notification or needs to be fetched from S3
-      if (sesNotification.content) {
-        // Email content is directly in the notification (base64 encoded)
+      // When both S3 and SNS actions are configured, content may be in S3 even if action type is 'SNS'
+      // For emails > 150 KB, AWS SES stores content in S3 and may not include it in SNS notification
+      // Strategy: Always prefer fetching from S3 if bucket is known (from notification or config)
+      // This ensures we get the full email with attachments even for large emails
+      
+      const bucketNameFromNotification = sesNotification.receipt?.action?.bucketName;
+      const bucketName = bucketNameFromNotification || this.defaultS3Bucket;
+      
+      if (sesNotification.content && (!bucketName || sesNotification.content.length < 100000)) {
+        // Email content is in notification and it's small enough (< 100 KB)
+        // Use content from notification for small emails (faster)
         this.logger.log(`[PARSE] Email content found in notification, decoding base64...`, 'InboundEmailService');
         emailContent = Buffer.from(sesNotification.content, 'base64').toString('utf-8');
         this.logger.log(`[PARSE] ✅ Decoded content from notification, length: ${emailContent.length}`, 'InboundEmailService');
-      } else if (sesNotification.receipt?.action?.type === 'S3' && sesNotification.receipt.action.bucketName && sesNotification.receipt.action.objectKey) {
-        // Email is stored in S3, fetch it
-        this.logger.log(`[PARSE] Email content not in notification, fetching from S3...`, 'InboundEmailService');
-        emailContent = await this.fetchEmailFromS3(
-          sesNotification.receipt.action.bucketName,
-          sesNotification.receipt.action.objectKey,
-        );
+      } else if (bucketName) {
+        // Email is stored in S3 (or we have default bucket configured)
+        // Always fetch from S3 to ensure we get full email with attachments
+        let objectKey = sesNotification.receipt?.action?.objectKey;
+        const objectKeyPrefix = sesNotification.receipt?.action?.objectKeyPrefix || this.defaultS3Prefix;
+        
+        // Construct object key if not provided
+        // AWS SES stores emails with objectKey in receipt.action when email is stored in S3
+        // If objectKey is missing, try to construct it (though this is uncommon)
+        // Note: AWS SES typically includes objectKey in receipt.action, so this is a fallback
+        if (!objectKey && sesNotification.mail.messageId) {
+          // Try constructing from prefix + messageId (AWS SES might use this format)
+          if (objectKeyPrefix) {
+            // Try: {prefix}{messageId}
+            objectKey = `${objectKeyPrefix}${sesNotification.mail.messageId}`;
+            this.logger.log(`[PARSE] Constructed S3 object key from prefix+messageId: ${objectKey}`, 'InboundEmailService');
+          } else {
+            // Try messageId directly (less common)
+            objectKey = sesNotification.mail.messageId;
+            this.logger.log(`[PARSE] No prefix configured, trying messageId as key: ${objectKey}`, 'InboundEmailService');
+          }
+        }
+        
+        // Log if we still don't have objectKey
+        if (!objectKey) {
+          this.logger.warn(`[PARSE] ⚠️ Cannot construct S3 object key: missing messageId and objectKey not in notification`, 'InboundEmailService');
+        }
+        
+        if (objectKey) {
+          this.logger.log(`[PARSE] Fetching email from S3 (content not in notification or using S3-first strategy)...`, 'InboundEmailService');
+          this.logger.log(`[PARSE] S3 bucket: ${bucketName}, key: ${objectKey}`, 'InboundEmailService');
+          try {
+            emailContent = await this.fetchEmailFromS3(bucketName, objectKey);
+          } catch (s3Error: unknown) {
+            const s3ErrorMessage = s3Error instanceof Error ? s3Error.message : 'Unknown error';
+            // If S3 fetch fails and we have content in notification, fall back to notification
+            if (sesNotification.content) {
+              this.logger.warn(`[PARSE] S3 fetch failed (${s3ErrorMessage}), falling back to notification content`, 'InboundEmailService');
+              emailContent = Buffer.from(sesNotification.content, 'base64').toString('utf-8');
+            } else {
+              throw s3Error;
+            }
+          }
+        } else {
+          // No objectKey available, try notification content as fallback
+          if (sesNotification.content) {
+            this.logger.warn(`[PARSE] S3 bucket configured but objectKey not available, using notification content`, 'InboundEmailService');
+            emailContent = Buffer.from(sesNotification.content, 'base64').toString('utf-8');
+          } else {
+            throw new Error(`S3 bucket configured (${bucketName}) but objectKey not available and cannot be constructed`);
+          }
+        }
+      } else if (sesNotification.content) {
+        // Fallback: use notification content if available
+        this.logger.log(`[PARSE] No S3 bucket configured, using notification content`, 'InboundEmailService');
+        emailContent = Buffer.from(sesNotification.content, 'base64').toString('utf-8');
       } else {
         // No content available
-        throw new Error('Email content not found in notification and S3 action not available');
+        throw new Error('Email content not found in notification and S3 bucket not configured');
       }
 
       this.logger.log(`[PARSE] Content preview (first 200 chars): ${emailContent.substring(0, 200)}`, 'InboundEmailService');
@@ -417,12 +487,28 @@ export class InboundEmailService {
             parts.bodyText = part.content || '';
           } else if (part.contentType?.includes('text/html')) {
             parts.bodyHtml = part.content || null;
-          } else if (part.contentDisposition?.includes('attachment')) {
-            parts.attachments.push({
-              filename: part.filename || 'attachment',
-              contentType: part.contentType || 'application/octet-stream',
-              content: part.content,
-            });
+          } else {
+            // Detect attachments: check Content-Disposition or Content-Type
+            const isAttachment = 
+              // Explicit attachment disposition
+              part.contentDisposition?.toLowerCase().includes('attachment') ||
+              // Has filename in Content-Disposition (even if inline)
+              (part.filename && part.contentDisposition?.toLowerCase().includes('filename')) ||
+              // Content-Type indicates attachment (not text/plain, text/html, or multipart)
+              (part.contentType && 
+               !part.contentType.includes('text/plain') && 
+               !part.contentType.includes('text/html') && 
+               !part.contentType.includes('multipart') &&
+               !part.contentType.includes('message/rfc822'));
+            
+            if (isAttachment) {
+              parts.attachments.push({
+                filename: part.filename || 'attachment',
+                contentType: part.contentType || 'application/octet-stream',
+                content: part.content,
+              });
+              this.logger.log(`[PARSE] Detected attachment: ${part.filename || 'attachment'} (${part.contentType || 'N/A'})`, 'InboundEmailService');
+            }
           }
           // Note: Nested multipart messages are now handled recursively in parseMultipart itself,
           // so by the time we get here, all nested parts have already been flattened into the parts array
@@ -1021,6 +1107,143 @@ export class InboundEmailService {
       this.logger.log(`[REPARSE] ===== REPARSE EMAIL END (ERROR) =====`, 'InboundEmailService');
       throw error;
     }
+  }
+
+  /**
+   * Process email directly from S3 bucket
+   * Used for S3 event notifications or manual processing
+   */
+  async processEmailFromS3(bucketName: string, objectKey: string): Promise<{ id: string; attachmentsCount: number }> {
+    this.logger.log(`[S3_PROCESS] ===== PROCESS EMAIL FROM S3 START =====`, 'InboundEmailService');
+    this.logger.log(`[S3_PROCESS] S3 bucket: ${bucketName}, key: ${objectKey}`, 'InboundEmailService');
+
+    try {
+      // Fetch email content from S3
+      const emailContent = await this.fetchEmailFromS3(bucketName, objectKey);
+      this.logger.log(`[S3_PROCESS] ✅ Fetched email from S3, length: ${emailContent.length}`, 'InboundEmailService');
+
+      // Parse email headers to extract metadata
+      const headerBodySplit = emailContent.indexOf('\r\n\r\n');
+      if (headerBodySplit === -1) {
+        const headerBodySplitLF = emailContent.indexOf('\n\n');
+        if (headerBodySplitLF === -1) {
+          throw new Error('Invalid email format: no header/body separator found');
+        }
+        const headers = emailContent.substring(0, headerBodySplitLF);
+        const body = emailContent.substring(headerBodySplitLF + 2);
+        return this.processEmailContentFromRaw(bucketName, objectKey, headers, body, emailContent);
+      }
+
+      const headers = emailContent.substring(0, headerBodySplit);
+      const body = emailContent.substring(headerBodySplit + 4);
+      return this.processEmailContentFromRaw(bucketName, objectKey, headers, body, emailContent);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`[S3_PROCESS] ❌ Failed to process email from S3: ${errorMessage}`, errorStack, 'InboundEmailService');
+      this.logger.log(`[S3_PROCESS] ===== PROCESS EMAIL FROM S3 END (ERROR) =====`, 'InboundEmailService');
+      throw error;
+    }
+  }
+
+  /**
+   * Process email content from raw headers and body
+   */
+  private async processEmailContentFromRaw(
+    bucketName: string,
+    objectKey: string,
+    headers: string,
+    body: string,
+    fullContent: string,
+  ): Promise<{ id: string; attachmentsCount: number }> {
+    const fromMatch = headers.match(/^From:\s*(.+)$/im);
+    const toMatch = headers.match(/^To:\s*(.+)$/im);
+    const subjectMatch = headers.match(/^Subject:\s*(.+)$/im);
+    const messageIdMatch = headers.match(/^Message-Id:\s*(.+)$/im);
+    const dateMatch = headers.match(/^Date:\s*(.+)$/im);
+
+    const from = fromMatch ? this.decodeEmailAddress(this.decodeHeader(fromMatch[1].trim())) : 'unknown@unknown.com';
+    const to = toMatch ? this.decodeEmailAddress(this.decodeHeader(toMatch[1].trim())) : 'unknown@unknown.com';
+    const subject = subjectMatch ? this.decodeHeader(subjectMatch[1].trim()) : null;
+    const messageId = messageIdMatch ? messageIdMatch[1].trim() : `s3-${Date.now()}`;
+    const date = dateMatch ? dateMatch[1].trim() : new Date().toISOString();
+
+    this.logger.log(`[S3_PROCESS] Parsed headers - from: ${from}, to: ${to}, subject: ${subject || 'N/A'}`, 'InboundEmailService');
+
+    // Check if email already exists (by messageId)
+    const existingEmails = await this.inboundEmailRepository.find({
+      where: {},
+    });
+    const existingEmail = existingEmails.find(
+      (e) => e.rawData?.mail?.messageId === messageId || e.rawData?.receipt?.action?.objectKey === objectKey,
+    );
+
+    if (existingEmail) {
+      this.logger.log(`[S3_PROCESS] Email already exists with ID: ${existingEmail.id}, updating...`, 'InboundEmailService');
+      // Re-parse to get updated attachments
+      const emailParts = this.parseEmailParts(fullContent);
+      existingEmail.attachments = emailParts.attachments.length > 0 ? emailParts.attachments : null;
+      existingEmail.bodyText = emailParts.bodyText;
+      existingEmail.bodyHtml = emailParts.bodyHtml;
+      existingEmail.subject = emailParts.subject || subject;
+      await this.inboundEmailRepository.save(existingEmail);
+      await this.processInboundEmail(existingEmail);
+      this.logger.log(`[S3_PROCESS] ✅ Updated existing email`, 'InboundEmailService');
+      return { id: existingEmail.id, attachmentsCount: existingEmail.attachments ? existingEmail.attachments.length : 0 };
+    }
+
+    // Create a SESNotification-like object for parsing
+    const sesNotification: SESNotification = {
+      mail: {
+        source: from,
+        destination: [to],
+        messageId: messageId,
+        timestamp: date,
+        commonHeaders: {
+          subject: subject || undefined,
+        },
+      },
+      receipt: {
+        recipients: [to],
+        action: {
+          type: 'S3',
+          bucketName: bucketName,
+          objectKey: objectKey,
+        },
+      },
+      content: undefined, // Content is in S3, not in notification
+    };
+
+    // Parse email content using existing method (but we already have the content)
+    // We need to manually parse since parseEmailContent expects content or S3 fetch
+    const emailParts = this.parseEmailParts(fullContent);
+
+    const inboundEmail = new InboundEmail();
+    inboundEmail.from = from;
+    inboundEmail.to = to;
+    inboundEmail.subject = emailParts.subject || subject;
+    inboundEmail.bodyText = emailParts.bodyText || '';
+    inboundEmail.bodyHtml = emailParts.bodyHtml || null;
+    inboundEmail.attachments = emailParts.attachments.length > 0 ? emailParts.attachments : null;
+    inboundEmail.status = 'pending';
+    inboundEmail.rawData = {
+      ...sesNotification,
+      content: Buffer.from(fullContent).toString('base64'), // Store raw content as base64
+    };
+
+    // Store new email
+    await this.storeInboundEmail(inboundEmail);
+    this.logger.log(`[S3_PROCESS] ✅ Stored new email with ID: ${inboundEmail.id}`, 'InboundEmailService');
+
+    // Process email (trigger webhooks)
+    await this.processInboundEmail(inboundEmail);
+    this.logger.log(`[S3_PROCESS] ✅ Processed email successfully`, 'InboundEmailService');
+
+    this.logger.log(`[S3_PROCESS] ===== PROCESS EMAIL FROM S3 END (SUCCESS) =====`, 'InboundEmailService');
+    return {
+      id: inboundEmail.id,
+      attachmentsCount: inboundEmail.attachments ? inboundEmail.attachments.length : 0,
+    };
   }
 
   /**
