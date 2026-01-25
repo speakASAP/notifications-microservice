@@ -519,12 +519,27 @@ export class InboundEmailService {
       if (boundaryMatch) {
         const boundary = boundaryMatch[1];
         const multipartParts = this.parseMultipart(body, boundary);
+        this.logger.log(`[PARSE] Processing ${multipartParts.length} parts from multipart message`, 'InboundEmailService');
         for (const part of multipartParts) {
           // Content is already decoded in parseMultipart
-          if (part.contentType?.includes('text/plain')) {
-            parts.bodyText = part.content || '';
-          } else if (part.contentType?.includes('text/html')) {
-            parts.bodyHtml = part.content || null;
+          const contentType = part.contentType || '';
+          const contentLength = part.content?.length || 0;
+          this.logger.log(`[PARSE] Processing part: contentType=${contentType}, contentLength=${contentLength}, filename=${part.filename || 'N/A'}`, 'InboundEmailService');
+
+          if (contentType.includes('text/plain')) {
+            if (part.content && part.content.trim()) {
+              parts.bodyText = part.content;
+              this.logger.log(`[PARSE] ✅ Set bodyText from text/plain part (length: ${parts.bodyText.length})`, 'InboundEmailService');
+            } else {
+              this.logger.warn(`[PARSE] ⚠️ text/plain part found but content is empty or whitespace only`, 'InboundEmailService');
+            }
+          } else if (contentType.includes('text/html')) {
+            if (part.content && part.content.trim()) {
+              parts.bodyHtml = part.content;
+              this.logger.log(`[PARSE] ✅ Set bodyHtml from text/html part (length: ${parts.bodyHtml.length})`, 'InboundEmailService');
+            } else {
+              this.logger.warn(`[PARSE] ⚠️ text/html part found but content is empty or whitespace only`, 'InboundEmailService');
+            }
           } else {
             // Detect attachments: check Content-Disposition or Content-Type
             const isAttachment = 
@@ -547,10 +562,19 @@ export class InboundEmailService {
                 rawBase64: part.rawBase64,
               });
               this.logger.log(`[PARSE] Detected attachment: ${part.filename || 'attachment'} (${part.contentType || 'N/A'})${part.rawBase64 ? ' [raw base64]' : ''}`, 'InboundEmailService');
+            } else if (contentType) {
+              this.logger.log(`[PARSE] Skipped part with contentType: ${contentType} (not text/plain, text/html, or attachment)`, 'InboundEmailService');
             }
           }
           // Note: Nested multipart messages are now handled recursively in parseMultipart itself,
           // so by the time we get here, all nested parts have already been flattened into the parts array
+        }
+
+        // Log final state
+        if (!parts.bodyText && !parts.bodyHtml) {
+          this.logger.warn(`[PARSE] ⚠️⚠️⚠️ EMPTY BODY DETECTED after parsing ${multipartParts.length} parts - subject: ${parts.subject || 'N/A'}`, 'InboundEmailService');
+        } else {
+          this.logger.log(`[PARSE] ✅ Final body state - bodyText length: ${parts.bodyText?.length || 0}, bodyHtml length: ${parts.bodyHtml?.length || 0}`, 'InboundEmailService');
         }
       }
     } else {
@@ -563,6 +587,11 @@ export class InboundEmailService {
       } else {
         parts.bodyText = decodedBody;
       }
+    }
+
+    // Final validation: log if body is still empty
+    if (!parts.bodyText && !parts.bodyHtml) {
+      this.logger.warn(`[PARSE] ⚠️⚠️⚠️ EMPTY BODY DETECTED - subject: ${parts.subject || 'N/A'}`, 'InboundEmailService');
     }
 
     return parts;
@@ -626,7 +655,13 @@ export class InboundEmailService {
         : section.substring(headerBodySplitLF + 2);
 
       // Clean up part content: remove trailing boundary markers and whitespace
-      partContent = partContent.replace(/\r?\n--.*$/, '').trim();
+      // Be careful not to remove content that legitimately contains "--"
+      // Only remove boundary markers at the end of the content
+      const beforeCleanup = partContent.length;
+      partContent = partContent.replace(/\r?\n--[^\r\n]*$/, '').trim();
+      if (beforeCleanup !== partContent.length) {
+        this.logger.log(`[PARSE] Cleaned trailing boundary from part ${i}: ${beforeCleanup} -> ${partContent.length} chars`, 'InboundEmailService');
+      }
 
       const contentTypeMatch = partHeaders.match(/Content-Type:\s*([^;\r\n]+)/i);
       const contentDispositionMatch = partHeaders.match(/Content-Disposition:\s*([^;\r\n]+)/i);
@@ -642,6 +677,7 @@ export class InboundEmailService {
         if (nestedBoundaryMatch) {
           const nestedBoundary = nestedBoundaryMatch[1];
           this.logger.log(`[PARSE] Found nested multipart ${contentType} with boundary ${nestedBoundary}, recursively parsing...`, 'InboundEmailService');
+          this.logger.log(`[PARSE] Nested multipart part ${i} content length before decoding: ${partContent.length}`, 'InboundEmailService');
 
           // Decode content first (if needed) before parsing nested multipart
           const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim().toLowerCase() : '';
@@ -656,9 +692,12 @@ export class InboundEmailService {
 
           // Recursively parse the nested multipart
           const nestedParts = this.parseMultipart(decodedPartContent, nestedBoundary);
+          this.logger.log(`[PARSE] Recursively parsed nested multipart: found ${nestedParts.length} nested parts`, 'InboundEmailService');
           // Add all nested parts to the result
           parts.push(...nestedParts);
           continue;
+        } else {
+          this.logger.warn(`[PARSE] ⚠️ Found multipart content type but no boundary in headers for part ${i}`, 'InboundEmailService');
         }
       }
 
@@ -688,7 +727,7 @@ export class InboundEmailService {
       if (transferEncoding && originalLength !== partContent.length) {
         this.logger.log(`[PARSE] Decoded ${transferEncoding} content in part ${i}: ${originalLength} -> ${partContent.length} bytes`, 'InboundEmailService');
       }
-      if (partContent) {
+      if (partContent && partContent.trim()) {
         parts.push({
           contentType,
           contentDisposition: contentDispositionMatch ? contentDispositionMatch[1].trim() : undefined,
@@ -696,6 +735,8 @@ export class InboundEmailService {
           content: partContent,
         });
         this.logger.log(`[PARSE] Extracted multipart part ${i}: contentType=${contentType || 'N/A'}, contentLength=${partContent.length}`, 'InboundEmailService');
+      } else if (partContent) {
+        this.logger.warn(`[PARSE] ⚠️ Part ${i} content is empty or whitespace only after decoding (contentType: ${contentType || 'N/A'})`, 'InboundEmailService');
       }
       continue;
     }
