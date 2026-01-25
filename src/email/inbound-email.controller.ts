@@ -3,7 +3,7 @@
  * Handles AWS SES SNS webhook for inbound emails
  */
 
-import { Controller, Post, Get, Headers, HttpCode, HttpStatus, Req, Query } from '@nestjs/common';
+import { Controller, Post, Get, Headers, HttpCode, HttpStatus, Req, Query, Param } from '@nestjs/common';
 import { Request } from 'express';
 import { InboundEmailService, SNSMessage } from './inbound-email.service';
 import { LoggerService } from '../../shared/logger/logger.service';
@@ -159,6 +159,30 @@ export class InboundEmailController {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Error getting inbound emails: ${errorMessage}`, undefined, 'InboundEmailController');
       throw error;
+    }
+  }
+
+  /**
+   * Re-parse an email from rawData and update attachments
+   * POST /email/inbound/:id/reparse
+   */
+  @Post('inbound/:id/reparse')
+  async reparseEmail(@Param('id') id: string): Promise<{ success: boolean; message: string; attachments?: number }> {
+    try {
+      this.logger.log(`[CONTROLLER] Re-parsing email: ${id}`, 'InboundEmailController');
+      const result = await this.inboundEmailService.reparseEmailFromRawData(id);
+      return {
+        success: true,
+        message: 'Email re-parsed successfully',
+        attachments: result.attachmentsCount,
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Error re-parsing email: ${errorMessage}`, undefined, 'InboundEmailController');
+      return {
+        success: false,
+        message: errorMessage,
+      };
     }
   }
 

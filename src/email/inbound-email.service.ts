@@ -963,6 +963,67 @@ export class InboundEmailService {
   }
 
   /**
+   * Re-parse email from rawData and update attachments
+   */
+  async reparseEmailFromRawData(emailId: string): Promise<{ attachmentsCount: number }> {
+    this.logger.log(`[REPARSE] ===== REPARSE EMAIL START =====`, 'InboundEmailService');
+    this.logger.log(`[REPARSE] Email ID: ${emailId}`, 'InboundEmailService');
+
+    try {
+      // Find the email
+      const email = await this.inboundEmailRepository.findOne({
+        where: { id: emailId },
+      });
+
+      if (!email) {
+        throw new Error(`Email not found: ${emailId}`);
+      }
+
+      this.logger.log(`[REPARSE] Found email: ${email.from} -> ${email.to}, subject: ${email.subject}`, 'InboundEmailService');
+      this.logger.log(`[REPARSE] Current attachments: ${email.attachments ? email.attachments.length : 0}`, 'InboundEmailService');
+
+      // Check if rawData exists
+      if (!email.rawData || !email.rawData.content) {
+        throw new Error(`No rawData.content found for email ${emailId}`);
+      }
+
+      this.logger.log(`[REPARSE] Re-parsing email from rawData...`, 'InboundEmailService');
+
+      // Re-parse the email using the updated code
+      const sesNotification = email.rawData;
+      const reParsedEmail = await this.parseEmailContent(sesNotification);
+
+      this.logger.log(`[REPARSE] Re-parsed email - attachments: ${reParsedEmail.attachments ? reParsedEmail.attachments.length : 0}`, 'InboundEmailService');
+
+      // Update the email in database with new attachments
+      email.attachments = reParsedEmail.attachments && reParsedEmail.attachments.length > 0
+        ? reParsedEmail.attachments
+        : null;
+
+      await this.inboundEmailRepository.save(email);
+
+      this.logger.log(`[REPARSE] ✅ Updated email in database with ${email.attachments ? email.attachments.length : 0} attachments`, 'InboundEmailService');
+
+      // Trigger webhook delivery again
+      this.logger.log(`[REPARSE] Triggering webhook delivery...`, 'InboundEmailService');
+      await this.webhookDeliveryService.deliverToSubscriptions(email);
+      this.logger.log(`[REPARSE] ✅ Webhook delivery triggered`, 'InboundEmailService');
+
+      this.logger.log(`[REPARSE] ===== REPARSE EMAIL END (SUCCESS) =====`, 'InboundEmailService');
+
+      return {
+        attachmentsCount: email.attachments ? email.attachments.length : 0,
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`[REPARSE] ❌ Failed to re-parse email: ${errorMessage}`, errorStack, 'InboundEmailService');
+      this.logger.log(`[REPARSE] ===== REPARSE EMAIL END (ERROR) =====`, 'InboundEmailService');
+      throw error;
+    }
+  }
+
+  /**
    * Find inbound emails with filters
    */
   async findInboundEmails(filters: {
