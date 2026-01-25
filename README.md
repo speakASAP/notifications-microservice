@@ -372,7 +372,8 @@ The service will automatically create the `notifications` and `inbound_emails` t
    - Create subscription:
      - Protocol: HTTPS
      - Endpoint: `https://notifications.statex.cz/email/inbound`
-     - Enable raw message delivery: No (needed for SES notifications)
+     - Enable raw message delivery: **Yes (recommended)** or No (both formats supported)
+     - **Recommended: Yes** - Raw delivery ensures original message is received without any transformation, reducing risk of data loss
 
 5. **Confirm Subscription**:
    - AWS SNS will send a subscription confirmation to the webhook
