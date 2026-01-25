@@ -18,8 +18,8 @@ async function bootstrap() {
   // Configure body parser to handle text/plain as JSON (for AWS SNS)
   app.use(express.text({ type: 'text/plain' }));
   app.use((req: any, res: any, next: any) => {
-    // If content-type is text/plain, parse as JSON
-    if (req.path === '/email/inbound' && req.headers['content-type']?.includes('text/plain')) {
+    // If content-type is text/plain, parse as JSON (for both /email/inbound and /email/inbound/s3)
+    if ((req.path === '/email/inbound' || req.path === '/email/inbound/s3') && req.headers['content-type']?.includes('text/plain')) {
       try {
         if (typeof req.body === 'string') {
           req.body = JSON.parse(req.body);
@@ -33,7 +33,7 @@ async function bootstrap() {
 
   // Logging middleware for debugging
   app.use((req: any, res: any, next: any) => {
-    if (req.path === '/email/inbound') {
+    if (req.path === '/email/inbound' || req.path === '/email/inbound/s3') {
       logger.log(`[MIDDLEWARE] ${req.method} ${req.path}`, 'RequestLogger');
       logger.log(`[MIDDLEWARE] Headers: ${JSON.stringify(req.headers)}`, 'RequestLogger');
       logger.log(`[MIDDLEWARE] Body: ${JSON.stringify(req.body)}`, 'RequestLogger');
