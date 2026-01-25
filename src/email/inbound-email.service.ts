@@ -423,6 +423,8 @@ export class InboundEmailService {
               content: part.content,
             });
           }
+          // Note: Nested multipart messages are now handled recursively in parseMultipart itself,
+          // so by the time we get here, all nested parts have already been flattened into the parts array
         }
       }
     } else {
@@ -490,21 +492,50 @@ export class InboundEmailService {
         // Clean up part content: remove trailing boundary markers and whitespace
         partContent = partContent.replace(/\r?\n--.*$/, '').trim();
         
-        const contentTypeMatch = partHeaders.match(/Content-Type:\s*([^;\r\n]+)/i);
-        const contentDispositionMatch = partHeaders.match(/Content-Disposition:\s*([^;\r\n]+)/i);
-        const filenameMatch = partHeaders.match(/filename="?([^";\r\n]+)"?/i);
-        const transferEncodingMatch = partHeaders.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
+      const contentTypeMatch = partHeaders.match(/Content-Type:\s*([^;\r\n]+)/i);
+      const contentDispositionMatch = partHeaders.match(/Content-Disposition:\s*([^;\r\n]+)/i);
+      const filenameMatch = partHeaders.match(/filename="?([^";\r\n]+)"?/i);
+      const transferEncodingMatch = partHeaders.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
 
-        const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim().toLowerCase() : '';
-        const originalLength = partContent.length;
-        partContent = this.decodeContent(partContent, transferEncoding);
-        
-        if (transferEncoding && originalLength !== partContent.length) {
-          this.logger.log(`[PARSE] Decoded ${transferEncoding} content in part ${i}: ${originalLength} -> ${partContent.length} bytes`, 'InboundEmailService');
+      const contentType = contentTypeMatch ? contentTypeMatch[1].trim() : undefined;
+      
+      // Check if this part is a nested multipart message
+      if (contentType?.includes('multipart')) {
+        // Extract boundary from Content-Type header
+        const nestedBoundaryMatch = partHeaders.match(/boundary="?([^";\r\n]+)"?/i);
+        if (nestedBoundaryMatch) {
+          const nestedBoundary = nestedBoundaryMatch[1];
+          this.logger.log(`[PARSE] Found nested multipart ${contentType} with boundary ${nestedBoundary}, recursively parsing...`, 'InboundEmailService');
+          
+          // Decode content first (if needed) before parsing nested multipart
+          const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim().toLowerCase() : '';
+          let decodedPartContent = partContent;
+          if (transferEncoding) {
+            const originalLength = partContent.length;
+            decodedPartContent = this.decodeContent(partContent, transferEncoding);
+            if (originalLength !== decodedPartContent.length) {
+              this.logger.log(`[PARSE] Decoded ${transferEncoding} content in nested multipart part ${i}: ${originalLength} -> ${decodedPartContent.length} bytes`, 'InboundEmailService');
+            }
+          }
+          
+          // Recursively parse the nested multipart
+          const nestedParts = this.parseMultipart(decodedPartContent, nestedBoundary);
+          // Add all nested parts to the result
+          parts.push(...nestedParts);
+          continue;
         }
+      }
+
+      const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim().toLowerCase() : '';
+      const originalLength = partContent.length;
+      partContent = this.decodeContent(partContent, transferEncoding);
+      
+      if (transferEncoding && originalLength !== partContent.length) {
+        this.logger.log(`[PARSE] Decoded ${transferEncoding} content in part ${i}: ${originalLength} -> ${partContent.length} bytes`, 'InboundEmailService');
+      }
 
         parts.push({
-          contentType: contentTypeMatch ? contentTypeMatch[1].trim() : undefined,
+          contentType: contentType,
           contentDisposition: contentDispositionMatch ? contentDispositionMatch[1].trim() : undefined,
           filename: filenameMatch ? this.decodeHeader(filenameMatch[1]) : undefined,
           content: partContent,
@@ -524,6 +555,35 @@ export class InboundEmailService {
       const filenameMatch = partHeaders.match(/filename="?([^";\r\n]+)"?/i);
       const transferEncodingMatch = partHeaders.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
 
+      const contentType = contentTypeMatch ? contentTypeMatch[1].trim() : undefined;
+      
+      // Check if this part is a nested multipart message
+      if (contentType?.includes('multipart')) {
+        // Extract boundary from Content-Type header
+        const nestedBoundaryMatch = partHeaders.match(/boundary="?([^";\r\n]+)"?/i);
+        if (nestedBoundaryMatch) {
+          const nestedBoundary = nestedBoundaryMatch[1];
+          this.logger.log(`[PARSE] Found nested multipart ${contentType} with boundary ${nestedBoundary}, recursively parsing...`, 'InboundEmailService');
+          
+          // Decode content first (if needed) before parsing nested multipart
+          const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim().toLowerCase() : '';
+          let decodedPartContent = partContent;
+          if (transferEncoding) {
+            const originalLength = partContent.length;
+            decodedPartContent = this.decodeContent(partContent, transferEncoding);
+            if (originalLength !== decodedPartContent.length) {
+              this.logger.log(`[PARSE] Decoded ${transferEncoding} content in nested multipart part ${i}: ${originalLength} -> ${decodedPartContent.length} bytes`, 'InboundEmailService');
+            }
+          }
+          
+          // Recursively parse the nested multipart
+          const nestedParts = this.parseMultipart(decodedPartContent, nestedBoundary);
+          // Add all nested parts to the result
+          parts.push(...nestedParts);
+          continue;
+        }
+      }
+
       // Decode content based on Content-Transfer-Encoding
       const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim().toLowerCase() : '';
       const originalLength = partContent.length;
@@ -537,13 +597,13 @@ export class InboundEmailService {
       // Only add parts that have content
       if (partContent) {
         parts.push({
-          contentType: contentTypeMatch ? contentTypeMatch[1].trim() : undefined,
+          contentType: contentType,
           contentDisposition: contentDispositionMatch ? contentDispositionMatch[1].trim() : undefined,
           filename: filenameMatch ? this.decodeHeader(filenameMatch[1]) : undefined,
           content: partContent,
         });
         
-        this.logger.log(`[PARSE] Extracted multipart part ${i}: contentType=${contentTypeMatch?.[1] || 'N/A'}, contentDisposition=${contentDispositionMatch?.[1] || 'N/A'}, contentLength=${partContent.length}`, 'InboundEmailService');
+        this.logger.log(`[PARSE] Extracted multipart part ${i}: contentType=${contentType || 'N/A'}, contentDisposition=${contentDispositionMatch?.[1] || 'N/A'}, contentLength=${partContent.length}`, 'InboundEmailService');
       }
     }
 
