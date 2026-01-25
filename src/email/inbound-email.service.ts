@@ -221,7 +221,10 @@ export class InboundEmailService {
       if (!response.Body) {
         throw new Error('S3 object body is empty');
       }
-      const emailContent = await response.Body.transformToString();
+      // Use transformToByteArray to handle binary content (emails can contain binary attachments)
+      // Then convert to string using latin1 encoding which preserves all byte values
+      const bytes = await response.Body.transformToByteArray();
+      const emailContent = Buffer.from(bytes).toString('latin1');
       this.logger.log(`[S3] ✅ Fetched email from S3, length: ${emailContent.length}`, 'InboundEmailService');
       return emailContent;
     } catch (error: unknown) {
