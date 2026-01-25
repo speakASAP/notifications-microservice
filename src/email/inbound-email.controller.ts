@@ -5,7 +5,7 @@
 
 import { Controller, Post, Get, Headers, HttpCode, HttpStatus, Req, Query, Param } from '@nestjs/common';
 import { Request } from 'express';
-import { InboundEmailService, InboundEmailSummary, SNSMessage } from './inbound-email.service';
+import { InboundEmailService, InboundEmailSummary, SNSMessage, SESNotification } from './inbound-email.service';
 import { LoggerService } from '../../shared/logger/logger.service';
 import { Inject } from '@nestjs/common';
 import * as https from 'https';
@@ -51,7 +51,68 @@ export class InboundEmailController {
         return { status: 'error', message: 'Request body is missing' };
       }
 
+      // Check if raw message delivery is enabled (from x-amz-sns-rawdelivery header)
+      const rawDeliveryHeader = headers['x-amz-sns-rawdelivery'];
+      const isRawDelivery = rawDeliveryHeader === 'true' || 
+                           (Array.isArray(rawDeliveryHeader) && rawDeliveryHeader.some(h => h === 'true'));
+      this.logger.log(`[CONTROLLER] Raw message delivery: ${isRawDelivery}`, 'InboundEmailController');
+
+      // Handle raw message delivery (body is SES notification directly)
+      if (isRawDelivery) {
+        this.logger.log(`[CONTROLLER] Processing raw message delivery format`, 'InboundEmailController');
+        try {
+          // Body is the SES notification directly (no SNS wrapper)
+          const sesNotification = req.body as SESNotification;
+          this.logger.log(`[CONTROLLER] Raw SES notification - notificationType: ${sesNotification?.notificationType}, source: ${sesNotification?.mail?.source}`, 'InboundEmailController');
+          
+          // Check if it's a subscription confirmation (raw format)
+          const notificationType = sesNotification.Type;
+          if ((typeof notificationType === 'string' && notificationType === 'SubscriptionConfirmation') || sesNotification.SubscribeURL) {
+            this.logger.log(`[CONTROLLER] Processing SubscriptionConfirmation (raw format)`, 'InboundEmailController');
+            const subscribeURL = sesNotification.SubscribeURL;
+            if (subscribeURL && typeof subscribeURL === 'string') {
+              try {
+                await this.confirmSubscription(subscribeURL);
+                this.logger.log(`[CONTROLLER] ✅ SNS subscription confirmed successfully (raw)`, 'InboundEmailController');
+                return { status: 'confirmed', message: 'Subscription confirmed' };
+              } catch (error: unknown) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                this.logger.error(`[CONTROLLER] ❌ Failed to confirm subscription: ${errorMessage}`, undefined, 'InboundEmailController');
+                return { status: 'error', message: `Failed to confirm subscription: ${errorMessage}` };
+              }
+            }
+            // Return early even if SubscribeURL is missing
+            this.logger.warn(`[CONTROLLER] ⚠️ SubscribeURL not provided in SubscriptionConfirmation`, 'InboundEmailController');
+            return { status: 'ignored', message: 'Subscription confirmation without URL' };
+          }
+
+          // Validate it's an email notification (not subscription confirmation)
+          if (sesNotification.notificationType && sesNotification.notificationType !== 'Received') {
+            this.logger.warn(`[CONTROLLER] Unexpected notification type: ${sesNotification.notificationType}`, 'InboundEmailController');
+            return { status: 'ignored', message: `Unknown notification type: ${sesNotification.notificationType}` };
+          }
+
+          // Validate required fields before processing
+          if (!sesNotification.mail || !sesNotification.receipt) {
+            this.logger.error(`[CONTROLLER] Invalid SES notification: missing mail or receipt fields`, undefined, 'InboundEmailController');
+            return { status: 'error', message: 'Invalid SES notification format' };
+          }
+
+          // Process SES notification directly (raw format)
+          await this.inboundEmailService.handleSESNotification(sesNotification);
+          this.logger.log(`[CONTROLLER] ✅ Successfully processed raw SES notification`, 'InboundEmailController');
+          return { status: 'processed', message: 'Email notification processed' };
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          const errorStack = error instanceof Error ? error.stack : undefined;
+          this.logger.error(`[CONTROLLER] ❌ Error processing raw SES notification: ${errorMessage}`, errorStack, 'InboundEmailController');
+          return { status: 'error', message: errorMessage };
+        }
+      }
+
+      // Handle wrapped SNS message format (raw delivery disabled)
       const body: SNSMessage = req.body as SNSMessage;
+      this.logger.log(`[CONTROLLER] Processing wrapped SNS message format`, 'InboundEmailController');
       this.logger.log(`[CONTROLLER] Body extracted, Type: ${body?.Type}, MessageId: ${body?.MessageId}`, 'InboundEmailController');
       this.logger.log(`[CONTROLLER] Body keys: ${Object.keys(body || {}).join(', ')}, Type: ${body?.Type === 'Notification' ? 'NOTIFICATION' : body?.Type === 'SubscriptionConfirmation' ? 'SUBSCRIPTION_CONFIRMATION' : 'UNKNOWN'}`, 'InboundEmailController');
 
