@@ -607,26 +607,34 @@ export class InboundEmailService {
 
       // Find header/body separator
       const headerBodySplit = section.indexOf('\r\n\r\n');
+      let headerBodySplitLF = -1;
       if (headerBodySplit === -1) {
         // Try LF-only separator
-        const headerBodySplitLF = section.indexOf('\n\n');
+        headerBodySplitLF = section.indexOf('\n\n');
         if (headerBodySplitLF === -1) {
           this.logger.warn(`[PARSE] No header/body separator found in multipart section ${i}, skipping`, 'InboundEmailService');
           continue;
         }
-        const partHeaders = section.substring(0, headerBodySplitLF);
-        let partContent = section.substring(headerBodySplitLF + 2);
-        
-        // Clean up part content: remove trailing boundary markers and whitespace
-        partContent = partContent.replace(/\r?\n--.*$/, '').trim();
-        
+      }
+
+      // Extract headers and content based on which separator was found
+      const partHeaders = headerBodySplit !== -1
+        ? section.substring(0, headerBodySplit)
+        : section.substring(0, headerBodySplitLF);
+      let partContent = headerBodySplit !== -1
+        ? section.substring(headerBodySplit + 4)
+        : section.substring(headerBodySplitLF + 2);
+
+      // Clean up part content: remove trailing boundary markers and whitespace
+      partContent = partContent.replace(/\r?\n--.*$/, '').trim();
+
       const contentTypeMatch = partHeaders.match(/Content-Type:\s*([^;\r\n]+)/i);
       const contentDispositionMatch = partHeaders.match(/Content-Disposition:\s*([^;\r\n]+)/i);
       const filenameMatch = partHeaders.match(/filename="?([^";\r\n]+)"?/i);
       const transferEncodingMatch = partHeaders.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
 
       const contentType = contentTypeMatch ? contentTypeMatch[1].trim() : undefined;
-      
+
       // Check if this part is a nested multipart message
       if (contentType?.includes('multipart')) {
         // Extract boundary from Content-Type header
@@ -634,7 +642,7 @@ export class InboundEmailService {
         if (nestedBoundaryMatch) {
           const nestedBoundary = nestedBoundaryMatch[1];
           this.logger.log(`[PARSE] Found nested multipart ${contentType} with boundary ${nestedBoundary}, recursively parsing...`, 'InboundEmailService');
-          
+
           // Decode content first (if needed) before parsing nested multipart
           const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim().toLowerCase() : '';
           let decodedPartContent = partContent;
@@ -645,7 +653,7 @@ export class InboundEmailService {
               this.logger.log(`[PARSE] Decoded ${transferEncoding} content in nested multipart part ${i}: ${originalLength} -> ${decodedPartContent.length} bytes`, 'InboundEmailService');
             }
           }
-          
+
           // Recursively parse the nested multipart
           const nestedParts = this.parseMultipart(decodedPartContent, nestedBoundary);
           // Add all nested parts to the result
@@ -690,79 +698,6 @@ export class InboundEmailService {
         this.logger.log(`[PARSE] Extracted multipart part ${i}: contentType=${contentType || 'N/A'}, contentLength=${partContent.length}`, 'InboundEmailService');
       }
       continue;
-    }
-
-    // CRLF header/body separator path (headerBodySplit from above)
-    if (headerBodySplit !== -1) {
-      const partHeaders = section.substring(0, headerBodySplit);
-      let partContent = section.substring(headerBodySplit + 4);
-
-      // Clean up part content: remove trailing boundary markers, newlines, and whitespace
-      // Boundary markers can appear at the end: \r\n--boundary or \n--boundary
-      partContent = partContent.replace(/\r?\n--[^\r\n]*$/, '').trim();
-
-      const contentTypeMatch = partHeaders.match(/Content-Type:\s*([^;\r\n]+)/i);
-      const contentDispositionMatch = partHeaders.match(/Content-Disposition:\s*([^;\r\n]+)/i);
-      const filenameMatch = partHeaders.match(/filename="?([^";\r\n]+)"?/i);
-      const transferEncodingMatch = partHeaders.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
-      const contentType = contentTypeMatch ? contentTypeMatch[1].trim() : undefined;
-      
-      // Check if this part is a nested multipart message
-      if (contentType?.includes('multipart')) {
-        // Extract boundary from Content-Type header
-        const nestedBoundaryMatch = partHeaders.match(/boundary="?([^";\r\n]+)"?/i);
-        if (nestedBoundaryMatch) {
-          const nestedBoundary = nestedBoundaryMatch[1];
-          this.logger.log(`[PARSE] Found nested multipart ${contentType} with boundary ${nestedBoundary}, recursively parsing...`, 'InboundEmailService');
-          const te = transferEncodingMatch ? transferEncodingMatch[1].trim().toLowerCase() : '';
-          let decodedPartContent = partContent;
-          if (te) {
-            const origLen = partContent.length;
-            decodedPartContent = this.decodeContent(partContent, te);
-            if (origLen !== decodedPartContent.length) {
-              this.logger.log(`[PARSE] Decoded ${te} in nested multipart part ${i}`, 'InboundEmailService');
-            }
-          }
-          const nestedParts = this.parseMultipart(decodedPartContent, nestedBoundary);
-          parts.push(...nestedParts);
-          continue;
-        }
-      }
-
-      const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim().toLowerCase() : '';
-      const isAttachment = this.isAttachmentPart(contentType, contentDispositionMatch, filenameMatch);
-
-      if (isAttachment) {
-        const rawContent = transferEncoding === 'base64' || transferEncoding === 'b'
-          ? partContent.replace(/\s/g, '')
-          : partContent;
-        if (rawContent) {
-          parts.push({
-            contentType,
-            contentDisposition: contentDispositionMatch ? contentDispositionMatch[1].trim() : undefined,
-            filename: filenameMatch ? this.decodeHeader(filenameMatch[1]) : undefined,
-            content: rawContent,
-            rawBase64: transferEncoding === 'base64' || transferEncoding === 'b',
-          });
-          this.logger.log(`[PARSE] Attachment (raw, no decode): ${filenameMatch?.[1] ? 'has filename' : 'attachment'}`, 'InboundEmailService');
-        }
-        continue;
-      }
-
-      const originalLength = partContent.length;
-      partContent = this.decodeContent(partContent, transferEncoding);
-      if (transferEncoding && originalLength !== partContent.length) {
-        this.logger.log(`[PARSE] Decoded ${transferEncoding} content in part ${i}: ${originalLength} -> ${partContent.length} bytes`, 'InboundEmailService');
-      }
-      if (partContent) {
-        parts.push({
-          contentType,
-          contentDisposition: contentDispositionMatch ? contentDispositionMatch[1].trim() : undefined,
-          filename: filenameMatch ? this.decodeHeader(filenameMatch[1]) : undefined,
-          content: partContent,
-        });
-        this.logger.log(`[PARSE] Extracted multipart part ${i}: contentType=${contentType || 'N/A'}, contentLength=${partContent.length}`, 'InboundEmailService');
-      }
     }
     }
 
