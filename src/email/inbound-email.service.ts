@@ -699,7 +699,6 @@ export class InboundEmailService {
       }
       continue;
     }
-    }
 
     this.logger.log(`[PARSE] Parsed ${parts.length} valid parts from multipart message`, 'InboundEmailService');
     return parts;
