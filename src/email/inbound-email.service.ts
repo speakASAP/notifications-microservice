@@ -191,6 +191,7 @@ export class InboundEmailService {
 
   /**
    * Parse email content from SES notification
+   * Public method for re-parsing emails
    */
   async parseEmailContent(sesNotification: SESNotification): Promise<InboundEmail> {
     this.logger.log(`[PARSE] ===== PARSE EMAIL CONTENT START =====`, 'InboundEmailService');
