@@ -747,8 +747,17 @@ export class InboundEmailService {
           }
 
           // Recursively parse the nested multipart (same as emails without attachments)
+          this.logger.log(`[PARSE] About to recursively parse nested multipart with content length: ${decodedPartContent.length}, boundary: ${nestedBoundary}`, 'InboundEmailService');
+          this.logger.log(`[PARSE] Nested content preview (first 200 chars): ${JSON.stringify(decodedPartContent.substring(0, 200))}`, 'InboundEmailService');
           const nestedParts = this.parseMultipart(decodedPartContent, nestedBoundary);
           this.logger.log(`[PARSE] Recursively parsed nested multipart: found ${nestedParts.length} nested parts`, 'InboundEmailService');
+          // Log details of each nested part
+          nestedParts.forEach((part, idx) => {
+            this.logger.log(`[PARSE] Nested part ${idx}: contentType=${part.contentType || 'N/A'}, contentLength=${part.content?.length || 0}, filename=${part.filename || 'N/A'}`, 'InboundEmailService');
+            if (part.content && (part.contentType?.includes('text/plain') || part.contentType?.includes('text/html'))) {
+              this.logger.log(`[PARSE] Nested body part ${idx} content preview: ${JSON.stringify(part.content.substring(0, 100))}`, 'InboundEmailService');
+            }
+          });
           // Add all nested parts to the result (they will be processed in the outer loop)
           parts.push(...nestedParts);
           continue;
