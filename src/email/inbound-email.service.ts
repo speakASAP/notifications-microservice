@@ -673,14 +673,19 @@ export class InboundEmailService {
 
       // Check if this part is a nested multipart message FIRST (before boundary cleanup)
       // For nested multiparts, we need to preserve the full content for recursive parsing
+      // This matches how emails without attachments work (direct multipart/alternative parsing)
       if (contentType?.includes('multipart')) {
         // Extract boundary from Content-Type header
         const nestedBoundaryMatch = partHeaders.match(/boundary="?([^";\r\n]+)"?/i);
         if (nestedBoundaryMatch) {
           const nestedBoundary = nestedBoundaryMatch[1];
           this.logger.log(`[PARSE] Found nested multipart ${contentType} with boundary ${nestedBoundary}, recursively parsing...`, 'InboundEmailService');
-          this.logger.log(`[PARSE] Nested multipart part ${i} content length before decoding: ${partContent.length}`, 'InboundEmailService');
+          this.logger.log(`[PARSE] Nested multipart part ${i} content length before any processing: ${partContent.length}`, 'InboundEmailService');
 
+          // For nested multiparts, we need to find where the nested multipart ends
+          // The content may include the next parent part's boundary after the nested multipart closes
+          // We need to remove only the next parent part, not the nested multipart's internal boundaries
+          
           // Decode content first (if needed) before parsing nested multipart
           const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim().toLowerCase() : '';
           let decodedPartContent = partContent;
@@ -692,45 +697,40 @@ export class InboundEmailService {
             }
           }
 
-          // IMPORTANT: For nested multiparts, we need to find where the nested multipart ends
+          // Find where the nested multipart ends by looking for its closing marker
           // The nested multipart ends with --nestedBoundary-- (double dash at end)
-          // Everything after that is the next parent part and should be removed
-          // But we need to be careful - the nested multipart content might include the next parent part's boundary
-          const beforeNestedCleanup = decodedPartContent.length;
-          
-          // Look for the nested multipart's closing marker: --nestedBoundary--
           const nestedClosingMarker = `--${nestedBoundary}--`;
           const nestedClosingIndex = decodedPartContent.indexOf(nestedClosingMarker);
           
           if (nestedClosingIndex !== -1) {
-            // Found the closing marker - keep everything up to and including the closing marker
-            // Everything after is the next parent part
+            // Found the closing marker - keep everything up to and including it
+            // parseMultipart expects the closing marker to be present
+            const beforeNestedCleanup = decodedPartContent.length;
             decodedPartContent = decodedPartContent.substring(0, nestedClosingIndex + nestedClosingMarker.length);
-            this.logger.log(`[PARSE] Found nested multipart closing marker, cleaned next parent part: ${beforeNestedCleanup} -> ${decodedPartContent.length} chars`, 'InboundEmailService');
+            this.logger.log(`[PARSE] Found nested multipart closing marker at index ${nestedClosingIndex}, cleaned next parent part: ${beforeNestedCleanup} -> ${decodedPartContent.length} chars`, 'InboundEmailService');
           } else {
-            // No closing marker found - the nested multipart might not be properly closed
-            // Or the next parent part's boundary might be included
-            // Look for boundaries that are NOT the nested boundary (these would be parent-level boundaries)
-            // Escape the nested boundary for regex
+            // No closing marker found - try to find the next parent part's boundary
+            // Look for boundaries that don't match the nested boundary pattern
+            const beforeNestedCleanup = decodedPartContent.length;
             const escapedNestedBoundary = nestedBoundary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            // Match boundaries that don't start with the nested boundary
+            // Match --boundary where boundary doesn't start with nestedBoundary
             const parentBoundaryPattern = new RegExp(`\\r?\\n--(?!${escapedNestedBoundary})[^\\r\\n]+`);
             const parentBoundaryMatch = decodedPartContent.match(parentBoundaryPattern);
             
             if (parentBoundaryMatch && parentBoundaryMatch.index !== undefined) {
               // Found a parent-level boundary - remove everything from it onwards
               decodedPartContent = decodedPartContent.substring(0, parentBoundaryMatch.index);
-              this.logger.log(`[PARSE] Cleaned parent boundary from nested multipart (no closing marker found): ${beforeNestedCleanup} -> ${decodedPartContent.length} chars`, 'InboundEmailService');
+              this.logger.log(`[PARSE] Cleaned parent boundary from nested multipart (no closing marker): ${beforeNestedCleanup} -> ${decodedPartContent.length} chars`, 'InboundEmailService');
             } else {
-              // No parent boundary found - content should be the full nested multipart
-              this.logger.log(`[PARSE] No parent boundary found in nested multipart content, using full content (length: ${decodedPartContent.length})`, 'InboundEmailService');
+              // No parent boundary found - use full content (might be malformed, but try to parse)
+              this.logger.log(`[PARSE] No closing marker or parent boundary found, using full nested multipart content (length: ${decodedPartContent.length})`, 'InboundEmailService');
             }
           }
 
-          // Recursively parse the nested multipart
+          // Recursively parse the nested multipart (same as emails without attachments)
           const nestedParts = this.parseMultipart(decodedPartContent, nestedBoundary);
           this.logger.log(`[PARSE] Recursively parsed nested multipart: found ${nestedParts.length} nested parts`, 'InboundEmailService');
-          // Add all nested parts to the result
+          // Add all nested parts to the result (they will be processed in the outer loop)
           parts.push(...nestedParts);
           continue;
         } else {
