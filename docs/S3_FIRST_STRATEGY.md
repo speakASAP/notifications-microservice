@@ -85,6 +85,7 @@ Configure both actions (in order):
 ✅ **Full attachments**: Always get complete email with attachments
 ✅ **Reliable**: Works even if SNS notification is incomplete
 ✅ **Flexible**: Falls back to notification content if S3 unavailable
+✅ **Recoverable**: Raw MIME is stored in webhook payload for downstream recovery
 
 ## Object Key Construction
 

@@ -253,6 +253,7 @@ export class InboundEmailService {
 
     try {
       let emailContent: string;
+      let fetchedFromS3 = false;
 
       // Check if email content is in notification or needs to be fetched from S3
       // When both S3 and SNS actions are configured, content may be in S3 even if action type is 'SNS'
@@ -302,6 +303,7 @@ export class InboundEmailService {
           this.logger.log(`[PARSE] S3 bucket: ${bucketName}, key: ${objectKey}`, 'InboundEmailService');
           try {
             emailContent = await this.fetchEmailFromS3(bucketName, objectKey);
+            fetchedFromS3 = true;
           } catch (s3Error: unknown) {
             const s3ErrorMessage = s3Error instanceof Error ? s3Error.message : 'Unknown error';
             // If S3 fetch fails and we have content in notification, fall back to notification
@@ -328,6 +330,14 @@ export class InboundEmailService {
       } else {
         // No content available
         throw new Error('Email content not found in notification and S3 bucket not configured');
+      }
+
+      if (fetchedFromS3 && !sesNotification.content) {
+        sesNotification.content = Buffer.from(emailContent, 'latin1').toString('base64');
+        this.logger.log(
+          `[PARSE] Stored raw S3 content as base64 in SES notification (length: ${sesNotification.content.length})`,
+          'InboundEmailService',
+        );
       }
 
       this.logger.log(`[PARSE] Content preview (first 200 chars): ${emailContent.substring(0, 200)}`, 'InboundEmailService');
@@ -639,8 +649,11 @@ export class InboundEmailService {
       // Trim only leading/trailing whitespace, but preserve content
       section = section.trim();
       
-      // Skip empty sections after trimming and the final closing boundary (ends with --)
-      if (!section || section === '--' || section.endsWith('--')) {
+      // Skip empty sections and the stray "--" fragment after final --boundary--
+      // Do NOT skip sections that end with "--": nested multipart (e.g. multipart/alternative)
+      // sections end with --nestedBoundary-- and contain the body; skipping them causes empty
+      // body when the email has attachments (multipart/mixed with alternative + attachments).
+      if (!section || section === '--') {
         continue;
       }
 
