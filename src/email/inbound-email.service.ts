@@ -701,10 +701,19 @@ export class InboundEmailService {
           // When we split by parent boundary, the section might not include the opening boundary
           // Check if content starts with the nested boundary marker, if not, prepend it
           const nestedBoundaryMarker = `--${nestedBoundary}`;
-          if (!decodedPartContent.trim().startsWith(nestedBoundaryMarker)) {
-            // Content doesn't start with boundary marker - prepend it
+          const trimmedContent = decodedPartContent.trim();
+          // Check if content starts with boundary marker (with or without leading whitespace/newlines)
+          if (!trimmedContent.startsWith(nestedBoundaryMarker) && !decodedPartContent.includes(nestedBoundaryMarker)) {
+            // Content doesn't contain boundary marker at all - prepend it
             decodedPartContent = nestedBoundaryMarker + '\r\n' + decodedPartContent;
-            this.logger.log(`[PARSE] Prepended nested boundary marker to content (content didn't start with boundary)`, 'InboundEmailService');
+            this.logger.log(`[PARSE] Prepended nested boundary marker to content (boundary marker not found in content)`, 'InboundEmailService');
+          } else if (!trimmedContent.startsWith(nestedBoundaryMarker)) {
+            // Boundary marker exists but not at start - trim leading whitespace/newlines
+            const boundaryIndex = decodedPartContent.indexOf(nestedBoundaryMarker);
+            if (boundaryIndex > 0) {
+              decodedPartContent = decodedPartContent.substring(boundaryIndex);
+              this.logger.log(`[PARSE] Trimmed leading content before nested boundary marker (removed ${boundaryIndex} chars)`, 'InboundEmailService');
+            }
           }
 
           // Find where the nested multipart ends by looking for its closing marker
