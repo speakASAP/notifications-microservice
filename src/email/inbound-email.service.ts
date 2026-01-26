@@ -672,22 +672,31 @@ export class InboundEmailService {
       
       // Find the first occurrence of a boundary marker (-- followed by non-newline chars)
       // This indicates the start of the next part
-      const boundaryMatch = partContent.match(/\r?\n--[^\r\n]+/);
+      // Try both CRLF and LF patterns
+      let boundaryMatch = partContent.match(/\r\n--[^\r\n]+/);
+      if (!boundaryMatch) {
+        boundaryMatch = partContent.match(/\n--[^\n]+/);
+      }
+      
       if (boundaryMatch && boundaryMatch.index !== undefined) {
         // Remove everything from the boundary marker onwards
-        partContent = partContent.substring(0, boundaryMatch.index);
-        this.logger.log(`[PARSE] Cleaned boundary marker at index ${boundaryMatch.index}: ${beforeCleanup} -> ${partContent.length} chars`, 'InboundEmailService');
+        const contentBeforeBoundary = partContent.substring(0, boundaryMatch.index);
+        this.logger.log(`[PARSE] Found boundary marker at index ${boundaryMatch.index}, content before: ${contentBeforeBoundary.length} chars, after cleanup: ${beforeCleanup} -> ${contentBeforeBoundary.length} chars`, 'InboundEmailService');
+        partContent = contentBeforeBoundary;
       } else {
         // Fallback: try regex replace for edge cases
         const afterReplace = partContent.replace(/\r?\n--[^\r\n]+(?:\r?\n.*)*$/m, '');
         if (afterReplace.length < partContent.length) {
+          this.logger.log(`[PARSE] Cleaned boundary using regex replace: ${beforeCleanup} -> ${afterReplace.length} chars`, 'InboundEmailService');
           partContent = afterReplace;
-          this.logger.log(`[PARSE] Cleaned boundary using regex replace: ${beforeCleanup} -> ${partContent.length} chars`, 'InboundEmailService');
+        } else {
+          // No boundary found - content should be clean
+          this.logger.log(`[PARSE] No boundary marker found in part ${i} content (length: ${partContent.length})`, 'InboundEmailService');
         }
       }
       
       if (beforeCleanup !== partContent.length) {
-        this.logger.log(`[PARSE] Final cleanup result: ${beforeCleanup} -> ${partContent.length} chars`, 'InboundEmailService');
+        this.logger.log(`[PARSE] Final cleanup result for part ${i}: ${beforeCleanup} -> ${partContent.length} chars`, 'InboundEmailService');
       }
 
       const contentTypeMatch = partHeaders.match(/Content-Type:\s*([^;\r\n]+)/i);
@@ -750,9 +759,11 @@ export class InboundEmailService {
       }
 
       const originalLength = partContent.length;
+      this.logger.log(`[PARSE] Part ${i} before decoding: length=${originalLength}, transferEncoding=${transferEncoding || 'none'}, contentType=${contentType || 'N/A'}`, 'InboundEmailService');
       partContent = this.decodeContent(partContent, transferEncoding);
-      if (transferEncoding && originalLength !== partContent.length) {
-        this.logger.log(`[PARSE] Decoded ${transferEncoding} content in part ${i}: ${originalLength} -> ${partContent.length} bytes`, 'InboundEmailService');
+      const afterDecodeLength = partContent.length;
+      if (transferEncoding && originalLength !== afterDecodeLength) {
+        this.logger.log(`[PARSE] Decoded ${transferEncoding} content in part ${i}: ${originalLength} -> ${afterDecodeLength} bytes`, 'InboundEmailService');
       }
       
       // For text/plain and text/html parts, preserve content even if it's mostly whitespace
@@ -766,9 +777,12 @@ export class InboundEmailService {
           filename: filenameMatch ? this.decodeHeader(filenameMatch[1]) : undefined,
           content: partContent,
         });
-        this.logger.log(`[PARSE] Extracted multipart part ${i}: contentType=${contentType || 'N/A'}, contentLength=${partContent.length}${isBodyPart ? ' [body part - preserved even if whitespace]' : ''}`, 'InboundEmailService');
+        this.logger.log(`[PARSE] ✅ Extracted multipart part ${i}: contentType=${contentType || 'N/A'}, contentLength=${partContent.length}${isBodyPart ? ' [body part - preserved even if whitespace]' : ''}`, 'InboundEmailService');
+        if (isBodyPart && partContent.length > 0) {
+          this.logger.log(`[PARSE] Body part ${i} content preview (first 100 chars): ${JSON.stringify(partContent.substring(0, 100))}`, 'InboundEmailService');
+        }
       } else if (partContent) {
-        this.logger.warn(`[PARSE] ⚠️ Part ${i} content is empty or whitespace only after decoding (contentType: ${contentType || 'N/A'})`, 'InboundEmailService');
+        this.logger.warn(`[PARSE] ⚠️ Part ${i} content is empty or whitespace only after decoding (contentType: ${contentType || 'N/A'}, length: ${partContent.length})`, 'InboundEmailService');
       } else {
         this.logger.warn(`[PARSE] ⚠️ Part ${i} has no content after decoding (contentType: ${contentType || 'N/A'})`, 'InboundEmailService');
       }
