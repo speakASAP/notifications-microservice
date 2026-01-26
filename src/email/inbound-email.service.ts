@@ -527,18 +527,20 @@ export class InboundEmailService {
           this.logger.log(`[PARSE] Processing part: contentType=${contentType}, contentLength=${contentLength}, filename=${part.filename || 'N/A'}`, 'InboundEmailService');
 
           if (contentType.includes('text/plain')) {
-            if (part.content && part.content.trim()) {
+            // Preserve text/plain content even if it's mostly whitespace (e.g., "------\nBest regards")
+            if (part.content) {
               parts.bodyText = part.content;
-              this.logger.log(`[PARSE] ✅ Set bodyText from text/plain part (length: ${parts.bodyText.length})`, 'InboundEmailService');
+              this.logger.log(`[PARSE] ✅ Set bodyText from text/plain part (length: ${parts.bodyText.length}, trimmed length: ${parts.bodyText.trim().length})`, 'InboundEmailService');
             } else {
-              this.logger.warn(`[PARSE] ⚠️ text/plain part found but content is empty or whitespace only`, 'InboundEmailService');
+              this.logger.warn(`[PARSE] ⚠️ text/plain part found but content is null/undefined`, 'InboundEmailService');
             }
           } else if (contentType.includes('text/html')) {
-            if (part.content && part.content.trim()) {
+            // Preserve text/html content even if it's mostly whitespace
+            if (part.content) {
               parts.bodyHtml = part.content;
-              this.logger.log(`[PARSE] ✅ Set bodyHtml from text/html part (length: ${parts.bodyHtml.length})`, 'InboundEmailService');
+              this.logger.log(`[PARSE] ✅ Set bodyHtml from text/html part (length: ${parts.bodyHtml.length}, trimmed length: ${parts.bodyHtml.trim().length})`, 'InboundEmailService');
             } else {
-              this.logger.warn(`[PARSE] ⚠️ text/html part found but content is empty or whitespace only`, 'InboundEmailService');
+              this.logger.warn(`[PARSE] ⚠️ text/html part found but content is null/undefined`, 'InboundEmailService');
             }
           } else {
             // Detect attachments: check Content-Disposition or Content-Type
@@ -727,16 +729,23 @@ export class InboundEmailService {
       if (transferEncoding && originalLength !== partContent.length) {
         this.logger.log(`[PARSE] Decoded ${transferEncoding} content in part ${i}: ${originalLength} -> ${partContent.length} bytes`, 'InboundEmailService');
       }
-      if (partContent && partContent.trim()) {
+      
+      // For text/plain and text/html parts, preserve content even if it's mostly whitespace
+      // These are body parts and should be included even if they appear "empty"
+      const isBodyPart = contentType?.includes('text/plain') || contentType?.includes('text/html');
+      
+      if (partContent && (isBodyPart || partContent.trim())) {
         parts.push({
           contentType,
           contentDisposition: contentDispositionMatch ? contentDispositionMatch[1].trim() : undefined,
           filename: filenameMatch ? this.decodeHeader(filenameMatch[1]) : undefined,
           content: partContent,
         });
-        this.logger.log(`[PARSE] Extracted multipart part ${i}: contentType=${contentType || 'N/A'}, contentLength=${partContent.length}`, 'InboundEmailService');
+        this.logger.log(`[PARSE] Extracted multipart part ${i}: contentType=${contentType || 'N/A'}, contentLength=${partContent.length}${isBodyPart ? ' [body part - preserved even if whitespace]' : ''}`, 'InboundEmailService');
       } else if (partContent) {
         this.logger.warn(`[PARSE] ⚠️ Part ${i} content is empty or whitespace only after decoding (contentType: ${contentType || 'N/A'})`, 'InboundEmailService');
+      } else {
+        this.logger.warn(`[PARSE] ⚠️ Part ${i} has no content after decoding (contentType: ${contentType || 'N/A'})`, 'InboundEmailService');
       }
       continue;
     }
