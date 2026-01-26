@@ -656,11 +656,13 @@ export class InboundEmailService {
         ? section.substring(headerBodySplit + 4)
         : section.substring(headerBodySplitLF + 2);
 
-      // Clean up part content: remove trailing boundary markers and whitespace
-      // Be careful not to remove content that legitimately contains "--"
-      // Only remove boundary markers at the end of the content
+      // Clean up part content: remove trailing boundary markers and next part headers
+      // Boundary markers can appear as: \r\n--boundary or \n--boundary
+      // Also need to remove any content after the boundary (next part's headers)
+      // Don't trim here - preserve whitespace for body parts (will be handled later)
       const beforeCleanup = partContent.length;
-      partContent = partContent.replace(/\r?\n--[^\r\n]*$/, '').trim();
+      // Remove boundary marker and everything after it (next part's headers)
+      partContent = partContent.replace(/\r?\n--[^\r\n]*(?:\r?\n.*)?$/, '');
       if (beforeCleanup !== partContent.length) {
         this.logger.log(`[PARSE] Cleaned trailing boundary from part ${i}: ${beforeCleanup} -> ${partContent.length} chars`, 'InboundEmailService');
       }
