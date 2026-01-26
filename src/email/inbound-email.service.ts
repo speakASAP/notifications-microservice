@@ -629,9 +629,17 @@ export class InboundEmailService {
     this.logger.log(`[PARSE] Split multipart into ${sections.length} sections using boundary pattern: ${boundaryPattern}`, 'InboundEmailService');
 
     for (let i = 0; i < sections.length; i++) {
-      const section = sections[i].trim();
+      let section = sections[i];
       
-      // Skip empty sections and the final closing boundary (ends with --)
+      // Skip completely empty sections
+      if (!section) {
+        continue;
+      }
+      
+      // Trim only leading/trailing whitespace, but preserve content
+      section = section.trim();
+      
+      // Skip empty sections after trimming and the final closing boundary (ends with --)
       if (!section || section === '--' || section.endsWith('--')) {
         continue;
       }
@@ -662,7 +670,17 @@ export class InboundEmailService {
       // Don't trim here - preserve whitespace for body parts (will be handled later)
       const beforeCleanup = partContent.length;
       // Remove boundary marker and everything after it (next part's headers)
-      partContent = partContent.replace(/\r?\n--[^\r\n]*(?:\r?\n.*)?$/, '');
+      // Match: newline(s) + -- + boundary pattern + optional newline + any content until end
+      // Use non-greedy match to stop at first boundary
+      partContent = partContent.replace(/\r?\n--[^\r\n]+(?:\r?\n.*)*$/m, '');
+      // Also try to remove if boundary appears without leading newline (edge case)
+      if (partContent.includes('\r\n--') || partContent.includes('\n--')) {
+        const afterFirstBoundary = partContent.split(/\r?\n--/)[0];
+        if (afterFirstBoundary.length < partContent.length) {
+          this.logger.log(`[PARSE] Cleaned boundary using split method: ${partContent.length} -> ${afterFirstBoundary.length} chars`, 'InboundEmailService');
+          partContent = afterFirstBoundary;
+        }
+      }
       if (beforeCleanup !== partContent.length) {
         this.logger.log(`[PARSE] Cleaned trailing boundary from part ${i}: ${beforeCleanup} -> ${partContent.length} chars`, 'InboundEmailService');
       }
