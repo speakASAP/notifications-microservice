@@ -1197,12 +1197,21 @@ export class InboundEmailService {
       const sesNotification = email.rawData;
       const reParsedEmail = await this.parseEmailContent(sesNotification);
 
-      this.logger.log(`[REPARSE] Re-parsed email - attachments: ${reParsedEmail.attachments ? reParsedEmail.attachments.length : 0}`, 'InboundEmailService');
+      this.logger.log(`[REPARSE] Re-parsed email - attachments: ${reParsedEmail.attachments ? reParsedEmail.attachments.length : 0}, bodyText length: ${reParsedEmail.bodyText?.length || 0}, bodyHtml length: ${reParsedEmail.bodyHtml?.length || 0}`, 'InboundEmailService');
 
-      // Update the email in database with new attachments
+      // Update the email in database with new parsed content (attachments AND body)
       email.attachments = reParsedEmail.attachments && reParsedEmail.attachments.length > 0
         ? reParsedEmail.attachments
         : null;
+      // Also update body fields if they were re-parsed
+      if (reParsedEmail.bodyText !== undefined) {
+        email.bodyText = reParsedEmail.bodyText || '';
+        this.logger.log(`[REPARSE] Updated bodyText: ${email.bodyText.length} chars`, 'InboundEmailService');
+      }
+      if (reParsedEmail.bodyHtml !== undefined) {
+        email.bodyHtml = reParsedEmail.bodyHtml || null;
+        this.logger.log(`[REPARSE] Updated bodyHtml: ${email.bodyHtml?.length || 0} chars`, 'InboundEmailService');
+      }
 
       await this.inboundEmailRepository.save(email);
 
