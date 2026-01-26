@@ -664,6 +664,81 @@ export class InboundEmailService {
         ? section.substring(headerBodySplit + 4)
         : section.substring(headerBodySplitLF + 2);
 
+      const contentTypeMatch = partHeaders.match(/Content-Type:\s*([^;\r\n]+)/i);
+      const contentDispositionMatch = partHeaders.match(/Content-Disposition:\s*([^;\r\n]+)/i);
+      const filenameMatch = partHeaders.match(/filename="?([^";\r\n]+)"?/i);
+      const transferEncodingMatch = partHeaders.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
+
+      const contentType = contentTypeMatch ? contentTypeMatch[1].trim() : undefined;
+
+      // Check if this part is a nested multipart message FIRST (before boundary cleanup)
+      // For nested multiparts, we need to preserve the full content for recursive parsing
+      if (contentType?.includes('multipart')) {
+        // Extract boundary from Content-Type header
+        const nestedBoundaryMatch = partHeaders.match(/boundary="?([^";\r\n]+)"?/i);
+        if (nestedBoundaryMatch) {
+          const nestedBoundary = nestedBoundaryMatch[1];
+          this.logger.log(`[PARSE] Found nested multipart ${contentType} with boundary ${nestedBoundary}, recursively parsing...`, 'InboundEmailService');
+          this.logger.log(`[PARSE] Nested multipart part ${i} content length before decoding: ${partContent.length}`, 'InboundEmailService');
+
+          // Decode content first (if needed) before parsing nested multipart
+          const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim().toLowerCase() : '';
+          let decodedPartContent = partContent;
+          if (transferEncoding) {
+            const originalLength = partContent.length;
+            decodedPartContent = this.decodeContent(partContent, transferEncoding);
+            if (originalLength !== decodedPartContent.length) {
+              this.logger.log(`[PARSE] Decoded ${transferEncoding} content in nested multipart part ${i}: ${originalLength} -> ${decodedPartContent.length} bytes`, 'InboundEmailService');
+            }
+          }
+
+          // IMPORTANT: For nested multiparts, we need to find where the nested multipart ends
+          // The nested multipart ends with --nestedBoundary-- (double dash at end)
+          // Everything after that is the next parent part and should be removed
+          // But we need to be careful - the nested multipart content might include the next parent part's boundary
+          const beforeNestedCleanup = decodedPartContent.length;
+          
+          // Look for the nested multipart's closing marker: --nestedBoundary--
+          const nestedClosingMarker = `--${nestedBoundary}--`;
+          const nestedClosingIndex = decodedPartContent.indexOf(nestedClosingMarker);
+          
+          if (nestedClosingIndex !== -1) {
+            // Found the closing marker - keep everything up to and including the closing marker
+            // Everything after is the next parent part
+            decodedPartContent = decodedPartContent.substring(0, nestedClosingIndex + nestedClosingMarker.length);
+            this.logger.log(`[PARSE] Found nested multipart closing marker, cleaned next parent part: ${beforeNestedCleanup} -> ${decodedPartContent.length} chars`, 'InboundEmailService');
+          } else {
+            // No closing marker found - the nested multipart might not be properly closed
+            // Or the next parent part's boundary might be included
+            // Look for boundaries that are NOT the nested boundary (these would be parent-level boundaries)
+            // Escape the nested boundary for regex
+            const escapedNestedBoundary = nestedBoundary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            // Match boundaries that don't start with the nested boundary
+            const parentBoundaryPattern = new RegExp(`\\r?\\n--(?!${escapedNestedBoundary})[^\\r\\n]+`);
+            const parentBoundaryMatch = decodedPartContent.match(parentBoundaryPattern);
+            
+            if (parentBoundaryMatch && parentBoundaryMatch.index !== undefined) {
+              // Found a parent-level boundary - remove everything from it onwards
+              decodedPartContent = decodedPartContent.substring(0, parentBoundaryMatch.index);
+              this.logger.log(`[PARSE] Cleaned parent boundary from nested multipart (no closing marker found): ${beforeNestedCleanup} -> ${decodedPartContent.length} chars`, 'InboundEmailService');
+            } else {
+              // No parent boundary found - content should be the full nested multipart
+              this.logger.log(`[PARSE] No parent boundary found in nested multipart content, using full content (length: ${decodedPartContent.length})`, 'InboundEmailService');
+            }
+          }
+
+          // Recursively parse the nested multipart
+          const nestedParts = this.parseMultipart(decodedPartContent, nestedBoundary);
+          this.logger.log(`[PARSE] Recursively parsed nested multipart: found ${nestedParts.length} nested parts`, 'InboundEmailService');
+          // Add all nested parts to the result
+          parts.push(...nestedParts);
+          continue;
+        } else {
+          this.logger.warn(`[PARSE] ⚠️ Found multipart content type but no boundary in headers for part ${i}`, 'InboundEmailService');
+        }
+      }
+
+      // For non-multipart parts, clean up boundary markers
       // Clean up part content: remove trailing boundary markers and next part headers
       // When splitting by boundary, the content may include the next part's boundary marker
       // We need to remove everything from the first boundary marker onwards
@@ -697,44 +772,6 @@ export class InboundEmailService {
       
       if (beforeCleanup !== partContent.length) {
         this.logger.log(`[PARSE] Final cleanup result for part ${i}: ${beforeCleanup} -> ${partContent.length} chars`, 'InboundEmailService');
-      }
-
-      const contentTypeMatch = partHeaders.match(/Content-Type:\s*([^;\r\n]+)/i);
-      const contentDispositionMatch = partHeaders.match(/Content-Disposition:\s*([^;\r\n]+)/i);
-      const filenameMatch = partHeaders.match(/filename="?([^";\r\n]+)"?/i);
-      const transferEncodingMatch = partHeaders.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
-
-      const contentType = contentTypeMatch ? contentTypeMatch[1].trim() : undefined;
-
-      // Check if this part is a nested multipart message
-      if (contentType?.includes('multipart')) {
-        // Extract boundary from Content-Type header
-        const nestedBoundaryMatch = partHeaders.match(/boundary="?([^";\r\n]+)"?/i);
-        if (nestedBoundaryMatch) {
-          const nestedBoundary = nestedBoundaryMatch[1];
-          this.logger.log(`[PARSE] Found nested multipart ${contentType} with boundary ${nestedBoundary}, recursively parsing...`, 'InboundEmailService');
-          this.logger.log(`[PARSE] Nested multipart part ${i} content length before decoding: ${partContent.length}`, 'InboundEmailService');
-
-          // Decode content first (if needed) before parsing nested multipart
-          const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim().toLowerCase() : '';
-          let decodedPartContent = partContent;
-          if (transferEncoding) {
-            const originalLength = partContent.length;
-            decodedPartContent = this.decodeContent(partContent, transferEncoding);
-            if (originalLength !== decodedPartContent.length) {
-              this.logger.log(`[PARSE] Decoded ${transferEncoding} content in nested multipart part ${i}: ${originalLength} -> ${decodedPartContent.length} bytes`, 'InboundEmailService');
-            }
-          }
-
-          // Recursively parse the nested multipart
-          const nestedParts = this.parseMultipart(decodedPartContent, nestedBoundary);
-          this.logger.log(`[PARSE] Recursively parsed nested multipart: found ${nestedParts.length} nested parts`, 'InboundEmailService');
-          // Add all nested parts to the result
-          parts.push(...nestedParts);
-          continue;
-        } else {
-          this.logger.warn(`[PARSE] ⚠️ Found multipart content type but no boundary in headers for part ${i}`, 'InboundEmailService');
-        }
       }
 
       const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim().toLowerCase() : '';
