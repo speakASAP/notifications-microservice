@@ -697,6 +697,16 @@ export class InboundEmailService {
             }
           }
 
+          // IMPORTANT: parseMultipart expects content to start with the boundary marker
+          // When we split by parent boundary, the section might not include the opening boundary
+          // Check if content starts with the nested boundary marker, if not, prepend it
+          const nestedBoundaryMarker = `--${nestedBoundary}`;
+          if (!decodedPartContent.trim().startsWith(nestedBoundaryMarker)) {
+            // Content doesn't start with boundary marker - prepend it
+            decodedPartContent = nestedBoundaryMarker + '\r\n' + decodedPartContent;
+            this.logger.log(`[PARSE] Prepended nested boundary marker to content (content didn't start with boundary)`, 'InboundEmailService');
+          }
+
           // Find where the nested multipart ends by looking for its closing marker
           // The nested multipart ends with --nestedBoundary-- (double dash at end)
           const nestedClosingMarker = `--${nestedBoundary}--`;
