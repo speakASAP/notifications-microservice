@@ -101,7 +101,7 @@ This document analyzes how email attachments are stored in the database and sent
 **Based on code analysis**:
 
 | Stage | Limit | Notes |
-|-------|-------|-------|
+| ----- | ----- | ----- |
 | Database (JSONB string) | ~256 MB per attachment | PostgreSQL hard limit |
 | Database (JSONB total) | ~1 GB total | All attachments combined |
 | Webhook timeout | 20 seconds | HTTP request timeout |

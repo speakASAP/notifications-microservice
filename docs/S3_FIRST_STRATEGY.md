@@ -142,7 +142,7 @@ The service checks for existing emails by messageId to prevent duplicates. If du
 ## Comparison: S3-First vs Notification-Only
 
 | Aspect | Notification-Only | S3-First Strategy |
-|--------|------------------|-------------------|
+| ------ | ---------------- | ----------------- |
 | Small emails (< 100 KB) | ✅ Fast (uses notification) | ✅ Fast (uses notification) |
 | Large emails (> 150 KB) | ❌ May fail (no content) | ✅ Always works (fetches from S3) |
 | Attachments | ⚠️ May be missing | ✅ Always included |
