@@ -654,7 +654,7 @@ console.log(result);
 **Port Range**: 33xx (shared microservices)
 
 | Service | Host Port | Container Port | .env Variable | Description |
-|---------|-----------|----------------|---------------|-------------|
+| ------- | --------- | -------------- | ------------- | ----------- |
 | **Notification Service** | `${PORT:-3368}` | `${PORT:-3368}` | `PORT` (notifications-microservice/.env) | Multi-channel notification service |
 
 **Note**:
