@@ -129,6 +129,22 @@ export class InboundEmailService {
     this.logger.log(`[SERVICE] SES notification - source: ${sesNotification.mail?.source}, destination: ${JSON.stringify(sesNotification.mail?.destination)}, messageId: ${sesNotification.mail?.messageId}`, 'InboundEmailService');
 
     try {
+      const messageId = sesNotification.mail?.messageId;
+      if (messageId) {
+        const existing = await this.inboundEmailRepository
+          .createQueryBuilder('e')
+          .where("e.rawData->'mail'->>'messageId' = :messageId", { messageId })
+          .getOne();
+        if (existing) {
+          this.logger.log(
+            `[SERVICE] Email with messageId ${messageId} already exists (ID: ${existing.id}), skipping store and webhook to avoid duplicate tickets`,
+            'InboundEmailService',
+          );
+          this.logger.log(`[SERVICE] ===== HANDLE SES NOTIFICATION (RAW) END (SKIP - DUPLICATE) =====`, 'InboundEmailService');
+          return;
+        }
+      }
+
       this.logger.log(`[SERVICE] Calling parseEmailContent...`, 'InboundEmailService');
       const inboundEmail = await this.parseEmailContent(sesNotification);
       this.logger.log(`[SERVICE] ✅ Parsed email content, email ID: ${inboundEmail.id || 'NEW'}, from: ${inboundEmail.from}, to: ${inboundEmail.to}`, 'InboundEmailService');
@@ -927,20 +943,24 @@ export class InboundEmailService {
           }
         } else if (encodingUpper === 'Q') {
           // Quoted-printable encoding
-          // Replace =XX with actual character, handle underscore as space
+          // Replace =XX with actual character (byte value), handle underscore as space
+          // decodedText is a string where each char has code point = byte value (0-255)
           const decodedText = text.replace(/_/g, ' ').replace(/=([0-9A-F]{2})/gi, (m, hex) => {
             const charCode = parseInt(hex, 16);
             return String.fromCharCode(charCode);
           });
 
-          // Convert from specified charset to UTF-8
+          // decodedText holds raw bytes as char codes; use latin1 to get Buffer of bytes, then decode with charset
           try {
-            const buffer = Buffer.from(decodedText, charsetLower as BufferEncoding);
-            return buffer.toString('utf-8');
+            const buffer = Buffer.from(decodedText, 'latin1');
+            return buffer.toString((charsetLower as BufferEncoding) || 'utf-8');
           } catch (e) {
-            // If charset conversion fails, return as-is (might already be UTF-8)
-            this.logger.warn(`[PARSE] Failed to convert quoted-printable from charset ${charsetLower}, using as-is: ${e}`, 'InboundEmailService');
-            return decodedText;
+            this.logger.warn(`[PARSE] Failed to convert quoted-printable from charset ${charsetLower}, trying utf-8: ${e}`, 'InboundEmailService');
+            try {
+              return Buffer.from(decodedText, 'latin1').toString('utf-8');
+            } catch {
+              return decodedText;
+            }
           }
         }
         return text;
@@ -1295,10 +1315,8 @@ export class InboundEmailService {
 
       this.logger.log(`[REPARSE] ✅ Updated email in database with ${email.attachments ? email.attachments.length : 0} attachments`, 'InboundEmailService');
 
-      // Trigger webhook delivery again
-      this.logger.log(`[REPARSE] Triggering webhook delivery...`, 'InboundEmailService');
-      await this.webhookDeliveryService.deliverToSubscriptions(email);
-      this.logger.log(`[REPARSE] ✅ Webhook delivery triggered`, 'InboundEmailService');
+      // Do NOT trigger webhook delivery on reparse - ticket already exists in helpdesk; re-delivery would create duplicates
+      this.logger.log(`[REPARSE] Skipping webhook delivery (email already delivered; would create duplicate tickets)`, 'InboundEmailService');
 
       this.logger.log(`[REPARSE] ===== REPARSE EMAIL END (SUCCESS) =====`, 'InboundEmailService');
 
@@ -1384,16 +1402,16 @@ export class InboundEmailService {
     );
 
     if (existingEmail) {
-      this.logger.log(`[S3_PROCESS] Email already exists with ID: ${existingEmail.id}, updating...`, 'InboundEmailService');
-      // Re-parse to get updated attachments
+      this.logger.log(`[S3_PROCESS] Email already exists with ID: ${existingEmail.id}, updating content only (no webhook)`, 'InboundEmailService');
+      // Re-parse to get updated attachments/body; do NOT call processInboundEmail - webhook was already delivered
+      // when email was first processed (SES or S3). Calling it again would create duplicate helpdesk tickets.
       const emailParts = this.parseEmailParts(fullContent);
       existingEmail.attachments = emailParts.attachments.length > 0 ? emailParts.attachments : null;
       existingEmail.bodyText = emailParts.bodyText;
       existingEmail.bodyHtml = emailParts.bodyHtml;
       existingEmail.subject = emailParts.subject || subject;
       await this.inboundEmailRepository.save(existingEmail);
-      await this.processInboundEmail(existingEmail);
-      this.logger.log(`[S3_PROCESS] ✅ Updated existing email`, 'InboundEmailService');
+      this.logger.log(`[S3_PROCESS] ✅ Updated existing email (webhook not re-sent to avoid duplicate tickets)`, 'InboundEmailService');
       return { id: existingEmail.id, attachmentsCount: existingEmail.attachments ? existingEmail.attachments.length : 0 };
     }
 
