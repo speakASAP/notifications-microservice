@@ -1564,6 +1564,7 @@ export class InboundEmailService {
     unprocessed: Array<{ key: string; size: number; lastModified: string }>;
     bucket: string;
     prefix: string;
+    error?: string;
   }> {
     const bucket = this.defaultS3Bucket || process.env.AWS_SES_S3_BUCKET;
     const prefix = this.defaultS3Prefix || process.env.AWS_SES_S3_OBJECT_KEY_PREFIX || 'forwards/';
@@ -1575,24 +1576,30 @@ export class InboundEmailService {
 
     this.logger.log(`[S3_UNPROCESSED] Listing S3 bucket=${bucket}, prefix=${prefix}, maxKeys=${maxKeys}`, 'InboundEmailService');
 
-    const listResult = await this.s3Client.send(
-      new ListObjectsV2Command({
-        Bucket: bucket,
-        Prefix: prefix,
-        MaxKeys: maxKeys,
-      }),
-    );
+    let listResult: { Contents?: Array<{ Key?: string; Size?: number; LastModified?: Date }> };
+    try {
+      listResult = await this.s3Client.send(
+        new ListObjectsV2Command({
+          Bucket: bucket,
+          Prefix: prefix,
+          MaxKeys: maxKeys,
+        }),
+      );
+    } catch (s3Error: unknown) {
+      const msg = s3Error instanceof Error ? s3Error.message : String(s3Error);
+      this.logger.error(`[S3_UNPROCESSED] S3 ListObjectsV2 failed: ${msg}`, undefined, 'InboundEmailService');
+      throw new Error(`S3 list failed: ${msg}`);
+    }
 
     const contents = listResult.Contents || [];
     const s3Keys = contents.map((c) => ({ key: c.Key!, size: c.Size ?? 0, lastModified: (c.LastModified?.toISOString() ?? '') }));
 
-    const processedKeys = await this.inboundEmailRepository
-      .createQueryBuilder('e')
-      .select("e.rawData->'receipt'->'action'->>'objectKey'", 'objectKey')
-      .where("e.rawData->'receipt'->'action'->>'objectKey' IS NOT NULL")
-      .andWhere("e.rawData->'receipt'->'action'->>'objectKey' != ''")
-      .getRawMany()
-      .then((rows) => new Set(rows.map((r) => r.objectKey).filter(Boolean)));
+    const allEmails = await this.inboundEmailRepository.find({ select: ['rawData'] });
+    const processedKeys = new Set<string>();
+    for (const e of allEmails) {
+      const key = e.rawData?.receipt?.action?.objectKey;
+      if (key && typeof key === 'string') processedKeys.add(key);
+    }
 
     const unprocessed = s3Keys.filter((o) => !processedKeys.has(o.key));
 
