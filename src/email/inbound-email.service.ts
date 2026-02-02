@@ -85,6 +85,14 @@ export interface InboundEmailSummary {
   status: string;
 }
 
+/** Normalize messageId so SES and S3 payloads match (strip angle brackets). */
+function normalizeMessageId(id: string | undefined): string {
+  if (!id || typeof id !== 'string') return id || '';
+  const s = id.trim();
+  if (s.length >= 2 && s.startsWith('<') && s.endsWith('>')) return s.slice(1, -1).trim();
+  return s;
+}
+
 @Injectable()
 export class InboundEmailService {
   private s3Client: S3Client;
@@ -129,7 +137,7 @@ export class InboundEmailService {
     this.logger.log(`[SERVICE] SES notification - source: ${sesNotification.mail?.source}, destination: ${JSON.stringify(sesNotification.mail?.destination)}, messageId: ${sesNotification.mail?.messageId}`, 'InboundEmailService');
 
     try {
-      const messageId = sesNotification.mail?.messageId;
+      const messageId = normalizeMessageId(sesNotification.mail?.messageId);
       if (messageId) {
         const existing = await this.inboundEmailRepository
           .createQueryBuilder('e')
@@ -283,8 +291,10 @@ export class InboundEmailService {
       if (sesNotification.content && (!bucketName || sesNotification.content.length < 100000)) {
         // Email content is in notification and it's small enough (< 100 KB)
         // Use content from notification for small emails (faster)
+        // CRITICAL: Use latin1 (not utf-8) - raw MIME contains binary/non-UTF8 bytes.
+        // utf-8 would replace invalid sequences with U+FFFD, corrupting content (blue ? in helpdesk)
         this.logger.log(`[PARSE] Email content found in notification, decoding base64...`, 'InboundEmailService');
-        emailContent = Buffer.from(sesNotification.content, 'base64').toString('utf-8');
+        emailContent = Buffer.from(sesNotification.content, 'base64').toString('latin1');
         this.logger.log(`[PARSE] ✅ Decoded content from notification, length: ${emailContent.length}`, 'InboundEmailService');
       } else if (bucketName) {
         // Email is stored in S3 (or we have default bucket configured)
@@ -325,7 +335,7 @@ export class InboundEmailService {
             // If S3 fetch fails and we have content in notification, fall back to notification
             if (sesNotification.content) {
               this.logger.warn(`[PARSE] S3 fetch failed (${s3ErrorMessage}), falling back to notification content`, 'InboundEmailService');
-              emailContent = Buffer.from(sesNotification.content, 'base64').toString('utf-8');
+              emailContent = Buffer.from(sesNotification.content, 'base64').toString('latin1');
             } else {
               throw s3Error;
             }
@@ -334,7 +344,7 @@ export class InboundEmailService {
           // No objectKey available, try notification content as fallback
           if (sesNotification.content) {
             this.logger.warn(`[PARSE] S3 bucket configured but objectKey not available, using notification content`, 'InboundEmailService');
-            emailContent = Buffer.from(sesNotification.content, 'base64').toString('utf-8');
+            emailContent = Buffer.from(sesNotification.content, 'base64').toString('latin1');
           } else {
             throw new Error(`S3 bucket configured (${bucketName}) but objectKey not available and cannot be constructed`);
           }
@@ -342,7 +352,7 @@ export class InboundEmailService {
       } else if (sesNotification.content) {
         // Fallback: use notification content if available
         this.logger.log(`[PARSE] No S3 bucket configured, using notification content`, 'InboundEmailService');
-        emailContent = Buffer.from(sesNotification.content, 'base64').toString('utf-8');
+        emailContent = Buffer.from(sesNotification.content, 'base64').toString('latin1');
       } else {
         // No content available
         throw new Error('Email content not found in notification and S3 bucket not configured');
@@ -444,7 +454,14 @@ export class InboundEmailService {
       inboundEmail.bodyHtml = bodyHtml;
       inboundEmail.attachments = attachments.length > 0 ? attachments : null;
       inboundEmail.status = 'pending';
-      inboundEmail.rawData = sesNotification;
+      // Store rawData with normalized messageId so SES/S3 dedupe by messageId works
+      const normalizedId = normalizeMessageId(sesNotification.mail?.messageId);
+      inboundEmail.rawData = {
+        ...sesNotification,
+        mail: sesNotification.mail
+          ? { ...sesNotification.mail, messageId: normalizedId || sesNotification.mail.messageId }
+          : undefined,
+      };
 
       this.logger.log(`[PARSE] ✅ Created InboundEmail - from: ${from}, to: ${to}, subject: ${subject}`, 'InboundEmailService');
       this.logger.log(`[PARSE] ===== PARSE EMAIL CONTENT END (SUCCESS) =====`, 'InboundEmailService');
@@ -534,9 +551,11 @@ export class InboundEmailService {
       }
     }
 
-    // Check Content-Transfer-Encoding for non-multipart messages
+    // Check Content-Transfer-Encoding and charset for non-multipart messages
     const transferEncodingMatch = headers.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
     const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim() : '';
+    const charsetMatch = headers.match(/charset=["']?([^"'\s;]+)["']?/i);
+    const messageCharset = charsetMatch ? charsetMatch[1].trim() : undefined;
 
     // Check if multipart message
     if (headers.includes('Content-Type: multipart')) {
@@ -607,8 +626,8 @@ export class InboundEmailService {
       }
     } else {
       // Simple message, decode content first, then check content type
-      const decodedBody = this.decodeContent(body, transferEncoding);
-      
+      const decodedBody = this.decodeContent(body, transferEncoding, messageCharset);
+
       if (headers.includes('Content-Type: text/html')) {
         parts.bodyHtml = decodedBody;
         parts.bodyText = this.stripHtml(decodedBody);
@@ -697,6 +716,8 @@ export class InboundEmailService {
       const contentDispositionMatch = partHeaders.match(/Content-Disposition:\s*([^;\r\n]+)/i);
       const filenameMatch = partHeaders.match(/filename="?([^";\r\n]+)"?/i);
       const transferEncodingMatch = partHeaders.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
+      const charsetMatch = partHeaders.match(/charset=["']?([^"'\s;]+)["']?/i);
+      const partCharset = charsetMatch ? charsetMatch[1].trim() : undefined;
 
       const contentType = contentTypeMatch ? contentTypeMatch[1].trim() : undefined;
 
@@ -853,8 +874,8 @@ export class InboundEmailService {
       }
 
       const originalLength = partContent.length;
-      this.logger.log(`[PARSE] Part ${i} before decoding: length=${originalLength}, transferEncoding=${transferEncoding || 'none'}, contentType=${contentType || 'N/A'}`, 'InboundEmailService');
-      partContent = this.decodeContent(partContent, transferEncoding);
+      this.logger.log(`[PARSE] Part ${i} before decoding: length=${originalLength}, transferEncoding=${transferEncoding || 'none'}, contentType=${contentType || 'N/A'}, charset=${partCharset || 'default'}`, 'InboundEmailService');
+      partContent = this.decodeContent(partContent, transferEncoding, partCharset);
       const afterDecodeLength = partContent.length;
       if (transferEncoding && originalLength !== afterDecodeLength) {
         this.logger.log(`[PARSE] Decoded ${transferEncoding} content in part ${i}: ${originalLength} -> ${afterDecodeLength} bytes`, 'InboundEmailService');
@@ -1030,83 +1051,60 @@ export class InboundEmailService {
   }
 
   /**
-   * Decode email content based on Content-Transfer-Encoding
-   * Handles quoted-printable, base64, and 7bit/8bit/binary (no decoding needed)
+   * Decode email content based on Content-Transfer-Encoding.
+   * Content comes from latin1-decoded raw MIME (char code = byte value).
+   * charset from Content-Type (e.g. windows-1251) - use 'utf-8' if not specified.
    */
-  private decodeContent(content: string, transferEncoding: string): string {
+  private decodeContent(
+    content: string,
+    transferEncoding: string,
+    charset?: string,
+  ): string {
     if (!content) {
       return content;
     }
 
     const encoding = transferEncoding.toLowerCase().trim();
+    const targetCharset = (charset || 'utf-8').toLowerCase().trim();
 
     try {
       if (encoding === 'quoted-printable' || encoding === 'qp') {
-        // Decode quoted-printable encoding
-        // Quoted-printable uses =XX for bytes and = at end of line for soft breaks
-        // Algorithm:
-        // 1. Remove soft line breaks (= followed by CRLF or LF)
-        // 2. Replace =XX sequences with the actual byte value
-        // 3. The result is a UTF-8 encoded string
-        
-        // Step 1: Remove soft line breaks (= at end of line, with optional whitespace)
-        // Handle all variations: =\r\n, =\n, = \r\n, = \n, =\r, etc.
-        // Soft line breaks in quoted-printable: = at end of line means line continues
+        // Decode quoted-printable. Content is from latin1-decoded MIME so char code = byte.
         const processed = content
-          .replace(/=\s*\r\n/g, '')  // = followed by optional whitespace and CRLF
-          .replace(/=\s*\n/g, '')    // = followed by optional whitespace and LF
-          .replace(/=\s*\r/g, '');   // = followed by optional whitespace and CR (just in case)
-        
-        // Step 2: Decode =XX sequences
-        // Replace =XX with the actual byte (as a character with that char code)
-        // Then we'll convert the whole thing to a buffer and decode as UTF-8
+          .replace(/=\s*\r\n/g, '')
+          .replace(/=\s*\n/g, '')
+          .replace(/=\s*\r/g, '');
+
         const bytes: number[] = [];
         let i = 0;
-        
+
         while (i < processed.length) {
           if (processed[i] === '=' && i + 2 < processed.length) {
             const hex = processed.substring(i + 1, i + 3);
             if (/^[0-9A-Fa-f]{2}$/.test(hex)) {
-              // Valid hex sequence - decode to byte
               bytes.push(parseInt(hex, 16));
               i += 3;
             } else {
-              // Invalid sequence - log warning
               this.logger.warn(`[PARSE] Invalid quoted-printable sequence: =${hex}`, 'InboundEmailService');
-              // Treat as literal character
-              const charBytes = Buffer.from(processed[i], 'utf-8');
-              bytes.push(...Array.from(charBytes));
+              bytes.push(processed[i].charCodeAt(0) & 0xff);
               i++;
             }
           } else {
-            // Regular character - get its UTF-8 byte representation
-            const charBytes = Buffer.from(processed[i], 'utf-8');
-            bytes.push(...Array.from(charBytes));
+            // Content from latin1: char code = byte value (not UTF-8 re-encoding)
+            bytes.push(processed[i].charCodeAt(0) & 0xff);
             i++;
           }
         }
-        
-        // Step 3: Convert bytes to UTF-8 string
-        try {
-          const buffer = Buffer.from(bytes);
-          const decoded = buffer.toString('utf-8');
-          this.logger.log(`[PARSE] Decoded quoted-printable: ${content.length} chars -> ${bytes.length} bytes -> ${decoded.length} chars`, 'InboundEmailService');
-          return decoded;
-        } catch (e) {
-          this.logger.error(`[PARSE] Failed to decode quoted-printable bytes as UTF-8: ${e}`, 'InboundEmailService');
-          // Fallback: try to return as string from bytes (limited to prevent memory issues)
-          if (bytes.length > 100000) {
-            this.logger.warn(`[PARSE] Quoted-printable content too large (${bytes.length} bytes), truncating`, 'InboundEmailService');
-            return Buffer.from(bytes.slice(0, 100000)).toString('utf-8') + '...[truncated]';
-          }
-          return Buffer.from(bytes).toString('utf-8');
-        }
+
+        const buffer = Buffer.from(bytes);
+        const decoded = this.bufferToStringWithCharset(buffer, targetCharset);
+        this.logger.log(`[PARSE] Decoded quoted-printable: ${content.length} -> ${bytes.length} bytes -> ${decoded.length} chars (charset: ${targetCharset})`, 'InboundEmailService');
+        return decoded;
       } else if (encoding === 'base64' || encoding === 'b') {
-        // Decode base64
         try {
-          // Remove whitespace that might interfere with base64 decoding
           const cleanContent = content.replace(/\s/g, '');
-          const decoded = Buffer.from(cleanContent, 'base64').toString('utf-8');
+          const buffer = Buffer.from(cleanContent, 'base64');
+          const decoded = this.bufferToStringWithCharset(buffer, targetCharset);
           return decoded;
         } catch (e) {
           this.logger.warn(`[PARSE] Failed to decode base64 content: ${e}`, 'InboundEmailService');
@@ -1124,6 +1122,34 @@ export class InboundEmailService {
       this.logger.error(`[PARSE] Error decoding content with encoding ${encoding}: ${e}`, 'InboundEmailService');
       return content;
     }
+  }
+
+  /**
+   * Convert buffer to string using charset.
+   * Node Buffer supports: utf8, utf16le, ucs2, latin1, ascii.
+   * For windows-1251, koi8-r etc. uses iconv-lite if available.
+   */
+  private bufferToStringWithCharset(buffer: Buffer, charset: string): string {
+    const enc = charset.toLowerCase().replace(/[-_]/g, '');
+    const nodeEncodings: BufferEncoding[] = ['utf8', 'utf16le', 'ucs2', 'latin1', 'ascii'];
+    if (nodeEncodings.includes(enc as BufferEncoding)) {
+      try {
+        return buffer.toString(enc as BufferEncoding);
+      } catch {
+        return buffer.toString('utf-8');
+      }
+    }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const iconv = require('iconv-lite');
+      if (iconv && iconv.decode) {
+        const decoded = iconv.decode(buffer, enc);
+        if (decoded) return decoded;
+      }
+    } catch {
+      /* iconv-lite optional */
+    }
+    return buffer.toString('utf-8');
   }
 
   /**
@@ -1388,17 +1414,20 @@ export class InboundEmailService {
     const from = fromMatch ? this.decodeEmailAddress(this.decodeHeader(fromMatch[1].trim())) : 'unknown@unknown.com';
     const to = toMatch ? this.decodeEmailAddress(this.decodeHeader(toMatch[1].trim())) : 'unknown@unknown.com';
     const subject = subjectMatch ? this.decodeHeader(subjectMatch[1].trim()) : null;
-    const messageId = messageIdMatch ? messageIdMatch[1].trim() : `s3-${Date.now()}`;
+    const messageIdRaw = messageIdMatch ? messageIdMatch[1].trim() : `s3-${Date.now()}`;
+    const messageId = normalizeMessageId(messageIdRaw);
     const date = dateMatch ? dateMatch[1].trim() : new Date().toISOString();
 
     this.logger.log(`[S3_PROCESS] Parsed headers - from: ${from}, to: ${to}, subject: ${subject || 'N/A'}`, 'InboundEmailService');
 
-    // Check if email already exists (by messageId)
+    // Check if email already exists (by messageId, normalized so SES and S3 match)
     const existingEmails = await this.inboundEmailRepository.find({
       where: {},
     });
     const existingEmail = existingEmails.find(
-      (e) => e.rawData?.mail?.messageId === messageId || e.rawData?.receipt?.action?.objectKey === objectKey,
+      (e) =>
+        normalizeMessageId(e.rawData?.mail?.messageId) === messageId ||
+        e.rawData?.receipt?.action?.objectKey === objectKey,
     );
 
     if (existingEmail) {
