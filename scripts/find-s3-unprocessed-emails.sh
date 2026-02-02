@@ -20,8 +20,19 @@ echo "S3 vs Notifications DB: Unprocessed Emails"
 echo "=============================================="
 echo ""
 
+# Load only needed vars from .env (avoid sourcing JSON/complex values that break shell)
 if [ -f .env ]; then
-  source .env
+  while IFS= read -r line; do
+    case "$line" in
+      AWS_SES_S3_BUCKET=*) export "$line" ;;
+      AWS_SES_S3_OBJECT_KEY_PREFIX=*) export "$line" ;;
+      AWS_SES_REGION=*) export "$line" ;;
+      DB_HOST=*) export "$line" ;;
+      DB_PORT=*) export "$line" ;;
+      DB_USER=*) export "$line" ;;
+      DB_NAME=*) export "$line" ;;
+    esac
+  done < <(grep -E '^(AWS_SES_S3_BUCKET|AWS_SES_S3_OBJECT_KEY_PREFIX|AWS_SES_REGION|DB_HOST|DB_PORT|DB_USER|DB_NAME)=' .env 2>/dev/null || true)
 fi
 S3_BUCKET="${AWS_SES_S3_BUCKET:-speakasap-email-forward}"
 S3_PREFIX="${AWS_SES_S3_OBJECT_KEY_PREFIX:-forwards/}"
