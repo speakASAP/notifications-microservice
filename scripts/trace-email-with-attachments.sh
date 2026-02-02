@@ -122,7 +122,6 @@ echo ""
 echo "3. Checking Service Logs..."
 echo "---------------------------"
 if docker ps | grep -q notifications-microservice; then
-then
     CONTAINER_NAME=$(docker ps | grep notifications-microservice | awk '{print $NF}' | head -1)
     echo "Checking logs from container: $CONTAINER_NAME"
 

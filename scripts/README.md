@@ -29,8 +29,13 @@ Use `up -d --build` after a pull; `restart` alone does not rebuild the image.
 
 - **`process-s3-email.ts`** - Manually process an email from S3 bucket
   - Usage: `ts-node scripts/process-s3-email.ts <bucket-name> <object-key>`
+- **`find-s3-unprocessed-emails.sh`** - Find S3 objects that were never processed by notifications-microservice (compare S3 bucket with `inbound_emails` by `rawData.receipt.action.objectKey`). Use to trace emails with attachments that stayed in S3.
+  - Usage: `./scripts/find-s3-unprocessed-emails.sh` (requires AWS CLI, psql, .env)
+  - On prod: `ssh statex "cd ~/notifications-microservice && ./scripts/find-s3-unprocessed-emails.sh"`
 - **`reparse-email.ts`** - Re-parse an existing email from database
   - Usage: `ts-node scripts/reparse-email.ts <email-id>`
+- **`trace-email-with-attachments.sh`** - Trace why an email (e.g. with attachments) did not reach helpdesk: DB, S3, logs, S3 event config.
+  - Usage: `./scripts/trace-email-with-attachments.sh [recipient@domain] [message-id]`
 
 ### S3 Event Notifications
 
