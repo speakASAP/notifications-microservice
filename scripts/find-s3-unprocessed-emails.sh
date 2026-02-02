@@ -27,12 +27,17 @@ if [ -f .env ]; then
       AWS_SES_S3_BUCKET=*) export "$line" ;;
       AWS_SES_S3_OBJECT_KEY_PREFIX=*) export "$line" ;;
       AWS_SES_REGION=*) export "$line" ;;
+      AWS_SES_ACCESS_KEY_ID=*) export "$line" ;;
+      AWS_SES_SECRET_ACCESS_KEY=*) export "$line" ;;
       DB_HOST=*) export "$line" ;;
       DB_PORT=*) export "$line" ;;
       DB_USER=*) export "$line" ;;
       DB_NAME=*) export "$line" ;;
     esac
-  done < <(grep -E '^(AWS_SES_S3_BUCKET|AWS_SES_S3_OBJECT_KEY_PREFIX|AWS_SES_REGION|DB_HOST|DB_PORT|DB_USER|DB_NAME)=' .env 2>/dev/null || true)
+  done < <(grep -E '^(AWS_SES_S3_BUCKET|AWS_SES_S3_OBJECT_KEY_PREFIX|AWS_SES_REGION|AWS_SES_ACCESS_KEY_ID|AWS_SES_SECRET_ACCESS_KEY|DB_HOST|DB_PORT|DB_USER|DB_NAME)=' .env 2>/dev/null || true)
+  # AWS CLI uses AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+  [ -n "$AWS_SES_ACCESS_KEY_ID" ] && export AWS_ACCESS_KEY_ID="$AWS_SES_ACCESS_KEY_ID"
+  [ -n "$AWS_SES_SECRET_ACCESS_KEY" ] && export AWS_SECRET_ACCESS_KEY="$AWS_SES_SECRET_ACCESS_KEY"
 fi
 S3_BUCKET="${AWS_SES_S3_BUCKET:-speakasap-email-forward}"
 S3_PREFIX="${AWS_SES_S3_OBJECT_KEY_PREFIX:-forwards/}"
