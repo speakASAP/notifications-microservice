@@ -1220,13 +1220,36 @@ export class InboundEmailService {
   }
 
   /**
+   * Normalize recipient for forwarding lookup: extract address from "Name <addr>" and lowercase.
+   * So "Stashok <stashok@speakasap.com>" and "stashok@speakasap.com" both match rule key "stashok@speakasap.com".
+   */
+  private normalizeRecipientForForwarding(recipient: string): string {
+    if (!recipient || typeof recipient !== 'string') return '';
+    const s = recipient.trim();
+    const angle = s.indexOf('<');
+    if (angle !== -1) {
+      const end = s.indexOf('>', angle);
+      const addr = end !== -1 ? s.slice(angle + 1, end).trim() : s.slice(angle + 1).trim();
+      return addr.toLowerCase();
+    }
+    const emailMatch = s.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+    return emailMatch ? emailMatch[1].toLowerCase() : s.toLowerCase();
+  }
+
+  /**
    * Get email forwarding rules from environment variable
    * Format: JSON object like {"stashok@speakasap.com": "ssfskype@gmail.com"}
+   * Keys are normalized to lowercase for case-insensitive match.
    */
   private getForwardingRules(): Record<string, string> {
-    const forwardingRulesEnv = process.env.EMAIL_FORWARDING_RULES;
+    let forwardingRulesEnv = process.env.EMAIL_FORWARDING_RULES;
     if (!forwardingRulesEnv) {
       return {};
+    }
+    forwardingRulesEnv = forwardingRulesEnv.trim();
+    if ((forwardingRulesEnv.startsWith("'") && forwardingRulesEnv.endsWith("'")) ||
+        (forwardingRulesEnv.startsWith('"') && forwardingRulesEnv.endsWith('"'))) {
+      forwardingRulesEnv = forwardingRulesEnv.slice(1, -1);
     }
 
     try {
@@ -1235,7 +1258,13 @@ export class InboundEmailService {
         this.logger.warn(`[FORWARD] Invalid EMAIL_FORWARDING_RULES format, expected object`, 'InboundEmailService');
         return {};
       }
-      return rules;
+      const normalized: Record<string, string> = {};
+      for (const [key, value] of Object.entries(rules)) {
+        if (typeof key === 'string' && typeof value === 'string') {
+          normalized[key.toLowerCase().trim()] = value.trim();
+        }
+      }
+      return normalized;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`[FORWARD] Failed to parse EMAIL_FORWARDING_RULES: ${errorMessage}`, undefined, 'InboundEmailService');
@@ -1248,9 +1277,13 @@ export class InboundEmailService {
    */
   private async forwardEmailIfNeeded(email: InboundEmail): Promise<void> {
     const forwardingRules = this.getForwardingRules();
-    const forwardTo = forwardingRules[email.to];
+    const recipientKey = this.normalizeRecipientForForwarding(email.to);
+    const forwardTo = recipientKey ? forwardingRules[recipientKey] : undefined;
 
     if (!forwardTo) {
+      if (recipientKey && Object.keys(forwardingRules).length > 0) {
+        this.logger.log(`[FORWARD] No rule for recipient "${email.to}" (normalized: ${recipientKey}), skipping forward`, 'InboundEmailService');
+      }
       return; // No forwarding rule for this recipient
     }
 
