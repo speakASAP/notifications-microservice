@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin – Notifications Service</title>
+  <style>
+    :root {
+      --bg: #0f0f12;
+      --surface: #18181c;
+      --border: #2a2a2e;
+      --text: #e4e4e7;
+      --muted: #71717a;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --error: #ef4444;
+      --success: #22c55e;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+    header {
+      padding: 16px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    header .container { display: flex; justify-content: space-between; align-items: center; }
+    .logo { font-weight: 700; color: var(--text); text-decoration: none; }
+    .btn {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      font-size: 0.9rem;
+      text-decoration: none;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+    main { padding: 32px 0 48px; }
+    h1 { font-size: 1.5rem; margin-bottom: 24px; }
+    h2 { font-size: 1.15rem; margin-bottom: 12px; color: var(--muted); }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .login-form { max-width: 360px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; margin-bottom: 6px; font-size: 0.9rem; color: var(--muted); }
+    .form-group input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    .form-group input:focus { outline: none; border-color: var(--accent); }
+    .error-msg { color: var(--error); font-size: 0.9rem; margin-top: 8px; }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat { background: var(--bg); border-radius: 8px; padding: 16px; text-align: center; }
+    .stat .value { font-size: 1.5rem; font-weight: 700; }
+    .stat .label { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 500; }
+    .params-list { list-style: none; }
+    .params-list li { padding: 6px 0; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 16px; }
+    .params-list li:last-child { border-bottom: none; }
+    .params-list .key { color: var(--muted); }
+    .hidden { display: none; }
+    .loading { color: var(--muted); }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <a href="/" class="logo">Notifications Admin</a>
+      <div id="header-actions"></div>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <div id="login-view" class="login-form card">
+        <h1>Sign in</h1>
+        <p style="color: var(--muted); margin-bottom: 20px;">Use your auth-microservice account.</p>
+        <form id="login-form">
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" required autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required autocomplete="current-password">
+          </div>
+          <div id="login-error" class="error-msg hidden"></div>
+          <button type="submit" class="btn btn-primary">Sign in</button>
+        </form>
+      </div>
+      <div id="dashboard-view" class="hidden">
+        <h1>Dashboard</h1>
+        <section class="card">
+          <h2>Statistics</h2>
+          <div id="stats-content" class="loading">Loading…</div>
+          <div id="stats-grid" class="stats-grid hidden"></div>
+        </section>
+        <section class="card">
+          <h2>Message history</h2>
+          <div id="history-content" class="loading">Loading…</div>
+          <table id="history-table" class="hidden">
+            <thead>
+              <tr>
+                <th>Channel</th>
+                <th>Type</th>
+                <th>Recipient</th>
+                <th>Status</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody"></tbody>
+          </table>
+          <p id="history-more" style="margin-top: 12px;"></p>
+        </section>
+        <section class="card">
+          <h2>Service parameters</h2>
+          <div id="params-content" class="loading">Loading…</div>
+          <ul id="params-list" class="params-list hidden"></ul>
+        </section>
+      </div>
+    </div>
+  </main>
+  <script>
+    (function () {
+      const TOKEN_KEY = 'notifications_admin_token';
+      const REFRESH_KEY = 'notifications_admin_refresh';
+      let authServicePublicUrl = '';
+
+      function getOrigin() {
+        return window.location.origin;
+      }
+
+      function getToken() {
+        return sessionStorage.getItem(TOKEN_KEY);
+      }
+
+      function setTokens(access, refresh) {
+        sessionStorage.setItem(TOKEN_KEY, access);
+        if (refresh) sessionStorage.setItem(REFRESH_KEY, refresh);
+      }
+
+      function clearTokens() {
+        sessionStorage.removeItem(TOKEN_KEY);
+        sessionStorage.removeItem(REFRESH_KEY);
+      }
+
+      function show(el) { el.classList.remove('hidden'); }
+      function hide(el) { el.classList.add('hidden'); }
+
+      async function loadConfig() {
+        const r = await fetch(getOrigin() + '/api/config');
+        const json = await r.json();
+        if (json.success && json.data) {
+          authServicePublicUrl = (json.data.authServicePublicUrl || '').replace(/\/$/, '');
+        }
+      }
+
+      function renderHeader(loggedIn) {
+        const el = document.getElementById('header-actions');
+        if (loggedIn) {
+          el.innerHTML = '<a href="/" class="btn btn-secondary" style="margin-right:8px">Landing</a><button type="button" class="btn btn-secondary" id="logout-btn">Logout</button>';
+          document.getElementById('logout-btn').onclick = function () {
+            clearTokens();
+            showLogin();
+          };
+        } else {
+          el.innerHTML = '<a href="/" class="btn btn-secondary">Landing</a>';
+        }
+      }
+
+      function showLogin() {
+        hide(document.getElementById('dashboard-view'));
+        show(document.getElementById('login-view'));
+        renderHeader(false);
+      }
+
+      function showDashboard() {
+        hide(document.getElementById('login-view'));
+        show(document.getElementById('dashboard-view'));
+        renderHeader(true);
+        loadStats();
+        loadHistory();
+        loadParams();
+      }
+
+      async function login(email, password) {
+        if (!authServicePublicUrl) {
+          document.getElementById('login-error').textContent = 'Auth service URL not configured.';
+          show(document.getElementById('login-error'));
+          return;
+        }
+        try {
+          const r = await fetch(authServicePublicUrl + '/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+          });
+          const data = await r.json();
+          if (!r.ok) {
+            document.getElementById('login-error').textContent = data.message || 'Login failed';
+            show(document.getElementById('login-error'));
+            return;
+          }
+          setTokens(data.accessToken, data.refreshToken);
+          hide(document.getElementById('login-error'));
+          showDashboard();
+        } catch (e) {
+          document.getElementById('login-error').textContent = 'Network error: ' + (e.message || 'Could not reach auth service');
+          show(document.getElementById('login-error'));
+        }
+      }
+
+      function api(path, options) {
+        const token = getToken();
+        const h = options && options.headers ? { ...options.headers } : {};
+        if (token) h['Authorization'] = 'Bearer ' + token;
+        return fetch(getOrigin() + path, { ...options, headers: { ...h, 'Content-Type': 'application/json' } });
+      }
+
+      async function loadStats() {
+        const el = document.getElementById('stats-content');
+        const grid = document.getElementById('stats-grid');
+        try {
+          const r = await api('/admin/stats');
+          if (r.status === 401) { showLogin(); return; }
+          const json = await r.json();
+          if (!json.success) { el.textContent = json.error?.message || 'Failed to load stats'; return; }
+          const d = json.data;
+          grid.innerHTML =
+            '<div class="stat"><span class="value">' + (d.total ?? 0) + '</span><span class="label">Total</span></div>' +
+            '<div class="stat"><span class="value">' + (d.last24h ?? 0) + '</span><span class="label">Last 24h</span></div>' +
+            '<div class="stat"><span class="value">' + (d.last7d ?? 0) + '</span><span class="label">Last 7 days</span></div>' +
+            (d.byChannel ? Object.entries(d.byChannel).map(function (e) {
+              return '<div class="stat"><span class="value">' + e[1] + '</span><span class="label">' + e[0] + '</span></div>';
+            }).join('') : '') +
+            (d.byStatus ? Object.entries(d.byStatus).map(function (e) {
+              return '<div class="stat"><span class="value">' + e[1] + '</span><span class="label">' + e[0] + '</span></div>';
+            }).join('') : '');
+          el.textContent = '';
+          show(grid);
+        } catch (e) {
+          el.textContent = 'Error: ' + (e.message || 'Could not load stats');
+        }
+      }
+
+      async function loadHistory() {
+        const content = document.getElementById('history-content');
+        const table = document.getElementById('history-table');
+        const tbody = document.getElementById('history-tbody');
+        const more = document.getElementById('history-more');
+        try {
+          const r = await api('/admin/history?limit=30&offset=0');
+          if (r.status === 401) { showLogin(); return; }
+          const json = await r.json();
+          if (!json.success) { content.textContent = json.error?.message || 'Failed to load history'; return; }
+          const list = json.data || [];
+          tbody.innerHTML = list.map(function (n) {
+            const created = n.createdAt ? new Date(n.createdAt).toLocaleString() : '-';
+            return '<tr><td>' + (n.channel || '-') + '</td><td>' + (n.type || '-') + '</td><td>' + (n.recipient || '-') + '</td><td>' + (n.status || '-') + '</td><td>' + created + '</td></tr>';
+          }).join('');
+          content.textContent = '';
+          show(table);
+          more.textContent = list.length >= 30 ? 'Showing last 30 messages.' : '';
+        } catch (e) {
+          content.textContent = 'Error: ' + (e.message || 'Could not load history');
+        }
+      }
+
+      async function loadParams() {
+        const content = document.getElementById('params-content');
+        const list = document.getElementById('params-list');
+        try {
+          const r = await api('/admin/params');
+          if (r.status === 401) { showLogin(); return; }
+          const json = await r.json();
+          if (!json.success) { content.textContent = json.error?.message || 'Failed to load params'; return; }
+          const d = json.data || {};
+          list.innerHTML = Object.entries(d).map(function (e) {
+            const v = typeof e[1] === 'boolean' ? (e[1] ? 'Yes' : 'No') : String(e[1]);
+            return '<li><span class="key">' + e[0] + '</span><span>' + v + '</span></li>';
+          }).join('');
+          content.textContent = '';
+          show(list);
+        } catch (e) {
+          content.textContent = 'Error: ' + (e.message || 'Could not load params');
+        }
+      }
+
+      document.getElementById('login-form').onsubmit = function (e) {
+        e.preventDefault();
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+        login(email, password);
+      };
+
+      (async function init() {
+        await loadConfig();
+        if (getToken()) {
+          showDashboard();
+        } else {
+          showLogin();
+        }
+      })();
+    })();
+  </script>
+</body>
+</html>

@@ -7,6 +7,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { Logger } from '@nestjs/common';
 import * as express from 'express';
+import * as path from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -14,6 +15,10 @@ async function bootstrap() {
     rawBody: true,
   });
   const logger = new Logger('Bootstrap');
+
+  // Serve web interface (landing + admin) - static files first so API routes still work
+  const webPath = path.join(process.cwd(), 'web');
+  app.use(express.static(webPath));
 
   // Configure body parser to handle text/plain as JSON (for AWS SNS)
   app.use(express.text({ type: 'text/plain' }));

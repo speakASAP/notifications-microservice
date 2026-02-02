@@ -169,6 +169,66 @@ export class NotificationsService {
     }));
   }
 
+  /**
+   * Get aggregated statistics for all notifications (for admin panel)
+   */
+  async getStats(): Promise<{
+    total: number;
+    byChannel: Record<string, number>;
+    byStatus: Record<string, number>;
+    byType: Record<string, number>;
+    last24h: number;
+    last7d: number;
+  }> {
+    const total = await this.notificationRepository.count();
+
+    const channelRows = await this.notificationRepository
+      .createQueryBuilder('n')
+      .select('n.channel', 'channel')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('n.channel')
+      .getRawMany<{ channel: string; count: string }>();
+    const byChannel: Record<string, number> = {};
+    channelRows.forEach((r) => {
+      byChannel[r.channel] = parseInt(r.count, 10);
+    });
+
+    const statusRows = await this.notificationRepository
+      .createQueryBuilder('n')
+      .select('n.status', 'status')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('n.status')
+      .getRawMany<{ status: string; count: string }>();
+    const byStatus: Record<string, number> = {};
+    statusRows.forEach((r) => {
+      byStatus[r.status] = parseInt(r.count, 10);
+    });
+
+    const typeRows = await this.notificationRepository
+      .createQueryBuilder('n')
+      .select('n.type', 'type')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('n.type')
+      .getRawMany<{ type: string; count: string }>();
+    const byType: Record<string, number> = {};
+    typeRows.forEach((r) => {
+      byType[r.type] = parseInt(r.count, 10);
+    });
+
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const last24h = await this.notificationRepository
+      .createQueryBuilder('n')
+      .where('n.createdAt >= :date', { date: oneDayAgo })
+      .getCount();
+    const last7d = await this.notificationRepository
+      .createQueryBuilder('n')
+      .where('n.createdAt >= :date', { date: sevenDaysAgo })
+      .getCount();
+
+    return { total, byChannel, byStatus, byType, last24h, last7d };
+  }
+
   async getStatus(id: string): Promise<NotificationStatusResult> {
     const notification = await this.notificationRepository.findOne({
       where: { id },

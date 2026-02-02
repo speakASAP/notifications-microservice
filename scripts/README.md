@@ -6,7 +6,8 @@ This directory contains utility scripts for the notifications-microservice.
 
 ### Deployment
 
-- **`deploy.sh`** - Production deployment script using blue/green deployment system
+- **`deploy.sh`** - Production deployment script; calls `nginx-microservice/scripts/blue-green/deploy-smart.sh`. SSL via Let's Encrypt (certbot).
+- **`update-env-auth-vars.sh`** - Add `AUTH_SERVICE_URL` and `AUTH_SERVICE_PUBLIC_URL` to `.env` if missing (for admin panel). Run on prod: `ssh statex "cd notifications-microservice && ./scripts/update-env-auth-vars.sh"`.
 
 **Restart / rebuild after `git pull`** (service name is `notification-service`; container is `notifications-microservice-blue`):
 
@@ -42,6 +43,14 @@ Use `up -d --build` after a pull; `restart` alone does not rebuild the image.
 - **`setup-s3-events.sh`** - Interactive guide for setting up S3 event notifications
 - **`verify-s3-subscription.sh`** - Verify S3 event subscription status
 - **`manage-s3-subscriptions.sh`** - Manage S3 subscriptions using AWS CLI (requires AWS CLI and SNS permissions)
+
+### Admin Panel Testing
+
+To test the admin panel (`/admin/`):
+
+1. Create a test user in auth-microservice: `cd ../auth-microservice && ./scripts/create-test-user.sh` (default: <test@example.com> / testpassword123).
+2. Ensure notifications-microservice `.env` has `AUTH_SERVICE_URL` and `AUTH_SERVICE_PUBLIC_URL` (run `./scripts/update-env-auth-vars.sh` if needed).
+3. Open `https://${DOMAIN}/admin/` and sign in with the test user. You should see statistics, message history, and service parameters.
 
 ## Documentation
 

@@ -15,6 +15,17 @@ Centralized notification service for the FlipFlop.cz flipflop platform. Handles 
 - ✅ **Status Tracking** - Track notification status (pending, sent, failed)
 - ✅ **Database Integration** - PostgreSQL storage for notification records
 - ✅ **Comprehensive Logging** - Centralized logging via external logging microservice with local fallback
+- ✅ **Web Interface** - Landing page for potential customers and admin panel with auth-microservice login
+- ✅ **Admin Panel** - Statistics, message history, and service parameters (JWT-protected)
+
+## Web Interface
+
+The service serves a web UI at the same domain (`DOMAIN` from `.env`):
+
+- **Landing** (`/`) – Multi-channel overview and quick start for potential customers
+- **Admin** (`/admin/`) – Sign in via auth-microservice; view statistics, message history, and service parameters
+
+Admin endpoints (`GET /admin/stats`, `GET /admin/history`, `GET /admin/params`) require a valid JWT from auth-microservice. Set `AUTH_SERVICE_URL` (backend validation) and `AUTH_SERVICE_PUBLIC_URL` (browser login URL) in `.env`.
 
 ## Technology Stack
 
@@ -153,6 +164,24 @@ GET /notifications/status/:id
 }
 ```
 
+### Frontend Config (public)
+
+```text
+GET /api/config
+```
+
+Returns `authServicePublicUrl` and `domain` for the web UI. No auth required.
+
+### Admin Endpoints (JWT required)
+
+All admin endpoints require `Authorization: Bearer <accessToken>` from auth-microservice login.
+
+**GET /admin/stats** – Aggregated statistics (total, by channel, by status, by type, last 24h, last 7d).
+
+**GET /admin/history?limit=50&offset=0** – Notification history for admin panel.
+
+**GET /admin/params** – Non-secret service parameters (email provider, channels configured, version, etc.).
+
 ### Inbound Email Webhook (AWS SES SNS)
 
 ```text
@@ -191,9 +220,13 @@ DOMAIN=notifications.statex.cz
 SERVICE_NAME=notifications-microservice
 
 # Service Configuration
-PORT=3368  # Configured in notifications-microservice/.env (default: 3368)
+PORT=3368  # Reserved port for notifications-microservice (33xx range)
 NODE_ENV=production
 CORS_ORIGIN=*
+
+# Auth (admin panel - required for /admin/ login and JWT validation)
+AUTH_SERVICE_URL=http://auth-microservice:3370
+AUTH_SERVICE_PUBLIC_URL=https://auth.statex.cz
 
 # Database Configuration
 DB_HOST=db-server-postgres
@@ -231,6 +264,10 @@ TELEGRAM_API_URL=https://api.telegram.org/bot
 WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id
 WHATSAPP_ACCESS_TOKEN=your_access_token
 WHATSAPP_API_URL=https://graph.facebook.com/v18.0
+
+# Auth (admin panel login and JWT validation)
+AUTH_SERVICE_URL=http://auth-microservice:3370
+AUTH_SERVICE_PUBLIC_URL=https://auth.statex.cz
 
 # Logging Configuration
 LOG_LEVEL=info
@@ -651,7 +688,7 @@ console.log(result);
 
 ## 🔌 Port Configuration
 
-**Port Range**: 33xx (shared microservices)
+**Port Range**: 33xx (shared microservices). **Reserved port for notifications-microservice: 3368.**
 
 | Service | Host Port | Container Port | .env Variable | Description |
 | ------- | --------- | -------------- | ------------- | ----------- |
@@ -660,39 +697,52 @@ console.log(result);
 **Note**:
 
 - All ports are configured in `notifications-microservice/.env`. The values shown are defaults.
-- All ports are exposed on `127.0.0.1` only (localhost) for security
-- External access is provided via nginx-microservice reverse proxy at `https://notifications.statex.cz`
+- Port **3368** is the reserved address for this service (do not change unless coordinated with nginx-microservice).
+- All ports are exposed on `127.0.0.1` only (localhost) for security.
+- External access is provided via nginx-microservice reverse proxy at `https://${DOMAIN}` (e.g. `https://notifications.statex.cz`).
 
 ## Production Deployment
 
-The service is deployed and available at:
+The service is deployed using **nginx-microservice** blue/green deployment:
 
-- **Production URL**: `https://notifications.statex.cz`
-- **Internal URL**: `http://notifications-microservice:${PORT:-3368}` (within Docker network, port configured in `notifications-microservice/.env`)
+- **Deploy script**: `./scripts/deploy.sh` calls `nginx-microservice/scripts/blue-green/deploy-smart.sh`.
+- **SSL**: Let's Encrypt (certbot). A temporary self-signed cert is created first so nginx can start; then the deployment requests a real certificate. Set `CERTBOT_EMAIL` in `nginx-microservice/.env` for Let's Encrypt (e.g. `admin@statex.cz`). Certificates are not self-signed in production once certbot runs successfully.
+
+The service is available at:
+
+- **Production URL**: `https://${DOMAIN}` (e.g. `https://notifications.statex.cz`)
+- **Internal URL**: `http://notifications-microservice:${PORT:-3368}` (within Docker network)
 - **Port**: `${PORT:-3368}` (configured in `notifications-microservice/.env`)
 
 ### Quick Deployment Steps
 
-1. **Pull latest code**:
+1. **Update .env on prod** (include auth vars for admin panel):
+
+   ```bash
+   ssh statex "cd /home/statex/notifications-microservice && ./scripts/update-env-auth-vars.sh"
+   ```
+
+   Ensure `DOMAIN`, `AUTH_SERVICE_URL`, and `AUTH_SERVICE_PUBLIC_URL` are set (see Environment Variables).
+
+2. **Pull latest code**:
 
    ```bash
    ssh statex "cd /home/statex/notifications-microservice && git pull origin main"
    ```
 
-2. **Deploy service**:
+3. **Deploy service** (uses deploy-smart.sh; SSL via Let's Encrypt):
 
    ```bash
    ssh statex "cd /home/statex/notifications-microservice && ./scripts/deploy.sh"
    ```
 
-3. **Register domain** (if not already registered):
+4. **Register domain** (if not already registered; registry may be auto-created from service .env):
 
    ```bash
-   # Port configured in notifications-microservice/.env: PORT (default: 3368)
-   ssh statex "cd /home/statex/nginx-microservice && ./scripts/add-domain.sh notifications.statex.cz notifications-microservice \${PORT:-3368} admin@statex.cz"
+   ssh statex "cd /home/statex/nginx-microservice && ./scripts/add-domain.sh notifications.statex.cz notifications-microservice 3368 admin@statex.cz"
    ```
 
-4. **Verify deployment**:
+5. **Verify deployment**:
 
    ```bash
    curl https://notifications.statex.cz/health
@@ -701,10 +751,32 @@ The service is deployed and available at:
 ### Production Environment
 
 - **Server**: Production server accessible via `ssh statex`
-- **Container Name**: `notifications-microservice`
+- **Container Name**: `notifications-microservice` (blue/green: `-blue` / `-green`)
 - **Network**: Connected to `nginx-network` for internal service communication
-- **SSL Certificate**: Managed via Let's Encrypt (auto-renewal configured)
-- **Nginx Configuration**: `/home/statex/nginx-microservice/nginx/conf.d/notifications.statex.cz.conf`
+- **SSL Certificate**: Let's Encrypt via certbot (see nginx-microservice; temporary self-signed only until certbot succeeds)
+- **Nginx Configuration**: Generated by deploy-smart.sh (e.g. `nginx-microservice/nginx/conf.d/notifications.statex.cz.conf`)
+
+### Testing Admin Panel
+
+1. **Create a test user** in auth-microservice (use auth-microservice script or API):
+
+   ```bash
+   # On prod or where auth-microservice is running:
+   cd /path/to/auth-microservice && ./scripts/create-test-user.sh
+   # Default: test@example.com / testpassword123 (override with TEST_EMAIL, TEST_PASSWORD)
+   ```
+
+   Or register via API:
+
+   ```bash
+   curl -X POST https://auth.statex.cz/auth/register \
+     -H "Content-Type: application/json" \
+     -d '{"email":"admin@example.com","password":"YourSecurePassword","firstName":"Admin","lastName":"User"}'
+   ```
+
+2. **Open admin**: `https://notifications.statex.cz/admin/`
+
+3. **Sign in** with the same email/password. After login you should see statistics, message history, and service parameters.
 
 For detailed deployment instructions, see [DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
