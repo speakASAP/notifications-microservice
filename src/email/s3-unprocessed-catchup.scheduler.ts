@@ -9,11 +9,19 @@ import { Cron } from '@nestjs/schedule';
 import { LoggerService } from '../../shared/logger/logger.service';
 import { InboundEmailService } from './inbound-email.service';
 
-/** Max S3 keys to process per run (align with "max 30 small items" constraint). */
-const MAX_KEYS_PER_RUN = 30;
+/** Default: 10. Override via S3_CATCHUP_MAX_KEYS_PER_RUN in .env (max 100). */
+const DEFAULT_MAX_KEYS = 10;
 
-/** Cron: every 5 minutes. */
-const CRON_EXPRESSION = '*/5 * * * *';
+/** Default: every 5 minutes. Override via S3_CATCHUP_CRON in .env. */
+const DEFAULT_CRON = '*/5 * * * *';
+
+function getMaxKeysPerRun(): number {
+  const raw = process.env.S3_CATCHUP_MAX_KEYS_PER_RUN;
+  if (raw == null || raw === '') return DEFAULT_MAX_KEYS;
+  const n = parseInt(raw, 10);
+  if (Number.isNaN(n) || n < 1) return DEFAULT_MAX_KEYS;
+  return Math.min(n, 100);
+}
 
 @Injectable()
 export class S3UnprocessedCatchupScheduler {
@@ -22,18 +30,19 @@ export class S3UnprocessedCatchupScheduler {
     private readonly logger: LoggerService,
   ) {}
 
-  @Cron(CRON_EXPRESSION)
+  @Cron(process.env.S3_CATCHUP_CRON ?? DEFAULT_CRON)
   async handleCatchup(): Promise<void> {
+    const maxKeysPerRun = getMaxKeysPerRun();
     try {
       const data = await this.inboundEmailService.findUnprocessedS3Keys({
-        maxKeys: MAX_KEYS_PER_RUN,
+        maxKeys: maxKeysPerRun,
       });
       const { bucket, unprocessed } = data;
       if (!unprocessed.length) {
         return;
       }
       this.logger.log(
-        `[S3_CATCHUP] Found ${unprocessed.length} unprocessed S3 keys, processing (max ${MAX_KEYS_PER_RUN} per run)`,
+        `[S3_CATCHUP] Found ${unprocessed.length} unprocessed S3 keys, processing (max ${maxKeysPerRun} per run)`,
         'S3UnprocessedCatchupScheduler',
       );
       let ok = 0;
