@@ -7,7 +7,7 @@ import { Injectable, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { LoggerService } from '../../shared/logger/logger.service';
 import { InboundEmail } from './entities/inbound-email.entity';
 import { WebhookDeliveryService } from './webhook-delivery.service';
@@ -1552,6 +1552,59 @@ export class InboundEmailService {
       messageId: email.rawData?.mail?.messageId || `inbound-${email.id}`,
       status: email.status,
     }));
+  }
+
+  /**
+   * List S3 objects in bucket/prefix and return those not present in inbound_emails (by rawData.receipt.action.objectKey).
+   * Used for diagnostics when AWS CLI is not available on the host (e.g. run via service inside container).
+   */
+  async findUnprocessedS3Keys(options?: { maxKeys?: number }): Promise<{
+    s3Count: number;
+    processedCount: number;
+    unprocessed: Array<{ key: string; size: number; lastModified: string }>;
+    bucket: string;
+    prefix: string;
+  }> {
+    const bucket = this.defaultS3Bucket || process.env.AWS_SES_S3_BUCKET;
+    const prefix = this.defaultS3Prefix || process.env.AWS_SES_S3_OBJECT_KEY_PREFIX || 'forwards/';
+    const maxKeys = Math.min(options?.maxKeys ?? 500, 1000);
+
+    if (!bucket) {
+      throw new Error('S3 bucket not configured (AWS_SES_S3_BUCKET)');
+    }
+
+    this.logger.log(`[S3_UNPROCESSED] Listing S3 bucket=${bucket}, prefix=${prefix}, maxKeys=${maxKeys}`, 'InboundEmailService');
+
+    const listResult = await this.s3Client.send(
+      new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: prefix,
+        MaxKeys: maxKeys,
+      }),
+    );
+
+    const contents = listResult.Contents || [];
+    const s3Keys = contents.map((c) => ({ key: c.Key!, size: c.Size ?? 0, lastModified: (c.LastModified?.toISOString() ?? '') }));
+
+    const processedKeys = await this.inboundEmailRepository
+      .createQueryBuilder('e')
+      .select("e.rawData->'receipt'->'action'->>'objectKey'", 'objectKey')
+      .where("e.rawData->'receipt'->'action'->>'objectKey' IS NOT NULL")
+      .andWhere("e.rawData->'receipt'->'action'->>'objectKey' != ''")
+      .getRawMany()
+      .then((rows) => new Set(rows.map((r) => r.objectKey).filter(Boolean)));
+
+    const unprocessed = s3Keys.filter((o) => !processedKeys.has(o.key));
+
+    this.logger.log(`[S3_UNPROCESSED] s3Count=${s3Keys.length}, processedCount=${processedKeys.size}, unprocessed=${unprocessed.length}`, 'InboundEmailService');
+
+    return {
+      s3Count: s3Keys.length,
+      processedCount: processedKeys.size,
+      unprocessed,
+      bucket,
+      prefix,
+    };
   }
 
 }

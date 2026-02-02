@@ -185,6 +185,25 @@ export class InboundEmailController {
   }
 
   /**
+   * List S3 objects not yet in DB (unprocessed emails). Uses service S3 client (no AWS CLI on host needed).
+   * GET /email/inbound/s3-unprocessed?maxKeys=500
+   */
+  @Get('inbound/s3-unprocessed')
+  async getS3Unprocessed(
+    @Query('maxKeys') maxKeys?: string,
+  ): Promise<{ success: boolean; data: { s3Count: number; processedCount: number; unprocessed: Array<{ key: string; size: number; lastModified: string }>; bucket: string; prefix: string } }> {
+    try {
+      const max = maxKeys ? Math.min(parseInt(maxKeys, 10) || 500, 1000) : 500;
+      const data = await this.inboundEmailService.findUnprocessedS3Keys({ maxKeys: max });
+      return { success: true, data };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Error listing S3 unprocessed: ${errorMessage}`, undefined, 'InboundEmailController');
+      throw error;
+    }
+  }
+
+  /**
    * Get list of inbound emails
    * GET /email/inbound?limit=100&toFilter=@speakasap.com&excludeTo=support@speakasap.com&status=processed
    */
