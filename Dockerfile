@@ -25,8 +25,9 @@ COPY package*.json ./
 # Install production dependencies only
 RUN npm ci --only=production
 
-# Copy built files
+# Copy built files and web interface
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/web ./web
 COPY --from=builder /app/node_modules ./node_modules
 
 # Expose port (default: 3368, configured via PORT env var)

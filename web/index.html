@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notifications Service – Multi-Channel Delivery</title>
+  <style>
+    :root {
+      --bg: #0f0f12;
+      --surface: #18181c;
+      --border: #2a2a2e;
+      --text: #e4e4e7;
+      --muted: #71717a;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #22c55e;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+    header {
+      padding: 24px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    header .container { display: flex; justify-content: space-between; align-items: center; }
+    .logo { font-weight: 700; font-size: 1.25rem; color: var(--text); text-decoration: none; }
+    .nav a {
+      color: var(--muted);
+      text-decoration: none;
+      margin-left: 24px;
+      font-size: 0.9rem;
+    }
+    .nav a:hover { color: var(--accent); }
+    .nav .admin { color: var(--accent); }
+    main { padding: 64px 0 80px; }
+    h1 {
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 700;
+      margin-bottom: 16px;
+      letter-spacing: -0.02em;
+    }
+    .tagline { color: var(--muted); font-size: 1.15rem; margin-bottom: 40px; max-width: 560px; }
+    .channels {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 24px;
+      margin-bottom: 48px;
+    }
+    .channel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .channel h3 { font-size: 1.1rem; margin-bottom: 8px; }
+    .channel p { color: var(--muted); font-size: 0.9rem; }
+    .cta {
+      display: inline-block;
+      background: var(--accent);
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      margin-top: 16px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.95rem;
+    }
+    .cta:hover { background: var(--accent-hover); }
+    .cta.secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .cta.secondary:hover { border-color: var(--accent); color: var(--accent); }
+    .api-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      margin-top: 48px;
+    }
+    .api-section h2 { font-size: 1.25rem; margin-bottom: 16px; }
+    .api-section pre {
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 12px;
+    }
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 24px 0;
+      color: var(--muted);
+      font-size: 0.875rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <a href="/" class="logo">Notifications Service</a>
+      <nav class="nav">
+        <a href="/api">API</a>
+        <a href="/admin/" class="admin">Admin</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <h1>Multi-channel notifications, one API</h1>
+      <p class="tagline">
+        Send Email, Telegram, and WhatsApp messages from a single service. Built for reliability and scale.
+      </p>
+      <div class="channels">
+        <div class="channel">
+          <h3>Email</h3>
+          <p>SendGrid and AWS SES. Templates, HTML or plain text, provider selection per request.</p>
+        </div>
+        <div class="channel">
+          <h3>Telegram</h3>
+          <p>Bot API with inline keyboards and per-request bot tokens for multi-tenant use.</p>
+        </div>
+        <div class="channel">
+          <h3>WhatsApp</h3>
+          <p>WhatsApp Business API for templates and conversational messages.</p>
+        </div>
+      </div>
+      <a href="/admin/" class="cta">Open Admin Panel</a>
+      <a href="/api" class="cta secondary" style="margin-left: 12px;">View API</a>
+      <section class="api-section">
+        <h2>Quick start</h2>
+        <p>POST to <code>/notifications/send</code> with channel, recipient, and message. Full history and status tracking included.</p>
+        <pre>POST /notifications/send
+{ "channel": "email", "type": "custom", "recipient": "user@example.com", "subject": "Hello", "message": "Hi!" }</pre>
+      </section>
+    </div>
+  </main>
+  <footer>
+    <div class="container">Notifications Microservice – Multi-channel delivery with history and status tracking.</div>
+  </footer>
+</body>
+</html>

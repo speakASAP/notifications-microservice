@@ -12,6 +12,10 @@ services:
       - NODE_ENV=production
       - PORT=${PORT:-3368}
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      - DOMAIN=${DOMAIN:-}
+      - SERVICE_NAME=${SERVICE_NAME:-notifications-microservice}
+      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-}
+      - AUTH_SERVICE_PUBLIC_URL=${AUTH_SERVICE_PUBLIC_URL:-}
       - DB_HOST=${DB_HOST:-db-server-postgres}
       - DB_PORT=${DB_PORT:-5432}
       - DB_USER=${DB_USER:-dbadmin}

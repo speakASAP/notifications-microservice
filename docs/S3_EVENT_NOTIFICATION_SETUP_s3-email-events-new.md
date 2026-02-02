@@ -10,7 +10,7 @@ The endpoint `/email/inbound/s3` handles S3 event notifications from any SNS top
 
 ### 1. Create S3 Event Notification
 
-1. Navigate to: https://eu-central-1.console.aws.amazon.com/s3/buckets/speakasap-email-forward?region=eu-central-1&tab=properties
+1. Navigate to: <https://eu-central-1.console.aws.amazon.com/s3/buckets/speakasap-email-forward?region=eu-central-1&tab=properties>s>
 2. Scroll down to **Event notifications** section
 3. Click **Create event notification**
 4. Configure:
@@ -52,13 +52,25 @@ If subscription doesn't exist:
 
 After setup, test with a large email:
 
-1. Send email with attachment (>150 KB) to `contact@speakasap.com`
-2. Check service logs:
+1. Send email with attachment (>150 KB) to `contact@speakasap.com` or `stashok@speakasap.com`
+2. Check service logs (use the running container: blue or green):
+
    ```bash
-   docker logs notifications-microservice-blue --since '5 minutes ago' | grep -E 'S3_PROCESS|s3|bucket'
+   docker logs notifications-microservice-green --since '5 minutes ago' | grep -E 'S3_PROCESS|s3|bucket'
+   # or: notifications-microservice-blue
+
    ```
+
 3. Check database for the email
+
 4. Verify it appears in helpdesk
+5. Optional: check for any S3 backlog (unprocessed emails):
+
+   ```bash
+   curl -s "https://notifications.statex.cz/email/inbound/s3-unprocessed?maxKeys=500"
+   ```
+
+   If `unprocessed` array is empty after new emails, S3 events are working.
 
 ## How It Works
 
@@ -73,10 +85,12 @@ SNS Topic: s3-email-events-new
   ↓
 HTTPS Webhook → /email/inbound/s3
   ↓
+
 Service fetches email from S3 and processes it
 ```
 
 The service endpoint `/email/inbound/s3` automatically:
+
 - Handles SNS subscription confirmations
 - Processes S3 event notifications (from any SNS topic)
 - Fetches email from S3
