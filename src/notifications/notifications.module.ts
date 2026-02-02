@@ -13,6 +13,7 @@ import { InboundEmailController } from '../email/inbound-email.controller';
 import { WebhookDeliveryService } from '../email/webhook-delivery.service';
 import { WebhookSubscriptionService } from '../email/webhook-subscription.service';
 import { WebhookSubscriptionController } from '../email/webhook-subscription.controller';
+import { S3UnprocessedCatchupScheduler } from '../email/s3-unprocessed-catchup.scheduler';
 import { TelegramService } from '../telegram/telegram.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { Notification } from './entities/notification.entity';
@@ -35,6 +36,7 @@ import { WebhookSubscription } from '../email/entities/webhook-subscription.enti
     InboundEmailService,
     WebhookDeliveryService,
     WebhookSubscriptionService,
+    S3UnprocessedCatchupScheduler,
     TelegramService,
     WhatsAppService,
   ],
