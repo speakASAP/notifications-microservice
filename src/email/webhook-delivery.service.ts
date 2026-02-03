@@ -357,8 +357,15 @@ export class WebhookDeliveryService {
         }
       }
       if (inboundEmail.rawData.mail?.headers) {
-        payload.rawHeaders = inboundEmail.rawData.mail.headers;
-        this.logger.log(`[WEBHOOK_DELIVERY] Added rawHeaders (count: ${inboundEmail.rawData.mail.headers.length})`, 'WebhookDeliveryService');
+        // Send decoded Subject in rawHeaders so helpdesk displays correct text instead of =?UTF-8?B??=
+        const headers = inboundEmail.rawData.mail.headers as Array<{ name: string; value: string }>;
+        payload.rawHeaders = headers.map((h) => {
+          const name = h?.name || '';
+          const value = h?.value ?? '';
+          if (name.toLowerCase() === 'subject' && payload.subject != null) return { name, value: payload.subject };
+          return { name, value };
+        });
+        this.logger.log(`[WEBHOOK_DELIVERY] Added rawHeaders (count: ${payload.rawHeaders.length}) with decoded Subject`, 'WebhookDeliveryService');
       }
     } else {
       this.logger.log(`[WEBHOOK_DELIVERY] No rawData available, payload will not include raw content`, 'WebhookDeliveryService');

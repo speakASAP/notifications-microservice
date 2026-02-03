@@ -1112,8 +1112,10 @@ export class InboundEmailService {
           return content;
         }
       } else if (encoding === '7bit' || encoding === '8bit' || encoding === 'binary' || !encoding) {
-        // No decoding needed for 7bit, 8bit, binary, or no encoding specified
-        return content;
+        // No transfer decoding, but still apply charset: content is latin1 (byte-preserving) from MIME,
+        // so we must decode bytes with part charset to get correct Unicode (fixes Cyrillic mojibake in helpdesk).
+        const buffer = Buffer.from(content, 'latin1');
+        return this.bufferToStringWithCharset(buffer, targetCharset);
       } else {
         // Unknown encoding - log warning but return as-is
         this.logger.warn(`[PARSE] Unknown Content-Transfer-Encoding: ${encoding}, returning content as-is`, 'InboundEmailService');
