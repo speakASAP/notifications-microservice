@@ -173,9 +173,9 @@ export class WebhookDeliveryService {
         this.logger.log(`[WEBHOOK_DELIVERY] No secret configured for ${subscription.serviceName}, sending without signature`, 'WebhookDeliveryService');
       }
 
-      // Send webhook
-      this.logger.log(`[WEBHOOK_DELIVERY] Sending HTTP POST request to ${subscription.webhookUrl}`, 'WebhookDeliveryService');
-      this.logger.log(`[WEBHOOK_DELIVERY] Request payload size: ${JSON.stringify(webhookPayload).length} bytes, timeout: 20000ms`, 'WebhookDeliveryService');
+      // Send webhook (2 min timeout for large payloads e.g. 50MB attachments)
+      const WEBHOOK_TIMEOUT_MS = 120000;
+      this.logger.log(`[WEBHOOK_DELIVERY] Sending HTTP POST request to ${subscription.webhookUrl}, timeout: ${WEBHOOK_TIMEOUT_MS}ms`, 'WebhookDeliveryService');
       const requestStartTime = Date.now();
       const response = await firstValueFrom(
         this.httpService.post(subscription.webhookUrl, webhookPayload, {
@@ -184,7 +184,7 @@ export class WebhookDeliveryService {
             'X-Notification-Service': 'notifications-microservice',
             'X-Subscription-Id': subscription.id,
           },
-          timeout: 20000, // 20 seconds timeout
+          timeout: WEBHOOK_TIMEOUT_MS,
         }),
       );
       const requestDuration = Date.now() - requestStartTime;
@@ -258,7 +258,7 @@ export class WebhookDeliveryService {
     this.logger.log(`[WEBHOOK_DELIVERY] Preparing email payload for ID: ${inboundEmail.id}`, 'WebhookDeliveryService');
     this.logger.log(`[WEBHOOK_DELIVERY] Email metadata - from: ${inboundEmail.from}, to: ${inboundEmail.to}, subject: ${inboundEmail.subject || 'N/A'}`, 'WebhookDeliveryService');
 
-    // Process attachments if any
+    // Process attachments if any (no cap - send all so helpdesk receives full email including 50MB+ attachments)
     const attachments: EmailAttachment[] = [];
     const attachmentCount = inboundEmail.attachments?.length || 0;
     this.logger.log(`[WEBHOOK_DELIVERY] Processing ${attachmentCount} attachment(s)`, 'WebhookDeliveryService');
@@ -335,16 +335,29 @@ export class WebhookDeliveryService {
     };
     this.logger.log(`[WEBHOOK_DELIVERY] Base payload created - messageId: ${payload.messageId}, bodyText length: ${payload.bodyText?.length || 0}, bodyHtml length: ${payload.bodyHtml?.length || 0}`, 'WebhookDeliveryService');
 
-    // Include rawData and raw MIME so downstream services can reconstruct the email exactly as SES delivered it
+    // Include rawData and raw MIME so downstream services can reconstruct the email exactly as SES delivered it.
+    // Omit raw content when it would make payload too large (emails with big attachments) so webhook
+    // delivery succeeds and helpdesk still gets body + attachments (avoids timeout/413).
+    const MAX_RAW_CONTENT_BASE64_LENGTH = 3 * 1024 * 1024; // ~3MB base64 - keeps total payload under ~4MB
     if (inboundEmail.rawData) {
       this.logger.log(`[WEBHOOK_DELIVERY] Adding rawData to payload`, 'WebhookDeliveryService');
-      payload.rawData = inboundEmail.rawData;
-      if (inboundEmail.rawData.content) {
-        payload.rawContentBase64 = inboundEmail.rawData.content; // already base64 from SES
-        this.logger.log(`[WEBHOOK_DELIVERY] Added rawContentBase64 (length: ${inboundEmail.rawData.content.length})`, 'WebhookDeliveryService');
+      const rawContent = inboundEmail.rawData.content;
+      const rawContentTooLarge = typeof rawContent === 'string' && rawContent.length > MAX_RAW_CONTENT_BASE64_LENGTH;
+      if (rawContentTooLarge) {
+        this.logger.warn(
+          `[WEBHOOK_DELIVERY] Raw content length ${(rawContent as string).length} exceeds ${MAX_RAW_CONTENT_BASE64_LENGTH}, omitting rawContentBase64 and rawData.content so delivery can succeed`,
+          'WebhookDeliveryService',
+        );
+        payload.rawData = { ...inboundEmail.rawData, content: undefined };
+      } else {
+        payload.rawData = inboundEmail.rawData;
+        if (rawContent) {
+          payload.rawContentBase64 = rawContent;
+          this.logger.log(`[WEBHOOK_DELIVERY] Added rawContentBase64 (length: ${(rawContent as string).length})`, 'WebhookDeliveryService');
+        }
       }
       if (inboundEmail.rawData.mail?.headers) {
-        payload.rawHeaders = inboundEmail.rawData.mail.headers; // untouched headers array
+        payload.rawHeaders = inboundEmail.rawData.mail.headers;
         this.logger.log(`[WEBHOOK_DELIVERY] Added rawHeaders (count: ${inboundEmail.rawData.mail.headers.length})`, 'WebhookDeliveryService');
       }
     } else {
