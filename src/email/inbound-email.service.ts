@@ -559,10 +559,10 @@ export class InboundEmailService {
 
     // Check if multipart message
     if (headers.includes('Content-Type: multipart')) {
-      // Parse multipart message
+      // Parse multipart message (trim boundary - RFC allows whitespace)
       const boundaryMatch = headers.match(/boundary="?([^";\r\n]+)"?/i);
       if (boundaryMatch) {
-        const boundary = boundaryMatch[1];
+        const boundary = boundaryMatch[1].trim();
         const multipartParts = this.parseMultipart(body, boundary);
         this.logger.log(`[PARSE] Processing ${multipartParts.length} parts from multipart message`, 'InboundEmailService');
         for (const part of multipartParts) {
@@ -662,6 +662,7 @@ export class InboundEmailService {
       rawBase64?: boolean;
     }> = [];
 
+    boundary = boundary.trim();
     // Escape boundary for regex (boundary may already include -- prefix from header)
     const escapedBoundary = boundary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     // Multipart boundaries in body are prefixed with --, so match both --boundary and ----boundary (if boundary already has --)
@@ -725,10 +726,10 @@ export class InboundEmailService {
       // For nested multiparts, we need to preserve the full content for recursive parsing
       // This matches how emails without attachments work (direct multipart/alternative parsing)
       if (contentType?.includes('multipart')) {
-        // Extract boundary from Content-Type header
+        // Extract boundary from Content-Type header (trim - RFC allows whitespace)
         const nestedBoundaryMatch = partHeaders.match(/boundary="?([^";\r\n]+)"?/i);
         if (nestedBoundaryMatch) {
-          const nestedBoundary = nestedBoundaryMatch[1];
+          const nestedBoundary = nestedBoundaryMatch[1].trim();
           this.logger.log(`[PARSE] Found nested multipart ${contentType} with boundary ${nestedBoundary}, recursively parsing...`, 'InboundEmailService');
           this.logger.log(`[PARSE] Nested multipart part ${i} content length before any processing: ${partContent.length}`, 'InboundEmailService');
 
@@ -1279,10 +1280,17 @@ export class InboundEmailService {
     const forwardingRules = this.getForwardingRules();
     const recipientKey = this.normalizeRecipientForForwarding(email.to);
     const forwardTo = recipientKey ? forwardingRules[recipientKey] : undefined;
+    const rulesCount = Object.keys(forwardingRules).length;
+    this.logger.log(
+      `[FORWARD] Check to="${email.to}" normalizedKey="${recipientKey}" rulesCount=${rulesCount} forwardTo=${forwardTo || 'none'}`,
+      'InboundEmailService',
+    );
 
     if (!forwardTo) {
-      if (recipientKey && Object.keys(forwardingRules).length > 0) {
+      if (rulesCount > 0) {
         this.logger.log(`[FORWARD] No rule for recipient "${email.to}" (normalized: ${recipientKey}), skipping forward`, 'InboundEmailService');
+      } else {
+        this.logger.log(`[FORWARD] No forwarding rules configured (EMAIL_FORWARDING_RULES empty or invalid), skipping`, 'InboundEmailService');
       }
       return; // No forwarding rule for this recipient
     }
@@ -1290,21 +1298,32 @@ export class InboundEmailService {
     this.logger.log(`[FORWARD] Forwarding email from ${email.to} to ${forwardTo}`, 'InboundEmailService');
 
     try {
-      // If we have the raw MIME content from SES, forward it unchanged via SES
-      if (email.rawData?.content) {
+      // SES max message size: 40MB (v2 default). Raw MIME over that cannot be sent in one go.
+      const SES_MAX_RAW_DECODED_BYTES = 40 * 1024 * 1024;
+      const rawContent = email.rawData?.content;
+      const rawDecodedSizeEst = typeof rawContent === 'string' ? Math.floor((rawContent.length * 3) / 4) : 0;
+      const rawWithinSesLimit = rawContent && rawDecodedSizeEst <= SES_MAX_RAW_DECODED_BYTES;
+
+      if (rawWithinSesLimit) {
         await this.emailService.send({
           to: forwardTo,
           subject: email.subject || '(no subject)',
           message: '', // Not used for raw
-          rawMessage: email.rawData.content, // Base64-encoded raw MIME from SES
+          rawMessage: rawContent,
           emailProvider: 'ses',
         });
-
-        this.logger.log(`[FORWARD] ✅ Successfully forwarded raw email from ${email.to} to ${forwardTo}`, 'InboundEmailService');
+        this.logger.log(`[FORWARD] ✅ Successfully forwarded raw email from ${email.to} to ${forwardTo} (${rawDecodedSizeEst} bytes)`, 'InboundEmailService');
         return;
       }
 
-      // Fallback: forward without modification using original body (no extra wrappers)
+      if (rawContent && rawDecodedSizeEst > SES_MAX_RAW_DECODED_BYTES) {
+        this.logger.warn(
+          `[FORWARD] Raw email ~${Math.round(rawDecodedSizeEst / 1024 / 1024)}MB exceeds SES limit ${SES_MAX_RAW_DECODED_BYTES / 1024 / 1024}MB; forwarding body only to ${forwardTo}`,
+          'InboundEmailService',
+        );
+      }
+
+      // Fallback: forward body only (no attachments when over SES limit, or when no raw)
       const originalBody = email.bodyHtml || email.bodyText || '';
       await this.emailService.send({
         to: forwardTo,
@@ -1313,7 +1332,6 @@ export class InboundEmailService {
         contentType: email.bodyHtml ? 'text/html' : 'text/plain',
         emailProvider: 'auto',
       });
-
       this.logger.log(`[FORWARD] ✅ Successfully forwarded email (fallback) from ${email.to} to ${forwardTo}`, 'InboundEmailService');
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
