@@ -10,6 +10,7 @@ import { HttpService } from '@nestjs/axios';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { LoggerService } from '../../shared/logger/logger.service';
 import { WebhookSubscription } from './entities/webhook-subscription.entity';
+import { WebhookDelivery, WebhookDeliveryStatus } from './entities/webhook-delivery.entity';
 import { InboundEmail } from './entities/inbound-email.entity';
 import { firstValueFrom } from 'rxjs';
 
@@ -44,6 +45,8 @@ export class WebhookDeliveryService {
     private subscriptionRepository: Repository<WebhookSubscription>,
     @InjectRepository(InboundEmail)
     private inboundEmailRepository: Repository<InboundEmail>,
+    @InjectRepository(WebhookDelivery)
+    private webhookDeliveryRepository: Repository<WebhookDelivery>,
     @Inject(LoggerService)
     private logger: LoggerService,
     private httpService: HttpService,
@@ -156,12 +159,16 @@ export class WebhookDeliveryService {
     }
 
     try {
-      // Prepare webhook payload with signature if secret is configured
+      // Prepare webhook payload with signature if secret is configured.
+      // Include subscriptionId so subscriber can confirm delivery (e.g. helpdesk callback).
       this.logger.log(`[WEBHOOK_DELIVERY] Preparing webhook payload for ${subscription.serviceName}`, 'WebhookDeliveryService');
       const webhookPayload = {
         event: 'email.received',
         timestamp: new Date().toISOString(),
-        data: payload,
+        data: {
+          ...payload,
+          subscriptionId: subscription.id,
+        },
       };
 
       // Add signature if secret is configured
@@ -200,6 +207,16 @@ export class WebhookDeliveryService {
       this.logger.log(`[WEBHOOK_DELIVERY] Saving subscription to database...`, 'WebhookDeliveryService');
       await this.subscriptionRepository.save(subscription);
       this.logger.log(`[WEBHOOK_DELIVERY] Subscription saved successfully`, 'WebhookDeliveryService');
+
+      // Record webhook delivery for confirmation tracking (helpdesk can confirm when ticket is created)
+      const delivery = this.webhookDeliveryRepository.create({
+        inboundEmailId: inboundEmail.id,
+        subscriptionId: subscription.id,
+        status: 'sent' as WebhookDeliveryStatus,
+        httpStatus: response.status,
+      });
+      await this.webhookDeliveryRepository.save(delivery);
+      this.logger.log(`[WEBHOOK_DELIVERY] Recorded webhook_delivery id=${delivery.id} for inbound_email=${inboundEmail.id} subscription=${subscription.serviceName}`, 'WebhookDeliveryService');
 
       console.log(`[WEBHOOK_DELIVERY] ✅ Successfully delivered to ${subscription.serviceName} - Status: ${response.status}`);
       this.logger.log(`[WEBHOOK_DELIVERY] ✅ Successfully delivered to ${subscription.serviceName} - Status: ${response.status}`, 'WebhookDeliveryService');
@@ -601,6 +618,60 @@ export class WebhookDeliveryService {
     const testDuration = Date.now() - testStartTime;
     this.logger.log(`[WEBHOOK_DELIVERY] Test webhook completed in ${testDuration}ms, status: ${response.status}`, 'WebhookDeliveryService');
     this.logger.log(`[WEBHOOK_DELIVERY] Test webhook response headers: ${JSON.stringify(response.headers)}`, 'WebhookDeliveryService');
+  }
+
+  /**
+   * Confirm delivery from subscriber (e.g. helpdesk after ticket/comment created).
+   * Updates webhook_deliveries so we can query undelivered (status='sent' without confirmation).
+   */
+  async confirmDelivery(params: {
+    inboundEmailId: string;
+    subscriptionId: string;
+    status: 'delivered' | 'failed';
+    ticketId?: string | null;
+    commentId?: string | null;
+    error?: string | null;
+  }): Promise<{ success: boolean; message: string }> {
+    const { inboundEmailId, subscriptionId, status, ticketId, commentId, error } = params;
+    this.logger.log(`[WEBHOOK_DELIVERY] confirmDelivery inboundEmailId=${inboundEmailId} subscriptionId=${subscriptionId} status=${status} ticketId=${ticketId || 'n/a'} commentId=${commentId || 'n/a'}`, 'WebhookDeliveryService');
+
+    const delivery = await this.webhookDeliveryRepository.findOne({
+      where: { inboundEmailId, subscriptionId },
+      order: { createdAt: 'DESC' },
+    });
+    if (!delivery) {
+      this.logger.warn(`[WEBHOOK_DELIVERY] confirmDelivery: no webhook_delivery found for inbound=${inboundEmailId} subscription=${subscriptionId}`, 'WebhookDeliveryService');
+      return { success: false, message: 'Webhook delivery record not found' };
+    }
+    delivery.status = status as WebhookDeliveryStatus;
+    delivery.deliveredAt = status === 'delivered' ? new Date() : null;
+    delivery.ticketId = ticketId ?? null;
+    delivery.commentId = commentId ?? null;
+    delivery.error = error ?? null;
+    await this.webhookDeliveryRepository.save(delivery);
+    this.logger.log(`[WEBHOOK_DELIVERY] confirmDelivery: updated delivery id=${delivery.id} to status=${status}`, 'WebhookDeliveryService');
+    return { success: true, message: 'Delivery confirmed' };
+  }
+
+  /**
+   * List inbound emails sent to helpdesk but not yet confirmed delivered (for monitoring/retry).
+   */
+  async getUndeliveredToHelpdesk(limit: number = 100): Promise<{ inboundEmailId: string; subscriptionId: string; createdAt: string }[]> {
+    const subs = await this.subscriptionRepository.find({ where: { serviceName: 'helpdesk', status: 'active' } });
+    if (subs.length === 0) return [];
+    const subIds = subs.map((s) => s.id);
+    const rows = await this.webhookDeliveryRepository
+      .createQueryBuilder('d')
+      .where('d.subscriptionId IN (:...subIds)', { subIds })
+      .andWhere("d.status = 'sent'")
+      .orderBy('d.createdAt', 'DESC')
+      .take(limit)
+      .getMany();
+    return rows.map((r) => ({
+      inboundEmailId: r.inboundEmailId,
+      subscriptionId: r.subscriptionId,
+      createdAt: r.createdAt.toISOString(),
+    }));
   }
 
   /**

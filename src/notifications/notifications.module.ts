@@ -19,11 +19,12 @@ import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { Notification } from './entities/notification.entity';
 import { InboundEmail } from '../email/entities/inbound-email.entity';
 import { WebhookSubscription } from '../email/entities/webhook-subscription.entity';
+import { WebhookDelivery } from '../email/entities/webhook-delivery.entity';
 
 @Module({
   imports: [
     HttpModule,
-    TypeOrmModule.forFeature([Notification, InboundEmail, WebhookSubscription]),
+    TypeOrmModule.forFeature([Notification, InboundEmail, WebhookSubscription, WebhookDelivery]),
   ],
   controllers: [
     NotificationsController,
