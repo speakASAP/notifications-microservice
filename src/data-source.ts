@@ -2,6 +2,7 @@ import { DataSource } from 'typeorm';
 import { Notification } from './notifications/entities/notification.entity';
 import { InboundEmail } from './email/entities/inbound-email.entity';
 import { WebhookSubscription } from './email/entities/webhook-subscription.entity';
+import { WebhookDelivery } from './email/entities/webhook-delivery.entity';
 import * as dotenv from 'dotenv';
 
 // Load environment variables
@@ -14,7 +15,7 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USER || 'dbadmin',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'notifications',
-  entities: [Notification, InboundEmail, WebhookSubscription],
+  entities: [Notification, InboundEmail, WebhookSubscription, WebhookDelivery],
   migrations: ['src/migrations/*.ts'],
   synchronize: false,
   logging: process.env.NODE_ENV === 'development',
