@@ -8,13 +8,27 @@ import { AppModule } from './app.module';
 import { Logger } from '@nestjs/common';
 import * as express from 'express';
 import * as path from 'path';
+import { AppDataSource } from './data-source';
 
 async function bootstrap() {
+  // Run pending migrations at startup (single deploy step; no separate migration container)
+  const logger = new Logger('Bootstrap');
+  try {
+    await AppDataSource.initialize();
+    const run = await AppDataSource.runMigrations();
+    await AppDataSource.destroy();
+    if (run.length > 0) {
+      logger.log(`Ran ${run.length} migration(s): ${run.map((m) => m.name).join(', ')}`);
+    }
+  } catch (err) {
+    logger.error('Migration failed at startup', err instanceof Error ? err.stack : String(err));
+    process.exit(1);
+  }
+
   const app = await NestFactory.create(AppModule, {
     bodyParser: true,
     rawBody: true,
   });
-  const logger = new Logger('Bootstrap');
 
   // Serve web interface (landing + admin) - static files first so API routes still work
   const webPath = path.join(process.cwd(), 'web');

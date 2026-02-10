@@ -49,7 +49,7 @@ Returns webhook deliveries that were **sent** to the helpdesk but not yet **conf
 ## Database
 
 - **`webhook_deliveries`**: One row per (inbound_email_id, subscription_id) when we send the webhook. Columns: `status` (sent | delivered | failed), `http_status`, `delivered_at`, `ticket_id`, `comment_id`, `error`, timestamps.
-- Run migration: `npm run migration:run` (or deploy will run migrations if configured).
+- Migrations run automatically at app startup (no separate deploy step). To run manually: `npm run migration:run`.
 
 ## Script
 
