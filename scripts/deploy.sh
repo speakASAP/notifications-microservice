@@ -261,6 +261,25 @@ TOTAL_DURATION=$(awk "BEGIN {printf \"%.2f\", $END_TIME - $START_TIME}")
 
 # Ensure phase timing file is still accessible (don't remove it yet)
 if [ $DEPLOY_EXIT_CODE -eq 0 ]; then
+    # Run database migrations (one-off container: repo + .env on nginx-network)
+    start_phase "Database migrations"
+    MIGRATION_EXIT=0
+    if [ -f "$PROJECT_ROOT/.env" ]; then
+        log_with_timestamp "Running TypeORM migrations..."
+        if ! (cd "$PROJECT_ROOT" && docker run --rm --network nginx-network --env-file .env \
+            -v "$PROJECT_ROOT:/app" -w /app node:20-alpine \
+            sh -c 'npm ci --omit=dev 2>/dev/null || true && npm run migration:run' 2>&1); then
+            MIGRATION_EXIT=1
+            echo -e "${YELLOW}⚠️  Migrations failed or had nothing to run (see output above).${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠️  No .env at $PROJECT_ROOT/.env, skipping migrations.${NC}"
+    fi
+    end_phase "Database migrations"
+    if [ "$MIGRATION_EXIT" -ne 0 ]; then
+        echo -e "${YELLOW}Migration step had errors. Deployment is up; run migrations manually if needed.${NC}"
+    fi
+
     TOTAL_DURATION_FORMATTED=$(awk "BEGIN {printf \"%.2f\", $TOTAL_DURATION}")
     # Print summary before final message
     print_phase_summary 2>&1

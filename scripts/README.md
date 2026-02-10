@@ -6,7 +6,7 @@ This directory contains utility scripts for the notifications-microservice.
 
 ### Deployment
 
-- **`deploy.sh`** - Production deployment script; calls `nginx-microservice/scripts/blue-green/deploy-smart.sh`. SSL via Let's Encrypt (certbot).
+- **`deploy.sh`** - Production deployment script; calls `nginx-microservice/scripts/blue-green/deploy-smart.sh`, then runs TypeORM migrations (one-off container with repo + .env on nginx-network). SSL via Let's Encrypt (certbot).
 - **`update-env-auth-vars.sh`** - Add `AUTH_SERVICE_URL` and `AUTH_SERVICE_PUBLIC_URL` to `.env` if missing (for admin panel). Run on prod: `ssh statex "cd notifications-microservice && ./scripts/update-env-auth-vars.sh"`.
 
 **Restart / rebuild after `git pull`** (service name is `notification-service`; container is `notifications-microservice-blue`):
