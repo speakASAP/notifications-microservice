@@ -16,7 +16,8 @@ export const AppDataSource = new DataSource({
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'notifications',
   entities: [Notification, InboundEmail, WebhookSubscription, WebhookDelivery],
-  migrations: ['src/migrations/*.ts'],
+  // At runtime (dist): __dirname is dist/src → dist/src/migrations/*.js. CLI (ts-node): __dirname is src → src/migrations/*.ts
+  migrations: [__dirname + '/migrations/*.' + (process.env.NODE_ENV === 'production' ? 'js' : 'ts')],
   synchronize: false,
   logging: process.env.NODE_ENV === 'development',
 });
