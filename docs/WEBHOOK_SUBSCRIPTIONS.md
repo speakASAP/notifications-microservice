@@ -9,10 +9,10 @@ Notifications Microservice теперь поддерживает систему 
 Регистрирует новый webhook для получения входящих писем.
 
 **Request Body:**
-```json
+
 {
   "serviceName": "helpdesk",
-  "webhookUrl": "https://speakasap.com/helpdesk/api/email/webhook/",
+  "webhookUrl": "<https://speakasap.com/helpdesk/api/email/webhook/>",
   "secret": "optional-secret-for-signature-verification",
   "filters": {
     "to": ["support@speakasap.com", "help@speakasap.com"],
@@ -21,6 +21,7 @@ Notifications Microservice теперь поддерживает систему 
   },
   "maxRetries": 3
 }
+
 ```
 
 **Response:**
@@ -68,38 +69,42 @@ Notifications Microservice теперь поддерживает систему 
 
 Подписки могут использовать фильтры для получения только определенных писем:
 
-- `to`: массив email адресов получателей (письма должны быть адресованы одному из них)
+- `to`: массив email адресов получателей (письма должны быть адресованы одному из них). Поддерживается wildcard `*@domain.com`. Заголовок To в формате «Name &lt;<addr@domain.com>&gt;» нормализуется до <addr@domain.com> при сопоставлении.
 - `from`: массив email адресов отправителей (письма должны быть от одного из них)
 - `subjectPattern`: регулярное выражение для фильтрации по теме письма
 
 ## Управление подписками
 
 ### GET /webhooks/subscriptions
-Получить все подписки
 
 ### GET /webhooks/subscriptions/:id
+
 Получить подписку по ID
 
 ### PUT /webhooks/subscriptions/:id
-Обновить подписку
 
 ### DELETE /webhooks/subscriptions/:id
+
 Удалить подписку
 
 ### POST /webhooks/subscriptions/:id/activate
-Активировать подписку
 
 ### POST /webhooks/subscriptions/:id/suspend
+
 Приостановить подписку
 
 ## Retry механизм
 
+<contact@speakasap.com>
 Если webhook не отвечает или возвращает ошибку:
+
 1. Подписка автоматически повторяет отправку до `maxRetries` раз
 2. После превышения лимита подписка автоматически приостанавливается (`suspended`)
 3. Статистика сохраняется: `totalDeliveries`, `totalFailures`, `lastError`
 
 ## Пример регистрации подписки для Helpdesk
+
+Чтобы письма на **<contact@speakasap.com>** попадали в Helpdesk, в фильтр `to` нужно включить этот адрес или использовать wildcard `*@speakasap.com`:
 
 ```bash
 curl -X POST https://notifications.statex.cz/webhooks/subscriptions \
@@ -108,10 +113,16 @@ curl -X POST https://notifications.statex.cz/webhooks/subscriptions \
     "serviceName": "helpdesk",
     "webhookUrl": "https://speakasap.com/helpdesk/api/email/webhook/",
     "filters": {
-      "to": ["support@speakasap.com"]
+      "to": ["support@speakasap.com", "help@speakasap.com", "contact@speakasap.com"]
     },
     "maxRetries": 3
   }'
+```
+
+Либо один wildcard для всех адресов домена:
+
+```json
+"filters": { "to": ["*@speakasap.com"] }
 ```
 
 ## Обработка webhook в вашем сервисе
