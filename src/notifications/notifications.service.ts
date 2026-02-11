@@ -6,7 +6,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThanOrEqual, In } from 'typeorm';
-import { SendNotificationDto, NotificationChannel, EmailContentType } from './dto/send-notification.dto';
+import { SendNotificationDto, NotificationChannel } from './dto/send-notification.dto';
 import { EmailService } from '../email/email.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
@@ -59,12 +59,25 @@ export class NotificationsService {
   ) {}
 
   async send(sendNotificationDto: SendNotificationDto): Promise<NotificationSendResult> {
+    const startTime = Date.now();
+    const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const { channel, recipient, message, subject, templateData, type } = sendNotificationDto;
+
+    this.logger.log(
+      `[NotificationsService] send() - Request ID: ${requestId} - Starting notification send - channel=${channel}, recipient=${recipient}, subject=${subject}, type=${type}, service=${sendNotificationDto.service || 'none'}, messageLength=${message?.length || 0}`,
+      'NotificationsService',
+    );
 
     // Check for duplicate notification within last 5 minutes (idempotency protection)
     // Match on recipient, subject, and type to catch duplicates even if message content varies slightly
     // Check for both SENT and PENDING status to prevent race conditions
+    const duplicateCheckStart = Date.now();
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    this.logger.log(
+      `[NotificationsService] send() - Request ID: ${requestId} - Checking for duplicates (5min window, recipient=${recipient}, subject=${subject}, type=${type}, fiveMinutesAgo=${fiveMinutesAgo.toISOString()})`,
+      'NotificationsService',
+    );
+
     const duplicate = await this.notificationRepository.findOne({
       where: {
         channel,
@@ -79,8 +92,12 @@ export class NotificationsService {
       },
     });
 
+    const duplicateCheckDuration = Date.now() - duplicateCheckStart;
     if (duplicate) {
-      this.logger.warn(`Duplicate notification detected for ${recipient} with subject "${subject}". Returning existing notification ${duplicate.id}`, 'NotificationsService');
+      this.logger.warn(
+        `[NotificationsService] send() - Request ID: ${requestId} - DUPLICATE DETECTED after ${duplicateCheckDuration}ms - duplicateId=${duplicate.id}, duplicateStatus=${duplicate.status}, duplicateCreatedAt=${duplicate.createdAt.toISOString()}, duplicateMessageId=${duplicate.messageId || 'none'}, recipient=${recipient}, subject=${subject}, type=${type}`,
+        'NotificationsService',
+      );
       return {
         id: duplicate.id,
         status: 'sent',
@@ -90,7 +107,13 @@ export class NotificationsService {
       };
     }
 
+    this.logger.log(
+      `[NotificationsService] send() - Request ID: ${requestId} - No duplicate found (check took ${duplicateCheckDuration}ms), creating new notification`,
+      'NotificationsService',
+    );
+
     // Create notification record with pending status
+    const createStart = Date.now();
     const notification = this.notificationRepository.create({
       channel,
       type,
@@ -104,14 +127,23 @@ export class NotificationsService {
     });
 
     await this.notificationRepository.save(notification);
+    const createDuration = Date.now() - createStart;
 
-    this.logger.log(`Sending notification ${notification.id} via ${channel} to ${recipient}`, 'NotificationsService');
+    this.logger.log(
+      `[NotificationsService] send() - Request ID: ${requestId} - Notification record created (ID: ${notification.id}, took ${createDuration}ms). Starting send via ${channel} to ${recipient}`,
+      'NotificationsService',
+    );
 
     try {
+      const sendStart = Date.now();
       let result: { messageId?: string };
 
       switch (channel) {
-        case NotificationChannel.EMAIL:
+        case NotificationChannel.EMAIL: {
+          this.logger.log(
+            `[NotificationsService] send() - Request ID: ${requestId} - Calling emailService.send() - notificationId=${notification.id}, emailProvider=${sendNotificationDto.emailProvider || 'auto'}, contentType=${sendNotificationDto.contentType || 'auto'}`,
+            'NotificationsService',
+          );
           result = await this.emailService.send({
             to: recipient,
             subject: subject || this.getDefaultSubject(type),
@@ -120,7 +152,13 @@ export class NotificationsService {
             emailProvider: sendNotificationDto.emailProvider, // Pass provider selection
             contentType: sendNotificationDto.contentType, // Pass content type
           });
+          const emailSendDuration = Date.now() - sendStart;
+          this.logger.log(
+            `[NotificationsService] send() - Request ID: ${requestId} - emailService.send() completed in ${emailSendDuration}ms - notificationId=${notification.id}, messageId=${result.messageId || 'none'}`,
+            'NotificationsService',
+          );
           break;
+        }
 
         case NotificationChannel.TELEGRAM: {
           // Use chatId if provided, otherwise use recipient
@@ -149,6 +187,7 @@ export class NotificationsService {
       }
 
       // Update notification with success status and provider
+      const updateStart = Date.now();
       notification.status = NotificationStatus.SENT;
       notification.messageId = result.messageId || null;
       notification.error = null;
@@ -157,8 +196,13 @@ export class NotificationsService {
         notification.provider = sendNotificationDto.emailProvider;
       }
       await this.notificationRepository.save(notification);
+      const updateDuration = Date.now() - updateStart;
+      const totalDuration = Date.now() - startTime;
 
-      this.logger.log(`Notification ${notification.id} sent successfully`, 'NotificationsService');
+      this.logger.log(
+        `[NotificationsService] send() - Request ID: ${requestId} - Notification ${notification.id} sent successfully. Total duration: ${totalDuration}ms (update took ${updateDuration}ms) - messageId=${result.messageId || 'none'}, channel=${channel}, recipient=${recipient}`,
+        'NotificationsService',
+      );
 
       return {
         id: notification.id,
@@ -169,13 +213,20 @@ export class NotificationsService {
       };
     } catch (error: unknown) {
       // Update notification with failed status
+      const errorUpdateStart = Date.now();
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const errorStack = error instanceof Error ? error.stack : undefined;
       notification.status = NotificationStatus.FAILED;
       notification.error = errorMessage;
       await this.notificationRepository.save(notification);
+      const errorUpdateDuration = Date.now() - errorUpdateStart;
+      const totalDuration = Date.now() - startTime;
 
-      this.logger.error(`Failed to send notification ${notification.id}: ${errorMessage}`, errorStack, 'NotificationsService');
+      this.logger.error(
+        `[NotificationsService] send() - Request ID: ${requestId} - Failed to send notification ${notification.id} after ${totalDuration}ms (error update took ${errorUpdateDuration}ms): ${errorMessage} - channel=${channel}, recipient=${recipient}, subject=${subject || 'none'}`,
+        errorStack,
+        'NotificationsService',
+      );
 
       throw new Error(`Failed to send notification: ${errorMessage}`);
     }
