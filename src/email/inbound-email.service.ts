@@ -1579,6 +1579,24 @@ export class InboundEmailService {
   }
 
   /**
+   * Get inbound email counts for admin stats (total, last 24h, last 7 days)
+   */
+  async getInboundCount(): Promise<{ total: number; last24h: number; last7d: number }> {
+    const total = await this.inboundEmailRepository.count();
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const last24h = await this.inboundEmailRepository
+      .createQueryBuilder('e')
+      .where('e.receivedAt >= :date', { date: oneDayAgo })
+      .getCount();
+    const last7d = await this.inboundEmailRepository
+      .createQueryBuilder('e')
+      .where('e.receivedAt >= :date', { date: sevenDaysAgo })
+      .getCount();
+    return { total, last24h, last7d };
+  }
+
+  /**
    * Find inbound emails with filters
    */
   async findInboundEmails(filters: {
