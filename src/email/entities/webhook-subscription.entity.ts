@@ -30,7 +30,10 @@ export class WebhookSubscription {
   retryCount: number; // Number of retries for failed deliveries
 
   @Column({ type: 'int', default: 3, name: 'max_retries' })
-  maxRetries: number; // Maximum retries before suspending
+  maxRetries: number; // Kept for backoff; we never suspend
+
+  @Column({ type: 'int', default: 120000, name: 'delivery_timeout_ms' })
+  deliveryTimeoutMs: number; // Per-request timeout; doubled on timeout, never suspend
 
   @Column({ type: 'timestamp', nullable: true, name: 'last_delivery_at' })
   lastDeliveryAt: Date | null;
