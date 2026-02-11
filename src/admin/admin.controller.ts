@@ -28,8 +28,16 @@ export class AdminController {
   @Get('stats')
   async getStats() {
     try {
-      const stats = await this.notificationsService.getStats();
-      return ApiResponseUtil.success(stats);
+      const [outboundStats, inboundCount] = await Promise.all([
+        this.notificationsService.getStats(),
+        this.inboundEmailService.getInboundCount(),
+      ]);
+      return ApiResponseUtil.success({
+        ...outboundStats,
+        receivedTotal: inboundCount.total,
+        receivedLast24h: inboundCount.last24h,
+        receivedLast7d: inboundCount.last7d,
+      });
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       throw new HttpException(

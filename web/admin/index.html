@@ -182,10 +182,12 @@
         </section>
         <section class="card">
           <h2>Message history</h2>
+          <p style="color: var(--muted); font-size: 0.9rem; margin-bottom: 12px;">Sent = outbound notifications. Received = inbound emails (AWS SES receive rule; if none, configure SES inbound or no mail has been received yet).</p>
           <div id="history-content" class="loading">Loading…</div>
           <table id="history-table" class="hidden">
             <thead>
               <tr>
+                <th>Direction</th>
                 <th>Channel</th>
                 <th>Service</th>
                 <th>Subject</th>
@@ -325,9 +327,12 @@
           if (!json.success) { el.textContent = json.error?.message || 'Failed to load stats'; return; }
           const d = json.data;
           grid.innerHTML =
-            '<div class="stat"><span class="value">' + (d.total ?? 0) + '</span><span class="label">Total</span></div>' +
-            '<div class="stat"><span class="value">' + (d.last24h ?? 0) + '</span><span class="label">Last 24h</span></div>' +
-            '<div class="stat"><span class="value">' + (d.last7d ?? 0) + '</span><span class="label">Last 7 days</span></div>' +
+            '<div class="stat"><span class="value">' + (d.total ?? 0) + '</span><span class="label">Total (sent)</span></div>' +
+            '<div class="stat"><span class="value">' + (d.receivedTotal ?? 0) + '</span><span class="label">Received</span></div>' +
+            '<div class="stat"><span class="value">' + (d.last24h ?? 0) + '</span><span class="label">Last 24h (sent)</span></div>' +
+            '<div class="stat"><span class="value">' + (d.receivedLast24h ?? 0) + '</span><span class="label">Received 24h</span></div>' +
+            '<div class="stat"><span class="value">' + (d.last7d ?? 0) + '</span><span class="label">Last 7 days (sent)</span></div>' +
+            '<div class="stat"><span class="value">' + (d.receivedLast7d ?? 0) + '</span><span class="label">Received 7d</span></div>' +
             (d.byChannel ? Object.entries(d.byChannel).map(function (e) {
               return '<div class="stat"><span class="value">' + e[1] + '</span><span class="label">' + e[0] + '</span></div>';
             }).join('') : '') +
@@ -371,7 +376,9 @@
             const created = n.createdAt ? new Date(n.createdAt).toLocaleString() : '-';
             const subject = (n.subject || '-').substring(0, 50) + (n.subject && n.subject.length > 50 ? '...' : '');
             const service = n.service || (n.direction === 'inbound' ? 'inbound' : 'unknown');
+            const direction = n.direction === 'inbound' ? 'Received' : 'Sent';
             return '<tr data-id="' + n.id + '" data-type="' + (n.direction || 'outbound') + '">' +
+              '<td>' + direction + '</td>' +
               '<td>' + (n.channel || '-') + '</td>' +
               '<td>' + service + '</td>' +
               '<td>' + subject + '</td>' +
