@@ -1601,6 +1601,7 @@ export class InboundEmailService {
    */
   async findInboundEmails(filters: {
     limit?: number;
+    offset?: number;
     toFilter?: string;
     excludeTo?: string[];
     status?: string;
@@ -1629,9 +1630,13 @@ export class InboundEmailService {
     // Order by receivedAt descending
     queryBuilder.orderBy('email.receivedAt', 'DESC');
 
-    // Limit results
+    // Pagination: offset (skip) then limit
+    const offset = filters.offset ?? 0;
+    if (offset > 0) {
+      queryBuilder.skip(offset);
+    }
     if (filters.limit) {
-      queryBuilder.limit(filters.limit);
+      queryBuilder.take(filters.limit);
     }
 
     const emails = await queryBuilder.getMany();

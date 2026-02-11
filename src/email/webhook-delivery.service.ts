@@ -190,7 +190,10 @@ export class WebhookDeliveryService {
         subscription.deliveryTimeoutMs ?? 120000,
         MAX_DELIVERY_TIMEOUT_MS,
       );
-      this.logger.log(`[WEBHOOK_DELIVERY] Sending HTTP POST request to ${subscription.webhookUrl}, timeout: ${timeoutMs}ms`, 'WebhookDeliveryService');
+      const payloadSizeBytes = JSON.stringify(webhookPayload).length;
+      const payloadSizeKB = (payloadSizeBytes / 1024).toFixed(2);
+      this.logger.log(`[WEBHOOK_DELIVERY] Payload size: ${payloadSizeBytes} bytes (${payloadSizeKB} KB), inboundEmailId: ${inboundEmail.id}, messageId: ${payload.messageId || 'n/a'}`, 'WebhookDeliveryService');
+      this.logger.log(`[WEBHOOK_DELIVERY] Sending HTTP POST request to ${subscription.webhookUrl}, timeout: ${timeoutMs}ms, startedAt: ${new Date().toISOString()}`, 'WebhookDeliveryService');
       const requestStartTime = Date.now();
       const response = await firstValueFrom(
         this.httpService.post(subscription.webhookUrl, webhookPayload, {
@@ -203,7 +206,8 @@ export class WebhookDeliveryService {
         }),
       );
       const requestDuration = Date.now() - requestStartTime;
-      this.logger.log(`[WEBHOOK_DELIVERY] HTTP request completed in ${requestDuration}ms, status: ${response.status}`, 'WebhookDeliveryService');
+      this.logger.log(`[WEBHOOK_DELIVERY] HTTP request completed in ${requestDuration}ms, status: ${response.status}, finishedAt: ${new Date().toISOString()}`, 'WebhookDeliveryService');
+      this.logger.log(`[WEBHOOK_DELIVERY] Response body length: ${typeof response.data === 'string' ? response.data.length : JSON.stringify(response.data).length}`, 'WebhookDeliveryService');
 
       // Update subscription stats
       this.logger.log(`[WEBHOOK_DELIVERY] Updating subscription stats for ${subscription.serviceName} - totalDeliveries: ${subscription.totalDeliveries} -> ${subscription.totalDeliveries + 1}`, 'WebhookDeliveryService');
@@ -232,7 +236,9 @@ export class WebhookDeliveryService {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const errorStack = error instanceof Error ? error.stack : undefined;
+      const failedAt = new Date().toISOString();
       this.logger.error(`[WEBHOOK_DELIVERY] ❌ Exception caught during delivery to ${subscription.serviceName}: ${errorMessage}`, errorStack, 'WebhookDeliveryService');
+      this.logger.error(`[WEBHOOK_DELIVERY] Failed at: ${failedAt}, inboundEmailId: ${inboundEmail.id}, webhookUrl: ${subscription.webhookUrl}`, undefined, 'WebhookDeliveryService');
 
       // On timeout: double delivery timeout for next time and send alert email (never suspend)
       const isTimeout = /timeout|ETIMEDOUT|timed out/i.test(errorMessage);

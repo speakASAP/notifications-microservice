@@ -55,20 +55,21 @@ export class AdminController {
     try {
       const limitNum = limit ? Number(limit) : 50;
       const offsetNum = offset ? Number(offset) : 0;
+      // Fetch enough from both so merged sort + slice is correct (avoid inbound pushed to later pages)
+      const fetchSize = Math.min(500, offsetNum + limitNum + 100);
 
-      // Get outbound notifications
+      // Get outbound notifications (fetchSize most recent, no skip)
       const notifications = await this.notificationsService.getHistory(
-        limitNum,
-        offsetNum,
+        fetchSize,
+        0,
       );
 
-      // Get inbound emails (we'll combine them with notifications)
-      // For now, get a reasonable number to combine
+      // Get inbound emails (same window so merge by date is correct)
       const inboundEmails = await this.inboundEmailService.findInboundEmails({
-        limit: limitNum * 2, // Get more to ensure we have enough after combining
+        limit: fetchSize,
       });
 
-      // Combine and sort by date (newest first)
+      // Combine and sort by date (newest first), then apply pagination
       const combined = [
         ...notifications.map((n) => ({
           id: n.id,
