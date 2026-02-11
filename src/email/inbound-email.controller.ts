@@ -222,6 +222,7 @@ export class InboundEmailController {
   @Get('inbound')
   async getInboundEmails(
     @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
     @Query('toFilter') toFilter?: string,
     @Query('excludeTo') excludeTo?: string | string[],
     @Query('status') status?: string,
@@ -230,11 +231,14 @@ export class InboundEmailController {
       const limitNum = limit ? parseInt(limit, 10) : 100;
       const safeLimit =
         Number.isNaN(limitNum) || limitNum < 1 ? 100 : Math.min(limitNum, 500);
+      const offsetNum = offset ? parseInt(offset, 10) : 0;
+      const safeOffset = Number.isNaN(offsetNum) || offsetNum < 0 ? 0 : offsetNum;
       const excludeToList = Array.isArray(excludeTo) ? excludeTo : excludeTo ? [excludeTo] : [];
       const statusFilter = status || 'processed';
 
       const emails = await this.inboundEmailService.findInboundEmails({
         limit: safeLimit,
+        offset: safeOffset,
         toFilter: toFilter || '@speakasap.com',
         excludeTo: excludeToList,
         status: statusFilter,
