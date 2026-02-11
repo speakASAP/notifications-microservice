@@ -417,9 +417,15 @@ export class InboundEmailService {
         }
       }
 
-      const bodyText = emailParts.bodyText || '';
+      let bodyText = emailParts.bodyText || '';
       let bodyHtml = emailParts.bodyHtml || null;
       const attachments = emailParts.attachments || [];
+
+      // Try to fix mojibake (UTF-8 decoded as Latin-1) before storing/sending
+      bodyText = this.tryFixMojibakeUtf8(bodyText);
+      if (bodyHtml) {
+        bodyHtml = this.tryFixMojibakeUtf8(bodyHtml);
+      }
 
       // Validate parsed content - check if it looks corrupted (just punctuation, very short, or suspicious patterns)
       const looksCorrupted = bodyText && (
@@ -447,7 +453,7 @@ export class InboundEmailService {
 
       this.logger.log(`[PARSE] Creating InboundEmail entity...`, 'InboundEmailService');
       const inboundEmail = new InboundEmail();
-      inboundEmail.from = from;
+      inboundEmail.from = this.normalizeEmailOnly(from);
       inboundEmail.to = to;
       inboundEmail.subject = subject;
       inboundEmail.bodyText = bodyText;
@@ -1049,6 +1055,45 @@ export class InboundEmailService {
       this.logger.warn(`[PARSE] Failed to decode email address ${email}: ${error}`, 'InboundEmailService');
       return email;
     }
+  }
+
+  /**
+   * Extract only the email address from "Display Name <email@domain.com>" or return as-is.
+   * Display only email - nothing else (per helpdesk requirement).
+   */
+  private normalizeEmailOnly(value: string): string {
+    if (!value || typeof value !== 'string') {
+      return value || '';
+    }
+    const s = value.trim();
+    const match = s.match(/<([^>]+)>/);
+    if (match) {
+      return match[1].trim();
+    }
+    return s;
+  }
+
+  /**
+   * If text looks like UTF-8 decoded as Latin-1 (mojibake), re-decode to correct UTF-8.
+   * E.g. Cyrillic "Содержание" may appear as "Ð¡Ð¾Ð´ÐµÑÐ¶Ð°Ð½Ð¸Ðµ".
+   */
+  private tryFixMojibakeUtf8(text: string): string {
+    if (!text || typeof text !== 'string' || text.trim().length < 5) {
+      return text;
+    }
+    try {
+      const fixed = Buffer.from(text, 'latin1').toString('utf8');
+      if (fixed !== text && !fixed.includes('\ufffd')) {
+        this.logger.log(
+          `[PARSE] Fixed mojibake (latin1->utf8), length ${text.length} -> ${fixed.length}`,
+          'InboundEmailService',
+        );
+        return fixed;
+      }
+    } catch {
+      // ignore
+    }
+    return text;
   }
 
   /**
