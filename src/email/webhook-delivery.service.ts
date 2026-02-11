@@ -9,10 +9,14 @@ import { Repository } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { LoggerService } from '../../shared/logger/logger.service';
+import { EmailService } from './email.service';
 import { WebhookSubscription } from './entities/webhook-subscription.entity';
 import { WebhookDelivery, WebhookDeliveryStatus } from './entities/webhook-delivery.entity';
 import { InboundEmail } from './entities/inbound-email.entity';
 import { firstValueFrom } from 'rxjs';
+
+/** Max delivery timeout cap (30 min). Doubling stops at this. */
+const MAX_DELIVERY_TIMEOUT_MS = 30 * 60 * 1000;
 
 export interface ProcessedEmailPayload {
   id: string;
@@ -50,6 +54,7 @@ export class WebhookDeliveryService {
     @Inject(LoggerService)
     private logger: LoggerService,
     private httpService: HttpService,
+    private emailService: EmailService,
   ) {}
 
   /**
@@ -180,9 +185,12 @@ export class WebhookDeliveryService {
         this.logger.log(`[WEBHOOK_DELIVERY] No secret configured for ${subscription.serviceName}, sending without signature`, 'WebhookDeliveryService');
       }
 
-      // Send webhook (2 min timeout for large payloads e.g. 50MB attachments)
-      const WEBHOOK_TIMEOUT_MS = 120000;
-      this.logger.log(`[WEBHOOK_DELIVERY] Sending HTTP POST request to ${subscription.webhookUrl}, timeout: ${WEBHOOK_TIMEOUT_MS}ms`, 'WebhookDeliveryService');
+      // Per-subscription timeout (doubled on timeout; never suspend)
+      const timeoutMs = Math.min(
+        subscription.deliveryTimeoutMs ?? 120000,
+        MAX_DELIVERY_TIMEOUT_MS,
+      );
+      this.logger.log(`[WEBHOOK_DELIVERY] Sending HTTP POST request to ${subscription.webhookUrl}, timeout: ${timeoutMs}ms`, 'WebhookDeliveryService');
       const requestStartTime = Date.now();
       const response = await firstValueFrom(
         this.httpService.post(subscription.webhookUrl, webhookPayload, {
@@ -191,7 +199,7 @@ export class WebhookDeliveryService {
             'X-Notification-Service': 'notifications-microservice',
             'X-Subscription-Id': subscription.id,
           },
-          timeout: WEBHOOK_TIMEOUT_MS,
+          timeout: timeoutMs,
         }),
       );
       const requestDuration = Date.now() - requestStartTime;
@@ -226,42 +234,40 @@ export class WebhookDeliveryService {
       const errorStack = error instanceof Error ? error.stack : undefined;
       this.logger.error(`[WEBHOOK_DELIVERY] ❌ Exception caught during delivery to ${subscription.serviceName}: ${errorMessage}`, errorStack, 'WebhookDeliveryService');
 
-      // Enhanced error handling for SSL/certificate errors
+      // On timeout: double delivery timeout for next time and send alert email (never suspend)
+      const isTimeout = /timeout|ETIMEDOUT|timed out/i.test(errorMessage);
+      if (isTimeout) {
+        const prevTimeout = subscription.deliveryTimeoutMs ?? 120000;
+        const newTimeout = Math.min(prevTimeout * 2, MAX_DELIVERY_TIMEOUT_MS);
+        subscription.deliveryTimeoutMs = newTimeout;
+        this.logger.log(
+          `[WEBHOOK_DELIVERY] Timeout: doubled delivery timeout ${prevTimeout}ms -> ${newTimeout}ms for ${subscription.serviceName}`,
+          'WebhookDeliveryService',
+        );
+        await this.sendTimeoutAlert(subscription, errorMessage, prevTimeout, newTimeout);
+      }
+
+      // Enhanced error handling for SSL/certificate errors (increase maxRetries for retries only)
       const isSSLError = errorMessage.toLowerCase().includes('certificate') ||
                         errorMessage.toLowerCase().includes('ssl') ||
                         errorMessage.toLowerCase().includes('tls') ||
                         errorMessage.toLowerCase().includes('cert');
-      this.logger.log(`[WEBHOOK_DELIVERY] Error type analysis - isSSLError: ${isSSLError}, errorMessage: ${errorMessage}`, 'WebhookDeliveryService');
-
-      // Increase maxRetries for SSL errors (temporary issues)
+      this.logger.log(`[WEBHOOK_DELIVERY] Error type analysis - isSSLError: ${isSSLError}, isTimeout: ${isTimeout}, errorMessage: ${errorMessage}`, 'WebhookDeliveryService');
       if (isSSLError && subscription.maxRetries < 10) {
         subscription.maxRetries = 10;
-        console.log(`[WEBHOOK_DELIVERY] ⚠️ SSL error detected, increasing maxRetries to 10 for ${subscription.serviceName}`);
-        this.logger.warn(`[WEBHOOK_DELIVERY] ⚠️ SSL error detected, increasing maxRetries to 10 for ${subscription.serviceName}`, 'WebhookDeliveryService');
+        this.logger.warn(`[WEBHOOK_DELIVERY] SSL error detected, increasing maxRetries to 10 for ${subscription.serviceName}`, 'WebhookDeliveryService');
       }
 
-      // Update subscription stats
-      this.logger.log(`[WEBHOOK_DELIVERY] Updating failure stats for ${subscription.serviceName} - totalFailures: ${subscription.totalFailures} -> ${subscription.totalFailures + 1}, retryCount: ${subscription.retryCount} -> ${subscription.retryCount + 1}`, 'WebhookDeliveryService');
+      // Update subscription stats (never suspend)
       subscription.totalFailures += 1;
       subscription.retryCount += 1;
       subscription.lastErrorAt = new Date();
       subscription.lastError = errorMessage;
-
-      // Enhanced logging with retry details
-      console.error(`[WEBHOOK_DELIVERY] ❌ Failed to deliver to ${subscription.serviceName} (attempt ${subscription.retryCount}/${subscription.maxRetries}): ${errorMessage}`, errorStack);
-      this.logger.error(`[WEBHOOK_DELIVERY] ❌ Failed to deliver to ${subscription.serviceName} (attempt ${subscription.retryCount}/${subscription.maxRetries}): ${errorMessage}`, errorStack, 'WebhookDeliveryService');
-      this.logger.log(`[WEBHOOK_DELIVERY] Failure details - webhookUrl: ${subscription.webhookUrl}, lastErrorAt: ${subscription.lastErrorAt.toISOString()}`, 'WebhookDeliveryService');
-
-      // Suspend subscription if max retries exceeded
-      if (subscription.retryCount >= subscription.maxRetries) {
-        subscription.status = 'suspended';
-        const suspendMsg = `Suspending subscription ${subscription.serviceName} after ${subscription.retryCount} failures. Last error: ${errorMessage}`;
-        console.log(`[WEBHOOK_DELIVERY] ⚠️ ${suspendMsg}`);
-        this.logger.warn(`[WEBHOOK_DELIVERY] ⚠️ ${suspendMsg}`, 'WebhookDeliveryService');
-
-        // Send alert notification (if notification service is available)
-        await this.sendSuspensionAlert(subscription, errorMessage);
-      }
+      this.logger.error(
+        `[WEBHOOK_DELIVERY] ❌ Failed to deliver to ${subscription.serviceName} (attempt ${subscription.retryCount}): ${errorMessage}`,
+        errorStack,
+        'WebhookDeliveryService',
+      );
 
       await this.subscriptionRepository.save(subscription);
     }
@@ -675,7 +681,39 @@ export class WebhookDeliveryService {
   }
 
   /**
-   * Send alert notification when subscription is suspended
+   * Send email alert when webhook delivery times out (so we can fix the issue proactively).
+   */
+  private async sendTimeoutAlert(
+    subscription: WebhookSubscription,
+    errorMessage: string,
+    prevTimeoutMs: number,
+    newTimeoutMs: number,
+  ): Promise<void> {
+    const to = process.env.WEBHOOK_TIMEOUT_ALERT_EMAIL || 'ssfskype@gmail.com';
+    const subject = `[notifications-microservice] Webhook timeout: ${subscription.serviceName}`;
+    const message =
+      `Webhook delivery to ${subscription.serviceName} timed out.\n\n` +
+      `URL: ${subscription.webhookUrl}\n` +
+      `Error: ${errorMessage}\n` +
+      `Timeout was ${prevTimeoutMs}ms; doubled to ${newTimeoutMs}ms for next delivery (subscription is NOT suspended).\n\n` +
+      `Please ensure the endpoint responds quickly (e.g. accept request and process asynchronously).`;
+    try {
+      await this.emailService.send({
+        to,
+        subject,
+        message,
+        contentType: 'text/plain',
+        emailProvider: 'ses',
+      });
+      this.logger.log(`[WEBHOOK_DELIVERY] Timeout alert email sent to ${to}`, 'WebhookDeliveryService');
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      this.logger.error(`[WEBHOOK_DELIVERY] Failed to send timeout alert email: ${errMsg}`, undefined, 'WebhookDeliveryService');
+    }
+  }
+
+  /**
+   * Send alert notification when subscription is suspended (kept for manual suspend; we no longer auto-suspend)
    */
   private async sendSuspensionAlert(subscription: WebhookSubscription, errorMessage: string): Promise<void> {
     this.logger.log(`[WEBHOOK_DELIVERY] Preparing suspension alert for ${subscription.serviceName}`, 'WebhookDeliveryService');
