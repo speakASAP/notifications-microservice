@@ -344,17 +344,25 @@ export class WebhookDeliveryService {
       messageId = messageId.slice(1, -1);
       this.logger.log(`[WEBHOOK_DELIVERY] Cleaned messageId: removed angle brackets`, 'WebhookDeliveryService');
     }
-    // Clean from field: extract email address from "Display Name <email@domain.com>" format
+    // Clean from/to: extract email address from "Display Name <email@domain.com>" format for filter matching
     let fromEmail = inboundEmail.from;
     const fromMatch = fromEmail.match(/<([^>]+)>/);
     if (fromMatch) {
       fromEmail = fromMatch[1];
       this.logger.log(`[WEBHOOK_DELIVERY] Cleaned from field: extracted email from display name`, 'WebhookDeliveryService');
     }
+    let toEmail = inboundEmail.to || '';
+    const toMatch = toEmail.match(/<([^>]+)>/);
+    if (toMatch) {
+      toEmail = toMatch[1].trim();
+      this.logger.log(`[WEBHOOK_DELIVERY] Cleaned to field: extracted email from display name (e.g. SpeakASAP <contact@speakasap.com>)`, 'WebhookDeliveryService');
+    } else if (toEmail) {
+      toEmail = toEmail.trim();
+    }
     const payload: ProcessedEmailPayload = {
       id: inboundEmail.id,
       from: fromEmail,
-      to: inboundEmail.to,
+      to: toEmail,
       subject: inboundEmail.subject,
       bodyText: inboundEmail.bodyText,
       bodyHtml: inboundEmail.bodyHtml,
