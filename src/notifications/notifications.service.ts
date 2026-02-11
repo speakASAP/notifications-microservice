@@ -5,7 +5,7 @@
 
 import { Injectable, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThanOrEqual } from 'typeorm';
+import { Repository, MoreThanOrEqual, In } from 'typeorm';
 import { SendNotificationDto, NotificationChannel, EmailContentType } from './dto/send-notification.dto';
 import { EmailService } from '../email/email.service';
 import { TelegramService } from '../telegram/telegram.service';
@@ -63,6 +63,7 @@ export class NotificationsService {
 
     // Check for duplicate notification within last 5 minutes (idempotency protection)
     // Match on recipient, subject, and type to catch duplicates even if message content varies slightly
+    // Check for both SENT and PENDING status to prevent race conditions
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
     const duplicate = await this.notificationRepository.findOne({
       where: {
@@ -70,7 +71,7 @@ export class NotificationsService {
         recipient,
         subject: subject || null,
         type,
-        status: NotificationStatus.SENT,
+        status: In([NotificationStatus.SENT, NotificationStatus.PENDING]),
         createdAt: MoreThanOrEqual(fiveMinutesAgo),
       },
       order: {
