@@ -141,7 +141,7 @@ export class InboundEmailService {
       if (messageId) {
         const existing = await this.inboundEmailRepository
           .createQueryBuilder('e')
-          .where("e.rawData->'mail'->>'messageId' = :messageId", { messageId })
+          .where('e."rawData"->\'mail\'->>\'messageId\' = :messageId', { messageId })
           .getOne();
         if (existing) {
           this.logger.log(
