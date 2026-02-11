@@ -1553,6 +1553,32 @@ export class InboundEmailService {
   }
 
   /**
+   * Get inbound email by ID
+   */
+  async getInboundEmailById(id: string): Promise<InboundEmailSummary | null> {
+    const email = await this.inboundEmailRepository.findOne({
+      where: { id },
+    });
+
+    if (!email) {
+      return null;
+    }
+
+    return {
+      id: email.id,
+      from: email.from,
+      to: email.to,
+      subject: email.subject || 'Email ticket',
+      bodyText: email.bodyText || '',
+      bodyHtml: email.bodyHtml || null,
+      attachments: email.attachments || [],
+      receivedAt: email.receivedAt,
+      messageId: email.rawData?.mail?.messageId || `inbound-${email.id}`,
+      status: email.status,
+    };
+  }
+
+  /**
    * Find inbound emails with filters
    */
   async findInboundEmails(filters: {

@@ -7,18 +7,23 @@ import {
   Controller,
   Get,
   Query,
+  Param,
   UseGuards,
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
 import { NotificationsService } from '../notifications/notifications.service';
+import { InboundEmailService } from '../email/inbound-email.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { ApiResponseUtil } from '../../shared/utils/api-response.util';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard)
 export class AdminController {
-  constructor(private readonly notificationsService: NotificationsService) {}
+  constructor(
+    private readonly notificationsService: NotificationsService,
+    private readonly inboundEmailService: InboundEmailService,
+  ) {}
 
   @Get('stats')
   async getStats() {
@@ -40,15 +45,113 @@ export class AdminController {
     @Query('offset') offset?: number,
   ) {
     try {
-      const history = await this.notificationsService.getHistory(
-        limit ? Number(limit) : 50,
-        offset ? Number(offset) : 0,
+      const limitNum = limit ? Number(limit) : 50;
+      const offsetNum = offset ? Number(offset) : 0;
+
+      // Get outbound notifications
+      const notifications = await this.notificationsService.getHistory(
+        limitNum,
+        offsetNum,
       );
-      return ApiResponseUtil.success(history);
+
+      // Get inbound emails (we'll combine them with notifications)
+      // For now, get a reasonable number to combine
+      const inboundEmails = await this.inboundEmailService.findInboundEmails({
+        limit: limitNum * 2, // Get more to ensure we have enough after combining
+      });
+
+      // Combine and sort by date (newest first)
+      const combined = [
+        ...notifications.map((n) => ({
+          id: n.id,
+          channel: n.channel,
+          service: n.service || 'unknown',
+          recipient: n.recipient,
+          subject: n.subject,
+          status: n.status,
+          createdAt: n.createdAt,
+          updatedAt: n.updatedAt,
+          direction: 'outbound' as const,
+        })),
+        ...inboundEmails.map((e) => ({
+          id: e.id,
+          channel: 'email',
+          service: 'inbound',
+          recipient: e.to,
+          subject: e.subject,
+          status: e.status,
+          createdAt: e.receivedAt,
+          updatedAt: e.receivedAt,
+          direction: 'inbound' as const,
+        })),
+      ]
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(offsetNum, offsetNum + limitNum);
+
+      return ApiResponseUtil.success(combined);
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       throw new HttpException(
         ApiResponseUtil.error('HISTORY_FAILED', msg),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('message/:id')
+  async getMessageDetails(
+    @Param('id') id: string,
+    @Query('type') type?: string,
+  ) {
+    try {
+      // type can be 'notification' or 'inbound' - if not provided, try both
+      if (type === 'inbound' || !type) {
+        try {
+          const email = await this.inboundEmailService.getInboundEmailById(id);
+          if (email) {
+            return ApiResponseUtil.success({
+              id: email.id,
+              channel: 'email',
+              service: 'inbound',
+              recipient: email.to,
+              from: email.from,
+              subject: email.subject,
+              message: email.bodyHtml || email.bodyText,
+              bodyHtml: email.bodyHtml,
+              bodyText: email.bodyText,
+              attachments: email.attachments || [],
+              status: email.status,
+              createdAt: email.receivedAt,
+              direction: 'inbound',
+            });
+          }
+        } catch (e) {
+          // Continue to try notification
+        }
+      }
+
+      if (type === 'notification' || !type) {
+        const notification = await this.notificationsService.getStatus(id);
+        const fullNotification = await this.notificationsService.getNotificationById(id);
+        return ApiResponseUtil.success({
+          ...notification,
+          message: fullNotification?.message,
+          service: fullNotification?.service,
+          direction: 'outbound',
+        });
+      }
+
+      throw new HttpException(
+        ApiResponseUtil.error('NOT_FOUND', 'Message not found'),
+        HttpStatus.NOT_FOUND,
+      );
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        ApiResponseUtil.error('MESSAGE_DETAILS_FAILED', msg),
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

@@ -165,4 +165,9 @@ export class SendNotificationDto {
   @IsEnum(EmailContentType)
   @IsOptional()
   contentType?: EmailContentType;
+
+  // Service name that sent this notification (optional, for tracking)
+  @IsString()
+  @IsOptional()
+  service?: string;
 }

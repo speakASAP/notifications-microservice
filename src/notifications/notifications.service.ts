@@ -30,6 +30,9 @@ export interface NotificationHistoryItem {
   status: string;
   createdAt: Date;
   updatedAt: Date;
+  service: string | null;
+  message?: string; // Include message content for detail view
+  direction?: 'inbound' | 'outbound'; // Direction: inbound (received) or outbound (sent)
 }
 
 export interface NotificationStatusResult {
@@ -68,6 +71,7 @@ export class NotificationsService {
       templateData: templateData || null,
       status: NotificationStatus.PENDING,
       provider: channel === NotificationChannel.EMAIL ? (sendNotificationDto.emailProvider || null) : null,
+      service: sendNotificationDto.service || null,
     });
 
     await this.notificationRepository.save(notification);
@@ -166,6 +170,8 @@ export class NotificationsService {
       status: n.status,
       createdAt: n.createdAt,
       updatedAt: n.updatedAt,
+      service: n.service,
+      direction: 'outbound',
     }));
   }
 
@@ -248,6 +254,12 @@ export class NotificationsService {
       createdAt: notification.createdAt,
       updatedAt: notification.updatedAt,
     };
+  }
+
+  async getNotificationById(id: string): Promise<Notification | null> {
+    return await this.notificationRepository.findOne({
+      where: { id },
+    });
   }
 
   private getDefaultSubject(type: string): string {

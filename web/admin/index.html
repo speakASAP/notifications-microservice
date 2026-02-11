@@ -88,6 +88,64 @@
     .loading { color: var(--muted); }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
+    tr { cursor: pointer; }
+    tr:hover { background: var(--bg); }
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal.show { display: flex; }
+    .modal-content {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 800px;
+      max-height: 90vh;
+      overflow-y: auto;
+      width: 90%;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-body {
+      margin-bottom: 16px;
+    }
+    .modal-body pre {
+      background: var(--bg);
+      padding: 12px;
+      border-radius: 8px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .close-btn {
+      background: none;
+      border: none;
+      color: var(--text);
+      font-size: 1.5rem;
+      cursor: pointer;
+      padding: 0;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .close-btn:hover { color: var(--accent); }
   </style>
 </head>
 <body>
@@ -129,7 +187,8 @@
             <thead>
               <tr>
                 <th>Channel</th>
-                <th>Type</th>
+                <th>Service</th>
+                <th>Subject</th>
                 <th>Recipient</th>
                 <th>Status</th>
                 <th>Created</th>
@@ -137,7 +196,10 @@
             </thead>
             <tbody id="history-tbody"></tbody>
           </table>
-          <p id="history-more" style="margin-top: 12px;"></p>
+          <div id="history-pagination" style="margin-top: 12px; display: flex; gap: 8px; align-items: center;">
+            <button id="load-more-btn" class="btn btn-secondary hidden">Load More</button>
+            <span id="history-info"></span>
+          </div>
         </section>
         <section class="card">
           <h2>Service parameters</h2>
@@ -147,6 +209,15 @@
       </div>
     </div>
   </main>
+  <div id="message-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modal-title">Message Details</h2>
+        <button class="close-btn" id="close-modal">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
   <script>
     (function () {
       const TOKEN_KEY = 'notifications_admin_token';
@@ -206,7 +277,7 @@
         show(document.getElementById('dashboard-view'));
         renderHeader(true);
         loadStats();
-        loadHistory();
+        loadHistory(false);
         loadParams();
       }
 
@@ -270,28 +341,123 @@
         }
       }
 
-      async function loadHistory() {
+      let historyOffset = 0;
+      const historyLimit = 50;
+      let allHistoryItems = [];
+
+      async function loadHistory(append = false) {
         const content = document.getElementById('history-content');
         const table = document.getElementById('history-table');
         const tbody = document.getElementById('history-tbody');
-        const more = document.getElementById('history-more');
+        const loadMoreBtn = document.getElementById('load-more-btn');
+        const historyInfo = document.getElementById('history-info');
         try {
-          const r = await api('/admin/history?limit=30&offset=0');
+          if (!append) {
+            historyOffset = 0;
+            allHistoryItems = [];
+            tbody.innerHTML = '';
+          }
+          const r = await api('/admin/history?limit=' + historyLimit + '&offset=' + historyOffset);
           if (r.status === 401) { showLogin(); return; }
           const json = await r.json();
           if (!json.success) { content.textContent = json.error?.message || 'Failed to load history'; return; }
           const list = json.data || [];
-          tbody.innerHTML = list.map(function (n) {
+          if (!append) {
+            allHistoryItems = list;
+          } else {
+            allHistoryItems = allHistoryItems.concat(list);
+          }
+          tbody.innerHTML = allHistoryItems.map(function (n) {
             const created = n.createdAt ? new Date(n.createdAt).toLocaleString() : '-';
-            return '<tr><td>' + (n.channel || '-') + '</td><td>' + (n.type || '-') + '</td><td>' + (n.recipient || '-') + '</td><td>' + (n.status || '-') + '</td><td>' + created + '</td></tr>';
+            const subject = (n.subject || '-').substring(0, 50) + (n.subject && n.subject.length > 50 ? '...' : '');
+            const service = n.service || (n.direction === 'inbound' ? 'inbound' : 'unknown');
+            return '<tr data-id="' + n.id + '" data-type="' + (n.direction || 'outbound') + '">' +
+              '<td>' + (n.channel || '-') + '</td>' +
+              '<td>' + service + '</td>' +
+              '<td>' + subject + '</td>' +
+              '<td>' + (n.recipient || '-') + '</td>' +
+              '<td>' + (n.status || '-') + '</td>' +
+              '<td>' + created + '</td>' +
+              '</tr>';
           }).join('');
           content.textContent = '';
           show(table);
-          more.textContent = list.length >= 30 ? 'Showing last 30 messages.' : '';
+          historyOffset += list.length;
+          if (list.length >= historyLimit) {
+            show(loadMoreBtn);
+          } else {
+            hide(loadMoreBtn);
+          }
+          historyInfo.textContent = 'Showing ' + allHistoryItems.length + ' messages.';
+          // Add click handlers to rows
+          Array.from(tbody.querySelectorAll('tr')).forEach(function(tr) {
+            tr.onclick = function() {
+              const id = tr.getAttribute('data-id');
+              const type = tr.getAttribute('data-type');
+              showMessageDetails(id, type);
+            };
+          });
         } catch (e) {
           content.textContent = 'Error: ' + (e.message || 'Could not load history');
         }
       }
+
+      async function showMessageDetails(id, type) {
+        const modal = document.getElementById('message-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalBody = document.getElementById('modal-body');
+        try {
+          modalTitle.textContent = 'Loading...';
+          modalBody.innerHTML = '<div class="loading">Loading message details...</div>';
+          modal.classList.add('show');
+          const r = await api('/admin/message/' + id + '?type=' + (type === 'inbound' ? 'inbound' : 'notification'));
+          if (r.status === 401) { showLogin(); modal.classList.remove('show'); return; }
+          const json = await r.json();
+          if (!json.success) {
+            modalBody.innerHTML = '<div class="error-msg">' + (json.error?.message || 'Failed to load message details') + '</div>';
+            return;
+          }
+          const msg = json.data;
+          modalTitle.textContent = 'Message Details';
+          let html = '<div style="margin-bottom: 12px;"><strong>Service:</strong> ' + (msg.service || '-') + '</div>';
+          html += '<div style="margin-bottom: 12px;"><strong>Channel:</strong> ' + (msg.channel || '-') + '</div>';
+          html += '<div style="margin-bottom: 12px;"><strong>Direction:</strong> ' + (msg.direction || 'outbound') + '</div>';
+          if (msg.from) {
+            html += '<div style="margin-bottom: 12px;"><strong>From:</strong> ' + msg.from + '</div>';
+          }
+          html += '<div style="margin-bottom: 12px;"><strong>Recipient:</strong> ' + (msg.recipient || '-') + '</div>';
+          html += '<div style="margin-bottom: 12px;"><strong>Subject:</strong> ' + (msg.subject || '-') + '</div>';
+          html += '<div style="margin-bottom: 12px;"><strong>Status:</strong> ' + (msg.status || '-') + '</div>';
+          html += '<div style="margin-bottom: 12px;"><strong>Created:</strong> ' + (msg.createdAt ? new Date(msg.createdAt).toLocaleString() : '-') + '</div>';
+          html += '<div style="margin-top: 16px; margin-bottom: 8px;"><strong>Message:</strong></div>';
+          if (msg.bodyHtml) {
+            html += '<div style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">' + msg.bodyHtml + '</div>';
+          } else if (msg.message) {
+            html += '<pre>' + escapeHtml(msg.message) + '</pre>';
+          } else {
+            html += '<div class="loading">No message content available</div>';
+          }
+          if (msg.attachments && msg.attachments.length > 0) {
+            html += '<div style="margin-top: 16px;"><strong>Attachments:</strong> ' + msg.attachments.length + '</div>';
+          }
+          modalBody.innerHTML = html;
+        } catch (e) {
+          modalBody.innerHTML = '<div class="error-msg">Error: ' + (e.message || 'Could not load message details') + '</div>';
+        }
+      }
+
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      document.getElementById('close-modal').onclick = function() {
+        document.getElementById('message-modal').classList.remove('show');
+      };
+      document.getElementById('load-more-btn').onclick = function() {
+        loadHistory(true);
+      };
 
       async function loadParams() {
         const content = document.getElementById('params-content');

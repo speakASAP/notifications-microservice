@@ -41,6 +41,6 @@ import { WebhookDelivery } from '../email/entities/webhook-delivery.entity';
     TelegramService,
     WhatsAppService,
   ],
-  exports: [NotificationsService, WebhookSubscriptionService],
+  exports: [NotificationsService, WebhookSubscriptionService, InboundEmailService],
 })
 export class NotificationsModule {}

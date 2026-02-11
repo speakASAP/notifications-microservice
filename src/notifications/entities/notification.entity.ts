@@ -110,6 +110,13 @@ export class Notification {
   })
   direction: string | null; // 'inbound' | 'outbound'
 
+  @Column({
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
+  service: string | null; // Service name that sent this notification (e.g. 'speakasap-portal', 'allegro-service')
+
   @CreateDateColumn()
   @Index('idx_notifications_created_at')
   createdAt: Date;
