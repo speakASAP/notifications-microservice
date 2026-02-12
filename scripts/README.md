@@ -43,6 +43,9 @@ Use `up -d --build` after a pull; `restart` alone does not rebuild the image.
 - **`update-helpdesk-subscription-filter.sh`** - Set helpdesk webhook subscription `filters.to` to `["*@speakasap.com"]` so all inbound emails to any @speakasap.com address (including contact@) are delivered to Helpdesk.
   - Usage: `./scripts/update-helpdesk-subscription-filter.sh`
   - On prod: `ssh statex 'cd ~/notifications-microservice && ./scripts/update-helpdesk-subscription-filter.sh'`
+- **`trace-webhook-flow.sh`** - Print recent logs for the inbound-email → webhook delivery flow to find where it hangs when a ticket does not appear. See also `docs/TRACE_WEBHOOK_HANG.md`.
+  - Usage: `./scripts/trace-webhook-flow.sh` or `LINES=500 ./scripts/trace-webhook-flow.sh`
+  - On prod: `ssh statex 'cd ~/notifications-microservice && ./scripts/trace-webhook-flow.sh'`
 
 ### S3 Event Notifications
 
