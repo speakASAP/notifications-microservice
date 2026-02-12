@@ -31,6 +31,7 @@ services:
       - WHATSAPP_API_URL=${WHATSAPP_API_URL:-https://graph.facebook.com/v18.0}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - LOGGING_SERVICE_URL=${LOGGING_SERVICE_URL:-http://logging-microservice:${LOGGING_SERVICE_PORT:-3367}}
+      - NODE_OPTIONS=${NODE_OPTIONS:---max-old-space-size=512}
     volumes:
       - /srv/storagebox/statex/docker-volumes/notifications-microservice/logs:/app/logs
     networks:
@@ -38,9 +39,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 150M
+          memory: 768M
         reservations:
-          memory: 40M
+          memory: 128M
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:${PORT:-3368}/health"]
