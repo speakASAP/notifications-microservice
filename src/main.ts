@@ -30,12 +30,20 @@ async function bootstrap() {
     rawBody: true,
   });
 
-  // Serve web interface (landing + admin) - static files first so API routes still work
-  const webPath = path.join(process.cwd(), 'web');
-  app.use(express.static(webPath));
-
   // Configure body parser to handle text/plain as JSON (for AWS SNS)
+  // IMPORTANT: This must be registered BEFORE static middleware to prevent route interception
   app.use(express.text({ type: 'text/plain' }));
+
+  // Serve web interface (landing + admin) - static files AFTER body parser so API routes work
+  // Only serve static files for non-API routes to prevent interception
+  const webPath = path.join(process.cwd(), 'web');
+  app.use((req: any, res: any, next: any) => {
+    // Skip static file serving for API routes
+    if (req.path.startsWith('/email/') || req.path.startsWith('/api/') || req.path.startsWith('/admin/') || req.path.startsWith('/notifications/')) {
+      return next();
+    }
+    express.static(webPath)(req, res, next);
+  });
   app.use((req: any, res: any, next: any) => {
     // If content-type is text/plain, parse as JSON (for both /email/inbound and /email/inbound/s3)
     if ((req.path === '/email/inbound' || req.path === '/email/inbound/s3') && req.headers['content-type']?.includes('text/plain')) {
@@ -54,9 +62,14 @@ async function bootstrap() {
   app.use((req: any, res: any, next: any) => {
     if (req.path === '/email/inbound' || req.path === '/email/inbound/s3') {
       logger.log(`[MIDDLEWARE] ${req.method} ${req.path}`, 'RequestLogger');
-      logger.log(`[MIDDLEWARE] Headers: ${JSON.stringify(req.headers)}`, 'RequestLogger');
-      logger.log(`[MIDDLEWARE] Body: ${JSON.stringify(req.body)}`, 'RequestLogger');
-      logger.log(`[MIDDLEWARE] Body type: ${typeof req.body}`, 'RequestLogger');
+      // Log headers safely (avoid logging sensitive data)
+      const safeHeaders = { ...req.headers };
+      delete safeHeaders.authorization;
+      delete safeHeaders.cookie;
+      logger.log(`[MIDDLEWARE] Headers: ${JSON.stringify(safeHeaders)}`, 'RequestLogger');
+      // Log body summary instead of full body to avoid blocking
+      const bodySummary = req.body ? (typeof req.body === 'string' ? `string(${req.body.length} chars)` : `object(${JSON.stringify(req.body).length} chars)`) : 'null';
+      logger.log(`[MIDDLEWARE] Body type: ${typeof req.body}, summary: ${bodySummary}`, 'RequestLogger');
     }
     next();
   });
