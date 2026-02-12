@@ -272,12 +272,14 @@
       function showLogin() {
         hide(document.getElementById('dashboard-view'));
         show(document.getElementById('login-view'));
+        currentHistoryFilter = null;
         renderHeader(false);
       }
 
       function showDashboard() {
         hide(document.getElementById('login-view'));
         show(document.getElementById('dashboard-view'));
+        currentHistoryFilter = null;
         renderHeader(true);
         loadStats();
         loadHistory(false);
