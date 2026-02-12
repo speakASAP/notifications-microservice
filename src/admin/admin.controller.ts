@@ -51,6 +51,10 @@ export class AdminController {
   async getHistory(
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
+    @Query('direction') direction?: string,
+    @Query('channel') channel?: string,
+    @Query('status') status?: string,
+    @Query('timeframe') timeframe?: string,
   ) {
     try {
       const limitNum = limit ? Number(limit) : 50;
@@ -69,8 +73,8 @@ export class AdminController {
         limit: fetchSize,
       });
 
-      // Combine and sort by date (newest first), then apply pagination
-      const combined = [
+      // Combine and sort by date (newest first)
+      let combined = [
         ...notifications.map((n) => ({
           id: n.id,
           channel: n.channel,
@@ -94,10 +98,52 @@ export class AdminController {
           direction: 'inbound' as const,
         })),
       ]
-        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-        .slice(offsetNum, offsetNum + limitNum);
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-      return ApiResponseUtil.success(combined);
+      // Optional filtering by direction (inbound/outbound)
+      if (direction) {
+        const dir = direction.toLowerCase();
+        if (dir === 'inbound' || dir === 'outbound') {
+          combined = combined.filter((item) => item.direction === dir);
+        }
+      }
+
+      // Optional filtering by channel (email, telegram, whatsapp, etc.)
+      if (channel) {
+        const ch = channel.toLowerCase();
+        combined = combined.filter(
+          (item) => (item.channel || '').toLowerCase() === ch,
+        );
+      }
+
+      // Optional filtering by status (pending, sent, failed, etc.)
+      if (status) {
+        const st = status.toLowerCase();
+        combined = combined.filter(
+          (item) => (item.status || '').toLowerCase() === st,
+        );
+      }
+
+      // Optional timeframe filtering (e.g. last 24h, last 7d)
+      if (timeframe) {
+        const now = new Date();
+        let threshold: Date | null = null;
+
+        if (timeframe === '24h') {
+          threshold = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        } else if (timeframe === '7d' || timeframe === '7days') {
+          threshold = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        }
+
+        if (threshold) {
+          combined = combined.filter((item) => item.createdAt >= threshold);
+        }
+      }
+
+      // Apply pagination after filtering
+      const paged = combined.slice(offsetNum, offsetNum + limitNum);
+
+      return ApiResponseUtil.success(paged);
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       throw new HttpException(
