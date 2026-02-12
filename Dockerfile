@@ -33,5 +33,8 @@ COPY --from=builder /app/node_modules ./node_modules
 # Expose port (default: 3368, configured via PORT env var)
 EXPOSE ${PORT:-3368}
 
+# Set Node.js memory limit (can be overridden via NODE_OPTIONS env var)
+ENV NODE_OPTIONS="--max-old-space-size=512"
+
 # Start application
 CMD ["node", "dist/src/main"]
