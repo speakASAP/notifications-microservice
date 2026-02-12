@@ -74,7 +74,7 @@ export class AdminController {
       });
 
       // Combine and sort by date (newest first)
-      let combined = [
+      const baseCombined = [
         ...notifications.map((n) => ({
           id: n.id,
           channel: n.channel,
@@ -99,6 +99,15 @@ export class AdminController {
         })),
       ]
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+      // Fast path: no filters → behave exactly as before (only sort + paginate)
+      if (!direction && !channel && !status && !timeframe) {
+        const fastPaged = baseCombined.slice(offsetNum, offsetNum + limitNum);
+        return ApiResponseUtil.success(fastPaged);
+      }
+
+      // When filters are present, work on a mutable copy
+      let combined = baseCombined;
 
       // Optional filtering by direction (inbound/outbound)
       if (direction) {
