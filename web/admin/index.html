@@ -225,6 +225,7 @@
       const TOKEN_KEY = 'notifications_admin_token';
       const REFRESH_KEY = 'notifications_admin_refresh';
       let authServicePublicUrl = '';
+      let currentHistoryFilter = null;
 
       function getOrigin() {
         return window.location.origin;
@@ -327,20 +328,37 @@
           if (!json.success) { el.textContent = json.error?.message || 'Failed to load stats'; return; }
           const d = json.data;
           grid.innerHTML =
-            '<div class="stat"><span class="value">' + (d.total ?? 0) + '</span><span class="label">Total (sent)</span></div>' +
-            '<div class="stat"><span class="value">' + (d.receivedTotal ?? 0) + '</span><span class="label">Received</span></div>' +
-            '<div class="stat"><span class="value">' + (d.last24h ?? 0) + '</span><span class="label">Last 24h (sent)</span></div>' +
-            '<div class="stat"><span class="value">' + (d.receivedLast24h ?? 0) + '</span><span class="label">Received 24h</span></div>' +
-            '<div class="stat"><span class="value">' + (d.last7d ?? 0) + '</span><span class="label">Last 7 days (sent)</span></div>' +
-            '<div class="stat"><span class="value">' + (d.receivedLast7d ?? 0) + '</span><span class="label">Received 7d</span></div>' +
+            '<div class="stat" data-direction="outbound"><span class="value">' + (d.total ?? 0) + '</span><span class="label">Total (sent)</span></div>' +
+            '<div class="stat" data-direction="inbound"><span class="value">' + (d.receivedTotal ?? 0) + '</span><span class="label">Received</span></div>' +
+            '<div class="stat" data-direction="outbound" data-timeframe="24h"><span class="value">' + (d.last24h ?? 0) + '</span><span class="label">Last 24h (sent)</span></div>' +
+            '<div class="stat" data-direction="inbound" data-timeframe="24h"><span class="value">' + (d.receivedLast24h ?? 0) + '</span><span class="label">Received 24h</span></div>' +
+            '<div class="stat" data-direction="outbound" data-timeframe="7d"><span class="value">' + (d.last7d ?? 0) + '</span><span class="label">Last 7 days (sent)</span></div>' +
+            '<div class="stat" data-direction="inbound" data-timeframe="7d"><span class="value">' + (d.receivedLast7d ?? 0) + '</span><span class="label">Received 7d</span></div>' +
             (d.byChannel ? Object.entries(d.byChannel).map(function (e) {
-              return '<div class="stat"><span class="value">' + e[1] + '</span><span class="label">' + e[0] + '</span></div>';
+              return '<div class="stat" data-direction="outbound" data-channel="' + e[0] + '"><span class="value">' + e[1] + '</span><span class="label">' + e[0] + '</span></div>';
             }).join('') : '') +
             (d.byStatus ? Object.entries(d.byStatus).map(function (e) {
-              return '<div class="stat"><span class="value">' + e[1] + '</span><span class="label">' + e[0] + '</span></div>';
+              return '<div class="stat" data-direction="outbound" data-status="' + e[0] + '"><span class="value">' + e[1] + '</span><span class="label">' + e[0] + '</span></div>';
             }).join('') : '');
           el.textContent = '';
           show(grid);
+          // Attach click handlers for filtering history by statistic
+          Array.from(grid.querySelectorAll('.stat')).forEach(function(statEl) {
+            statEl.onclick = function() {
+              const dir = statEl.getAttribute('data-direction') || '';
+              const channel = statEl.getAttribute('data-channel') || '';
+              const status = statEl.getAttribute('data-status') || '';
+              const timeframe = statEl.getAttribute('data-timeframe') || '';
+              currentHistoryFilter = {
+                direction: dir || null,
+                channel: channel || null,
+                status: status || null,
+                timeframe: timeframe || null,
+              };
+              historyOffset = 0;
+              loadHistory(false);
+            };
+          });
         } catch (e) {
           el.textContent = 'Error: ' + (e.message || 'Could not load stats');
         }
@@ -362,7 +380,22 @@
             allHistoryItems = [];
             tbody.innerHTML = '';
           }
-          const r = await api('/admin/history?limit=' + historyLimit + '&offset=' + historyOffset);
+          let url = '/admin/history?limit=' + historyLimit + '&offset=' + historyOffset;
+          if (currentHistoryFilter) {
+            if (currentHistoryFilter.direction) {
+              url += '&direction=' + encodeURIComponent(currentHistoryFilter.direction);
+            }
+            if (currentHistoryFilter.channel) {
+              url += '&channel=' + encodeURIComponent(currentHistoryFilter.channel);
+            }
+            if (currentHistoryFilter.status) {
+              url += '&status=' + encodeURIComponent(currentHistoryFilter.status);
+            }
+            if (currentHistoryFilter.timeframe) {
+              url += '&timeframe=' + encodeURIComponent(currentHistoryFilter.timeframe);
+            }
+          }
+          const r = await api(url);
           if (r.status === 401) { showLogin(); return; }
           const json = await r.json();
           if (!json.success) { content.textContent = json.error?.message || 'Failed to load history'; return; }
@@ -395,7 +428,7 @@
           } else {
             hide(loadMoreBtn);
           }
-          historyInfo.textContent = 'Showing ' + allHistoryItems.length + ' messages.';
+          historyInfo.textContent = 'Showing ' + allHistoryItems.length + ' messages' + (currentHistoryFilter ? ' (filtered)' : '') + '.';
           // Add click handlers to rows
           Array.from(tbody.querySelectorAll('tr')).forEach(function(tr) {
             tr.onclick = function() {

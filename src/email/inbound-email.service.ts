@@ -1312,6 +1312,13 @@ export class InboundEmailService {
           normalized[key.toLowerCase().trim()] = value.trim();
         }
       }
+      const entriesPreview = Object.entries(normalized)
+        .map(([from, to]) => `${from} -> ${to}`)
+        .join(', ');
+      this.logger.log(
+        `[FORWARD] Loaded EMAIL_FORWARDING_RULES: count=${Object.keys(normalized).length} rules=${entriesPreview || 'none'}`,
+        'InboundEmailService',
+      );
       return normalized;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -1328,8 +1335,9 @@ export class InboundEmailService {
     const recipientKey = this.normalizeRecipientForForwarding(email.to);
     const forwardTo = recipientKey ? forwardingRules[recipientKey] : undefined;
     const rulesCount = Object.keys(forwardingRules).length;
+    const rawMessageId = email.rawData?.mail?.messageId || email.rawData?.messageId || 'n/a';
     this.logger.log(
-      `[FORWARD] Check to="${email.to}" normalizedKey="${recipientKey}" rulesCount=${rulesCount} forwardTo=${forwardTo || 'none'}`,
+      `[FORWARD] Check emailId=${email.id || 'n/a'} messageId=${rawMessageId} to="${email.to}" normalizedKey="${recipientKey}" rulesCount=${rulesCount} forwardTo=${forwardTo || 'none'}`,
       'InboundEmailService',
     );
 
@@ -1342,7 +1350,10 @@ export class InboundEmailService {
       return; // No forwarding rule for this recipient
     }
 
-    this.logger.log(`[FORWARD] Forwarding email from ${email.to} to ${forwardTo}`, 'InboundEmailService');
+    this.logger.log(
+      `[FORWARD] Forwarding email id=${email.id || 'n/a'} messageId=${rawMessageId} from=${email.from} to=${email.to} -> ${forwardTo}`,
+      'InboundEmailService',
+    );
 
     try {
       // SES max message size: 40MB (v2 default). Raw MIME over that cannot be sent in one go.
@@ -1352,6 +1363,10 @@ export class InboundEmailService {
       const rawWithinSesLimit = rawContent && rawDecodedSizeEst <= SES_MAX_RAW_DECODED_BYTES;
 
       if (rawWithinSesLimit) {
+        this.logger.log(
+          `[FORWARD] Using raw SES forward path: decodedSizeBytes=${rawDecodedSizeEst} to=${forwardTo}`,
+          'InboundEmailService',
+        );
         await this.emailService.send({
           to: forwardTo,
           subject: email.subject || '(no subject)',
@@ -1372,6 +1387,10 @@ export class InboundEmailService {
 
       // Fallback: forward body only (no attachments when over SES limit, or when no raw)
       const originalBody = email.bodyHtml || email.bodyText || '';
+      this.logger.log(
+        `[FORWARD] Using body-only forward path: provider=auto contentType=${email.bodyHtml ? 'text/html' : 'text/plain'} bodyLength=${originalBody.length} to=${forwardTo}`,
+        'InboundEmailService',
+      );
       await this.emailService.send({
         to: forwardTo,
         subject: email.subject || '(no subject)',
