@@ -7,6 +7,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Notification } from '../../src/notifications/entities/notification.entity';
 import { InboundEmail } from '../../src/email/entities/inbound-email.entity';
 import { WebhookSubscription } from '../../src/email/entities/webhook-subscription.entity';
+import { WebhookDelivery } from '../../src/email/entities/webhook-delivery.entity';
 
 @Module({
   imports: [
@@ -17,7 +18,7 @@ import { WebhookSubscription } from '../../src/email/entities/webhook-subscripti
       username: process.env.DB_USER || 'dbadmin',
       password: process.env.DB_PASSWORD || '',
       database: process.env.DB_NAME || 'notifications',
-      entities: [Notification, InboundEmail, WebhookSubscription],
+      entities: [Notification, InboundEmail, WebhookSubscription, WebhookDelivery],
       migrations: ['dist/src/migrations/*.js'],
       migrationsRun: process.env.RUN_MIGRATIONS === 'true',
       synchronize: process.env.DB_SYNC === 'true',
