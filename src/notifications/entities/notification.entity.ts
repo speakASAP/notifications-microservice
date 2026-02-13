@@ -42,12 +42,14 @@ export class Notification {
     type: 'varchar',
     length: 20,
   })
+  @Index('idx_notifications_channel')
   channel: NotificationChannel;
 
   @Column({
     type: 'varchar',
     length: 50,
   })
+  @Index('idx_notifications_type')
   type: NotificationType;
 
   @Column({

@@ -11,11 +11,13 @@ import {
   UseGuards,
   HttpException,
   HttpStatus,
+  Inject,
 } from '@nestjs/common';
 import { NotificationsService } from '../notifications/notifications.service';
 import { InboundEmailService } from '../email/inbound-email.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { ApiResponseUtil } from '../../shared/utils/api-response.util';
+import { LoggerService } from '../../shared/logger/logger.service';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard)
@@ -23,15 +25,43 @@ export class AdminController {
   constructor(
     private readonly notificationsService: NotificationsService,
     private readonly inboundEmailService: InboundEmailService,
+    @Inject(LoggerService)
+    private readonly logger: LoggerService,
   ) {}
 
   @Get('stats')
   async getStats() {
+    const requestStart = Date.now();
+    this.logger.log(
+      `[AdminController] getStats() - START`,
+      'AdminController',
+    );
     try {
       const [outboundStats, inboundCount] = await Promise.all([
-        this.notificationsService.getStats(),
-        this.inboundEmailService.getInboundCount(),
+        (async () => {
+          const t0 = Date.now();
+          const s = await this.notificationsService.getStats();
+          this.logger.log(
+            `[AdminController] getStats() - outbound (getStats) completed in ${Date.now() - t0}ms`,
+            'AdminController',
+          );
+          return s;
+        })(),
+        (async () => {
+          const t0 = Date.now();
+          const c = await this.inboundEmailService.getInboundCount();
+          this.logger.log(
+            `[AdminController] getStats() - inbound (getInboundCount) completed in ${Date.now() - t0}ms`,
+            'AdminController',
+          );
+          return c;
+        })(),
       ]);
+      const totalMs = Date.now() - requestStart;
+      this.logger.log(
+        `[AdminController] getStats() - END success totalTimeMs=${totalMs}`,
+        'AdminController',
+      );
       return ApiResponseUtil.success({
         ...outboundStats,
         receivedTotal: inboundCount.total,
@@ -39,7 +69,15 @@ export class AdminController {
         receivedLast7d: inboundCount.last7d,
       });
     } catch (error: unknown) {
+      const totalMs = Date.now() - requestStart;
       const msg = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.log(
+        `[AdminController] getStats() - END failed after ${totalMs}ms: ${msg}`,
+        'AdminController',
+      );
+      if (error instanceof Error && error.stack) {
+        this.logger.error(`[AdminController] getStats() error`, error.stack, 'AdminController');
+      }
       throw new HttpException(
         ApiResponseUtil.error('STATS_FAILED', msg),
         HttpStatus.INTERNAL_SERVER_ERROR,
