@@ -38,7 +38,11 @@ async function bootstrap() {
   // Only serve static files for non-API routes to prevent interception
   const webPath = path.join(process.cwd(), 'web');
   app.use((req: any, res: any, next: any) => {
-    // Skip static file serving for API routes
+    // Serve admin/index.html for /admin/ requests (exact match or trailing slash)
+    if (req.path === '/admin' || req.path === '/admin/') {
+      return res.sendFile(path.join(webPath, 'admin', 'index.html'));
+    }
+    // Skip static file serving for API routes (but allow /admin/ to be served above)
     if (req.path.startsWith('/email/') || req.path.startsWith('/api/') || req.path.startsWith('/admin/') || req.path.startsWith('/notifications/')) {
       return next();
     }

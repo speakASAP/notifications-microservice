@@ -1670,6 +1670,8 @@ export class InboundEmailService {
     excludeTo?: string[];
     status?: string;
   }): Promise<InboundEmailSummary[]> {
+    this.logger.log(`[SERVICE] ===== findInboundEmails START =====`, 'InboundEmailService');
+    this.logger.log(`[SERVICE] Filters: ${JSON.stringify(filters)}`, 'InboundEmailService');
     const queryBuilder = this.inboundEmailRepository.createQueryBuilder('email');
 
     // Filter by status
@@ -1703,10 +1705,13 @@ export class InboundEmailService {
       queryBuilder.take(filters.limit);
     }
 
+    this.logger.log(`[SERVICE] Executing database query...`, 'InboundEmailService');
     const emails = await queryBuilder.getMany();
+    this.logger.log(`[SERVICE] ✅ Database query completed, found ${emails.length} emails`, 'InboundEmailService');
 
     // Format response to match webhook payload format
-    return emails.map((email) => ({
+    this.logger.log(`[SERVICE] Formatting response...`, 'InboundEmailService');
+    const result = emails.map((email) => ({
       id: email.id,
       from: email.from,
       to: email.to,
@@ -1718,6 +1723,8 @@ export class InboundEmailService {
       messageId: email.rawData?.mail?.messageId || `inbound-${email.id}`,
       status: email.status,
     }));
+    this.logger.log(`[SERVICE] ===== findInboundEmails END (SUCCESS) =====`, 'InboundEmailService');
+    return result;
   }
 
   /**
