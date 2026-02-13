@@ -235,9 +235,33 @@
         return sessionStorage.getItem(TOKEN_KEY);
       }
 
+      function getRefreshToken() {
+        return sessionStorage.getItem(REFRESH_KEY);
+      }
+
       function setTokens(access, refresh) {
         sessionStorage.setItem(TOKEN_KEY, access);
         if (refresh) sessionStorage.setItem(REFRESH_KEY, refresh);
+      }
+
+      /** Try to refresh access token using refresh token. Returns true if new tokens set. */
+      async function tryRefresh() {
+        const refreshToken = getRefreshToken();
+        if (!refreshToken || !authServicePublicUrl) return false;
+        try {
+          const r = await fetch(authServicePublicUrl + '/auth/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken: refreshToken }),
+          });
+          if (!r.ok) return false;
+          const data = await r.json();
+          if (data.accessToken) {
+            setTokens(data.accessToken, data.refreshToken || refreshToken);
+            return true;
+          }
+        } catch (e) { /* ignore */ }
+        return false;
       }
 
       function clearTokens() {
@@ -313,11 +337,19 @@
         }
       }
 
-      function api(path, options) {
+      /** Call admin API; on 401 tries refresh once and retries. Returns fetch Response. */
+      async function api(path, options) {
         const token = getToken();
         const h = options && options.headers ? { ...options.headers } : {};
         if (token) h['Authorization'] = 'Bearer ' + token;
-        return fetch(getOrigin() + path, { ...options, headers: { ...h, 'Content-Type': 'application/json' } });
+        let r = await fetch(getOrigin() + path, { ...options, headers: { ...h, 'Content-Type': 'application/json' } });
+        if (r.status === 401 && (await tryRefresh())) {
+          const newToken = getToken();
+          const newH = options && options.headers ? { ...options.headers } : {};
+          if (newToken) newH['Authorization'] = 'Bearer ' + newToken;
+          r = await fetch(getOrigin() + path, { ...options, headers: { ...newH, 'Content-Type': 'application/json' } });
+        }
+        return r;
       }
 
       async function loadStats() {
