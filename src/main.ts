@@ -37,7 +37,7 @@ async function bootstrap() {
   // Serve web interface (landing + admin) - static files AFTER body parser so API routes work
   // Only serve static files for non-API routes to prevent interception
   const webPath = path.join(process.cwd(), 'web');
-  app.use((req: any, res: any, next: any) => {
+  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
     // Serve admin/index.html for /admin/ requests (exact match or trailing slash)
     if (req.path === '/admin' || req.path === '/admin/') {
       return res.sendFile(path.join(webPath, 'admin', 'index.html'));
@@ -48,7 +48,7 @@ async function bootstrap() {
     }
     express.static(webPath)(req, res, next);
   });
-  app.use((req: any, res: any, next: any) => {
+  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
     // If content-type is text/plain, parse as JSON (for both /email/inbound and /email/inbound/s3)
     if ((req.path === '/email/inbound' || req.path === '/email/inbound/s3') && req.headers['content-type']?.includes('text/plain')) {
       try {
@@ -63,7 +63,7 @@ async function bootstrap() {
   });
 
   // Logging middleware for debugging
-  app.use((req: any, res: any, next: any) => {
+  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (req.path === '/email/inbound' || req.path === '/email/inbound/s3') {
       logger.log(`[MIDDLEWARE] ${req.method} ${req.path}`, 'RequestLogger');
       // Log headers safely (avoid logging sensitive data)
