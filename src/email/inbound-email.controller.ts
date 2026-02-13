@@ -227,6 +227,8 @@ export class InboundEmailController {
     @Query('excludeTo') excludeTo?: string | string[],
     @Query('status') status?: string,
   ): Promise<{ success: boolean; data: InboundEmailSummary[]; count: number }> {
+    this.logger.log(`[CONTROLLER] ===== GET /email/inbound START =====`, 'InboundEmailController');
+    this.logger.log(`[CONTROLLER] Query params: limit=${limit}, offset=${offset}, toFilter=${toFilter}, excludeTo=${excludeTo}, status=${status}`, 'InboundEmailController');
     try {
       const limitNum = limit ? parseInt(limit, 10) : 100;
       const safeLimit =
@@ -244,6 +246,8 @@ export class InboundEmailController {
         status: statusFilter,
       });
 
+      this.logger.log(`[CONTROLLER] ✅ Found ${emails.length} emails`, 'InboundEmailController');
+      this.logger.log(`[CONTROLLER] ===== GET /email/inbound END (SUCCESS) =====`, 'InboundEmailController');
       return {
         success: true,
         data: emails,
@@ -251,7 +255,8 @@ export class InboundEmailController {
       };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Error getting inbound emails: ${errorMessage}`, undefined, 'InboundEmailController');
+      this.logger.error(`[CONTROLLER] ❌ Error getting inbound emails: ${errorMessage}`, undefined, 'InboundEmailController');
+      this.logger.log(`[CONTROLLER] ===== GET /email/inbound END (ERROR) =====`, 'InboundEmailController');
       throw error;
     }
   }
