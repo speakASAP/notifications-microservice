@@ -256,7 +256,8 @@ export class NotificationsService {
   }
 
   /**
-   * Get aggregated statistics for all notifications (for admin panel)
+   * Get aggregated statistics for all notifications (for admin panel).
+   * All DB queries run in parallel to minimize response time.
    */
   async getStats(): Promise<{
     total: number;
@@ -266,52 +267,108 @@ export class NotificationsService {
     last24h: number;
     last7d: number;
   }> {
-    const total = await this.notificationRepository.count();
+    const statsStart = Date.now();
+    this.logger.log(
+      `[NotificationsService] getStats() - START`,
+      'NotificationsService',
+    );
 
-    const channelRows = await this.notificationRepository
-      .createQueryBuilder('n')
-      .select('n.channel', 'channel')
-      .addSelect('COUNT(*)', 'count')
-      .groupBy('n.channel')
-      .getRawMany<{ channel: string; count: string }>();
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const [total, channelRows, statusRows, typeRows, last24h, last7d] = await Promise.all([
+      (async () => {
+        const t0 = Date.now();
+        const c = await this.notificationRepository.count();
+        this.logger.log(
+          `[NotificationsService] getStats() - total count completed in ${Date.now() - t0}ms, value=${c}`,
+          'NotificationsService',
+        );
+        return c;
+      })(),
+      this.notificationRepository
+        .createQueryBuilder('n')
+        .select('n.channel', 'channel')
+        .addSelect('COUNT(*)', 'count')
+        .groupBy('n.channel')
+        .getRawMany<{ channel: string; count: string }>()
+        .then((rows) => {
+          this.logger.log(
+            `[NotificationsService] getStats() - byChannel query completed, rows=${rows.length}`,
+            'NotificationsService',
+          );
+          return rows;
+        }),
+      this.notificationRepository
+        .createQueryBuilder('n')
+        .select('n.status', 'status')
+        .addSelect('COUNT(*)', 'count')
+        .groupBy('n.status')
+        .getRawMany<{ status: string; count: string }>()
+        .then((rows) => {
+          this.logger.log(
+            `[NotificationsService] getStats() - byStatus query completed, rows=${rows.length}`,
+            'NotificationsService',
+          );
+          return rows;
+        }),
+      this.notificationRepository
+        .createQueryBuilder('n')
+        .select('n.type', 'type')
+        .addSelect('COUNT(*)', 'count')
+        .groupBy('n.type')
+        .getRawMany<{ type: string; count: string }>()
+        .then((rows) => {
+          this.logger.log(
+            `[NotificationsService] getStats() - byType query completed, rows=${rows.length}`,
+            'NotificationsService',
+          );
+          return rows;
+        }),
+      (async () => {
+        const t0 = Date.now();
+        const c = await this.notificationRepository
+          .createQueryBuilder('n')
+          .where('n.createdAt >= :date', { date: oneDayAgo })
+          .getCount();
+        this.logger.log(
+          `[NotificationsService] getStats() - last24h count completed in ${Date.now() - t0}ms, value=${c}`,
+          'NotificationsService',
+        );
+        return c;
+      })(),
+      (async () => {
+        const t0 = Date.now();
+        const c = await this.notificationRepository
+          .createQueryBuilder('n')
+          .where('n.createdAt >= :date', { date: sevenDaysAgo })
+          .getCount();
+        this.logger.log(
+          `[NotificationsService] getStats() - last7d count completed in ${Date.now() - t0}ms, value=${c}`,
+          'NotificationsService',
+        );
+        return c;
+      })(),
+    ]);
+
     const byChannel: Record<string, number> = {};
     channelRows.forEach((r) => {
       byChannel[r.channel] = parseInt(r.count, 10);
     });
-
-    const statusRows = await this.notificationRepository
-      .createQueryBuilder('n')
-      .select('n.status', 'status')
-      .addSelect('COUNT(*)', 'count')
-      .groupBy('n.status')
-      .getRawMany<{ status: string; count: string }>();
     const byStatus: Record<string, number> = {};
     statusRows.forEach((r) => {
       byStatus[r.status] = parseInt(r.count, 10);
     });
-
-    const typeRows = await this.notificationRepository
-      .createQueryBuilder('n')
-      .select('n.type', 'type')
-      .addSelect('COUNT(*)', 'count')
-      .groupBy('n.type')
-      .getRawMany<{ type: string; count: string }>();
     const byType: Record<string, number> = {};
     typeRows.forEach((r) => {
       byType[r.type] = parseInt(r.count, 10);
     });
 
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const last24h = await this.notificationRepository
-      .createQueryBuilder('n')
-      .where('n.createdAt >= :date', { date: oneDayAgo })
-      .getCount();
-    const last7d = await this.notificationRepository
-      .createQueryBuilder('n')
-      .where('n.createdAt >= :date', { date: sevenDaysAgo })
-      .getCount();
-
+    const totalMs = Date.now() - statsStart;
+    this.logger.log(
+      `[NotificationsService] getStats() - END total=${total} last24h=${last24h} last7d=${last7d} totalTimeMs=${totalMs}`,
+      'NotificationsService',
+    );
     return { total, byChannel, byStatus, byType, last24h, last7d };
   }
 

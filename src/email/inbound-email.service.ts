@@ -1643,20 +1643,56 @@ export class InboundEmailService {
   }
 
   /**
-   * Get inbound email counts for admin stats (total, last 24h, last 7 days)
+   * Get inbound email counts for admin stats (total, last 24h, last 7 days).
+   * All counts run in parallel to minimize response time.
    */
   async getInboundCount(): Promise<{ total: number; last24h: number; last7d: number }> {
-    const total = await this.inboundEmailRepository.count();
+    const start = Date.now();
+    this.logger.log(`[InboundEmailService] getInboundCount() - START`, 'InboundEmailService');
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const last24h = await this.inboundEmailRepository
-      .createQueryBuilder('e')
-      .where('e.receivedAt >= :date', { date: oneDayAgo })
-      .getCount();
-    const last7d = await this.inboundEmailRepository
-      .createQueryBuilder('e')
-      .where('e.receivedAt >= :date', { date: sevenDaysAgo })
-      .getCount();
+
+    const [total, last24h, last7d] = await Promise.all([
+      (async () => {
+        const t0 = Date.now();
+        const c = await this.inboundEmailRepository.count();
+        this.logger.log(
+          `[InboundEmailService] getInboundCount() - total completed in ${Date.now() - t0}ms, value=${c}`,
+          'InboundEmailService',
+        );
+        return c;
+      })(),
+      (async () => {
+        const t0 = Date.now();
+        const c = await this.inboundEmailRepository
+          .createQueryBuilder('e')
+          .where('e.receivedAt >= :date', { date: oneDayAgo })
+          .getCount();
+        this.logger.log(
+          `[InboundEmailService] getInboundCount() - last24h completed in ${Date.now() - t0}ms, value=${c}`,
+          'InboundEmailService',
+        );
+        return c;
+      })(),
+      (async () => {
+        const t0 = Date.now();
+        const c = await this.inboundEmailRepository
+          .createQueryBuilder('e')
+          .where('e.receivedAt >= :date', { date: sevenDaysAgo })
+          .getCount();
+        this.logger.log(
+          `[InboundEmailService] getInboundCount() - last7d completed in ${Date.now() - t0}ms, value=${c}`,
+          'InboundEmailService',
+        );
+        return c;
+      })(),
+    ]);
+
+    const totalMs = Date.now() - start;
+    this.logger.log(
+      `[InboundEmailService] getInboundCount() - END total=${total} last24h=${last24h} last7d=${last7d} totalTimeMs=${totalMs}`,
+      'InboundEmailService',
+    );
     return { total, last24h, last7d };
   }
 
