@@ -354,23 +354,24 @@
 
       /** Parse response as JSON; on failure (e.g. HTML 502/504) return null and set friendly error. */
       async function parseJsonResponse(r, errorTargetEl, fallbackMessage) {
+        const text = await r.text();
         const ct = (r.headers.get('Content-Type') || '').toLowerCase();
-        if (ct.indexOf('application/json') === -1) {
-          const text = await r.text();
-          const msg = r.status >= 500
-            ? 'Server or gateway error (e.g. timeout). Try again.'
-            : (r.status ? 'Unexpected response (status ' + r.status + ').' : 'Invalid response.');
-          if (errorTargetEl) errorTargetEl.textContent = 'Error: ' + msg;
-          return null;
-        }
-        try {
-          return JSON.parse(await r.text());
-        } catch (e) {
-          if (errorTargetEl) {
-            errorTargetEl.textContent = 'Error: Invalid response from server (not JSON). ' + (fallbackMessage || '');
+        const looksLikeJson = ct.indexOf('application/json') !== -1 || (r.status >= 200 && r.status < 300);
+        if (looksLikeJson) {
+          try {
+            return JSON.parse(text);
+          } catch (e) {
+            if (errorTargetEl) {
+              errorTargetEl.textContent = 'Error: Invalid response from server (not JSON). ' + (fallbackMessage || '');
+            }
+            return null;
           }
-          return null;
         }
+        const msg = r.status >= 500
+          ? 'Server or gateway error (e.g. timeout). Try again.'
+          : (r.status ? 'Unexpected response (status ' + r.status + ').' : 'Invalid response.');
+        if (errorTargetEl) errorTargetEl.textContent = 'Error: ' + msg;
+        return null;
       }
 
       async function loadStats() {
