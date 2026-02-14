@@ -227,6 +227,7 @@ export class InboundEmailController {
     @Query('excludeTo') excludeTo?: string | string[],
     @Query('status') status?: string,
   ): Promise<{ success: boolean; data: InboundEmailSummary[]; count: number }> {
+    const t0 = Date.now();
     this.logger.log(`[CONTROLLER] ===== GET /email/inbound START =====`, 'InboundEmailController');
     this.logger.log(`[CONTROLLER] Query params: limit=${limit}, offset=${offset}, toFilter=${toFilter}, excludeTo=${excludeTo}, status=${status}`, 'InboundEmailController');
     try {
@@ -246,17 +247,19 @@ export class InboundEmailController {
         status: statusFilter,
       });
 
-      this.logger.log(`[CONTROLLER] ✅ Found ${emails.length} emails`, 'InboundEmailController');
-      this.logger.log(`[CONTROLLER] ===== GET /email/inbound END (SUCCESS) =====`, 'InboundEmailController');
+      const elapsed = Date.now() - t0;
+      this.logger.log(`[CONTROLLER] ✅ Found ${emails.length} emails in ${elapsed}ms`, 'InboundEmailController');
+      this.logger.log(`[CONTROLLER] ===== GET /email/inbound END (SUCCESS) totalMs=${elapsed} =====`, 'InboundEmailController');
       return {
         success: true,
         data: emails,
         count: emails.length,
       };
     } catch (error: unknown) {
+      const elapsed = Date.now() - t0;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`[CONTROLLER] ❌ Error getting inbound emails: ${errorMessage}`, undefined, 'InboundEmailController');
-      this.logger.log(`[CONTROLLER] ===== GET /email/inbound END (ERROR) =====`, 'InboundEmailController');
+      this.logger.error(`[CONTROLLER] ❌ Error getting inbound emails: ${errorMessage} (after ${elapsed}ms)`, undefined, 'InboundEmailController');
+      this.logger.log(`[CONTROLLER] ===== GET /email/inbound END (ERROR) totalMs=${elapsed} =====`, 'InboundEmailController');
       throw error;
     }
   }

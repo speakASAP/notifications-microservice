@@ -1706,6 +1706,7 @@ export class InboundEmailService {
     excludeTo?: string[];
     status?: string;
   }): Promise<InboundEmailSummary[]> {
+    const t0 = Date.now();
     this.logger.log(`[SERVICE] ===== findInboundEmails START =====`, 'InboundEmailService');
     this.logger.log(`[SERVICE] Filters: ${JSON.stringify(filters)}`, 'InboundEmailService');
     const queryBuilder = this.inboundEmailRepository.createQueryBuilder('email');
@@ -1742,8 +1743,10 @@ export class InboundEmailService {
     }
 
     this.logger.log(`[SERVICE] Executing database query...`, 'InboundEmailService');
+    const queryStart = Date.now();
     const emails = await queryBuilder.getMany();
-    this.logger.log(`[SERVICE] ✅ Database query completed, found ${emails.length} emails`, 'InboundEmailService');
+    const queryMs = Date.now() - queryStart;
+    this.logger.log(`[SERVICE] ✅ Database query completed in ${queryMs}ms, found ${emails.length} emails`, 'InboundEmailService');
 
     // Format response to match webhook payload format
     this.logger.log(`[SERVICE] Formatting response...`, 'InboundEmailService');
@@ -1759,7 +1762,8 @@ export class InboundEmailService {
       messageId: email.rawData?.mail?.messageId || `inbound-${email.id}`,
       status: email.status,
     }));
-    this.logger.log(`[SERVICE] ===== findInboundEmails END (SUCCESS) =====`, 'InboundEmailService');
+    const totalMs = Date.now() - t0;
+    this.logger.log(`[SERVICE] ===== findInboundEmails END (SUCCESS) totalMs=${totalMs} =====`, 'InboundEmailService');
     return result;
   }
 

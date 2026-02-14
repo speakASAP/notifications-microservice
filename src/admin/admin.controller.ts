@@ -97,8 +97,8 @@ export class AdminController {
     try {
       const limitNum = limit ? Number(limit) : 50;
       const offsetNum = offset ? Number(offset) : 0;
-      // Fetch enough from both so merged sort + slice is correct (avoid inbound pushed to later pages)
-      const fetchSize = Math.min(500, offsetNum + limitNum + 100);
+      // Fetch enough from both so merged sort + slice is correct; cap to avoid long queries/memory (max 30 items per request guideline)
+      const fetchSize = Math.min(150, offsetNum + limitNum + 100);
 
       // Get outbound notifications (fetchSize most recent, no skip)
       const notifications = await this.notificationsService.getHistory(
