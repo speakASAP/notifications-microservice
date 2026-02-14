@@ -274,8 +274,8 @@
 
       async function loadConfig() {
         const r = await fetch(getOrigin() + '/api/config');
-        const json = await r.json();
-        if (json.success && json.data) {
+        const json = await parseJsonResponse(r, null, '');
+        if (json && json.success && json.data) {
           authServicePublicUrl = (json.data.authServicePublicUrl || '').replace(/\/$/, '');
         }
       }
@@ -352,13 +352,35 @@
         return r;
       }
 
+      /** Parse response as JSON; on failure (e.g. HTML 502/504) return null and set friendly error. */
+      async function parseJsonResponse(r, errorTargetEl, fallbackMessage) {
+        const ct = (r.headers.get('Content-Type') || '').toLowerCase();
+        if (ct.indexOf('application/json') === -1) {
+          const text = await r.text();
+          const msg = r.status >= 500
+            ? 'Server or gateway error (e.g. timeout). Try again.'
+            : (r.status ? 'Unexpected response (status ' + r.status + ').' : 'Invalid response.');
+          if (errorTargetEl) errorTargetEl.textContent = 'Error: ' + msg;
+          return null;
+        }
+        try {
+          return JSON.parse(await r.text());
+        } catch (e) {
+          if (errorTargetEl) {
+            errorTargetEl.textContent = 'Error: Invalid response from server (not JSON). ' + (fallbackMessage || '');
+          }
+          return null;
+        }
+      }
+
       async function loadStats() {
         const el = document.getElementById('stats-content');
         const grid = document.getElementById('stats-grid');
         try {
           const r = await api('/admin/stats');
           if (r.status === 401) { showLogin(); return; }
-          const json = await r.json();
+          const json = await parseJsonResponse(r, el, 'Could not load stats');
+          if (!json) return;
           if (!json.success) { el.textContent = json.error?.message || 'Failed to load stats'; return; }
           const d = json.data;
           grid.innerHTML =
@@ -431,7 +453,8 @@
           }
           const r = await api(url);
           if (r.status === 401) { showLogin(); return; }
-          const json = await r.json();
+          const json = await parseJsonResponse(r, content, 'Could not load history');
+          if (!json) return;
           if (!json.success) { content.textContent = json.error?.message || 'Failed to load history'; return; }
           const list = json.data || [];
           if (!append) {
@@ -486,7 +509,8 @@
           modal.classList.add('show');
           const r = await api('/admin/message/' + id + '?type=' + (type === 'inbound' ? 'inbound' : 'notification'));
           if (r.status === 401) { showLogin(); modal.classList.remove('show'); return; }
-          const json = await r.json();
+          const json = await parseJsonResponse(r, modalBody, 'Could not load message details');
+          if (!json) { modalBody.innerHTML = '<div class="error-msg">Invalid response from server.</div>'; return; }
           if (!json.success) {
             modalBody.innerHTML = '<div class="error-msg">' + (json.error?.message || 'Failed to load message details') + '</div>';
             return;
@@ -539,7 +563,8 @@
         try {
           const r = await api('/admin/params');
           if (r.status === 401) { showLogin(); return; }
-          const json = await r.json();
+          const json = await parseJsonResponse(r, content, 'Could not load params');
+          if (!json) return;
           if (!json.success) { content.textContent = json.error?.message || 'Failed to load params'; return; }
           const d = json.data || {};
           list.innerHTML = Object.entries(d).map(function (e) {
