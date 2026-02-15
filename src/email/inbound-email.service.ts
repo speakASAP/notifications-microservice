@@ -1746,7 +1746,7 @@ export class InboundEmailService {
       queryBuilder.take(filters.limit);
     }
 
-    // listOnly: minimal columns (no body/attachments, no rawData) for fast list and to avoid rawData column reference (PostgreSQL column may be rawData or rawdata).
+    // listOnly: minimal columns only, use getMany() so we never reference rawData (avoids "column email.rawdata does not exist" on PG).
     if (listOnly) {
       queryBuilder.select([
         'email.id',
@@ -1756,46 +1756,52 @@ export class InboundEmailService {
         'email.receivedAt',
         'email.status',
       ]);
-    } else {
-      queryBuilder
-        .select([
-          'email.id',
-          'email.from',
-          'email.to',
-          'email.subject',
-          'email.bodyText',
-          'email.bodyHtml',
-          'email.attachments',
-          'email.receivedAt',
-          'email.status',
-        ])
-        .addSelect('email."rawData"->\'mail\'->>\'messageId\'', 'messageId');
+      this.logger.log(`[SERVICE] Executing database query (listOnly=true, getMany only)...`, 'InboundEmailService');
+      const queryStart = Date.now();
+      const emails = await queryBuilder.getMany();
+      const queryMs = Date.now() - queryStart;
+      this.logger.log(`[SERVICE] ✅ Database query completed in ${queryMs}ms, found ${emails.length} emails`, 'InboundEmailService');
+      this.logger.log(`[SERVICE] Formatting response (listOnly)...`, 'InboundEmailService');
+      const totalMs = Date.now() - t0;
+      const result = emails.map((email) => ({
+        id: email.id,
+        from: email.from,
+        to: email.to,
+        subject: email.subject || 'Email ticket',
+        bodyText: '',
+        bodyHtml: null,
+        attachments: [],
+        receivedAt: email.receivedAt,
+        messageId: `inbound-${email.id}`,
+        status: email.status,
+      }));
+      this.logger.log(`[SERVICE] ===== findInboundEmails END (SUCCESS) totalMs=${totalMs} =====`, 'InboundEmailService');
+      return result;
     }
 
-    this.logger.log(`[SERVICE] Executing database query (listOnly=${listOnly}, no rawData load)...`, 'InboundEmailService');
+    queryBuilder
+      .select([
+        'email.id',
+        'email.from',
+        'email.to',
+        'email.subject',
+        'email.bodyText',
+        'email.bodyHtml',
+        'email.attachments',
+        'email.receivedAt',
+        'email.status',
+      ])
+      .addSelect('email."rawData"->\'mail\'->>\'messageId\'', 'messageId');
+
+    this.logger.log(`[SERVICE] Executing database query (listOnly=false, with rawData messageId)...`, 'InboundEmailService');
     const queryStart = Date.now();
     const { entities: emails, raw: rawRows } = await queryBuilder.getRawAndEntities();
     const queryMs = Date.now() - queryStart;
     this.logger.log(`[SERVICE] ✅ Database query completed in ${queryMs}ms, found ${emails.length} emails`, 'InboundEmailService');
 
-    // Format response to match webhook payload format
     this.logger.log(`[SERVICE] Formatting response...`, 'InboundEmailService');
     const result = emails.map((email, i) => {
       const messageId = rawRows[i]?.messageId ?? `inbound-${email.id}`;
-      if (listOnly) {
-        return {
-          id: email.id,
-          from: email.from,
-          to: email.to,
-          subject: email.subject || 'Email ticket',
-          bodyText: '',
-          bodyHtml: null,
-          attachments: [],
-          receivedAt: email.receivedAt,
-          messageId,
-          status: email.status,
-        };
-      }
       return {
         id: email.id,
         from: email.from,
