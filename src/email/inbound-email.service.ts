@@ -1697,7 +1697,9 @@ export class InboundEmailService {
   }
 
   /**
-   * Find inbound emails with filters
+   * Find inbound emails with filters.
+   * When listOnly is true, returns minimal fields (id, from, to, subject, receivedAt, messageId, status) so the
+   * list response stays small and fast; caller can then fetch full email by ID (GET /email/inbound/:id).
    */
   async findInboundEmails(filters: {
     limit?: number;
@@ -1705,9 +1707,11 @@ export class InboundEmailService {
     toFilter?: string;
     excludeTo?: string[];
     status?: string;
+    listOnly?: boolean;
   }): Promise<InboundEmailSummary[]> {
     const t0 = Date.now();
-    this.logger.log(`[SERVICE] ===== findInboundEmails START =====`, 'InboundEmailService');
+    const listOnly = filters.listOnly === true;
+    this.logger.log(`[SERVICE] ===== findInboundEmails START (listOnly=${listOnly}) =====`, 'InboundEmailService');
     this.logger.log(`[SERVICE] Filters: ${JSON.stringify(filters)}`, 'InboundEmailService');
     const queryBuilder = this.inboundEmailRepository.createQueryBuilder('email');
 
@@ -1742,26 +1746,64 @@ export class InboundEmailService {
       queryBuilder.take(filters.limit);
     }
 
-    this.logger.log(`[SERVICE] Executing database query...`, 'InboundEmailService');
+    // listOnly: minimal columns (no body/attachments) for fast list; full: same as before (no rawData).
+    if (listOnly) {
+      queryBuilder
+        .select(['email.id', 'email.from', 'email.to', 'email.subject', 'email.receivedAt', 'email.status'])
+        .addSelect("email.rawData->'mail'->>'messageId'", 'messageId');
+    } else {
+      queryBuilder
+        .select([
+          'email.id',
+          'email.from',
+          'email.to',
+          'email.subject',
+          'email.bodyText',
+          'email.bodyHtml',
+          'email.attachments',
+          'email.receivedAt',
+          'email.status',
+        ])
+        .addSelect("email.rawData->'mail'->>'messageId'", 'messageId');
+    }
+
+    this.logger.log(`[SERVICE] Executing database query (listOnly=${listOnly}, no rawData load)...`, 'InboundEmailService');
     const queryStart = Date.now();
-    const emails = await queryBuilder.getMany();
+    const { entities: emails, raw: rawRows } = await queryBuilder.getRawAndEntities();
     const queryMs = Date.now() - queryStart;
     this.logger.log(`[SERVICE] ✅ Database query completed in ${queryMs}ms, found ${emails.length} emails`, 'InboundEmailService');
 
     // Format response to match webhook payload format
     this.logger.log(`[SERVICE] Formatting response...`, 'InboundEmailService');
-    const result = emails.map((email) => ({
-      id: email.id,
-      from: email.from,
-      to: email.to,
-      subject: email.subject || 'Email ticket',
-      bodyText: email.bodyText || '',
-      bodyHtml: email.bodyHtml || null,
-      attachments: email.attachments || [],
-      receivedAt: email.receivedAt,
-      messageId: email.rawData?.mail?.messageId || `inbound-${email.id}`,
-      status: email.status,
-    }));
+    const result = emails.map((email, i) => {
+      const messageId = rawRows[i]?.messageId ?? `inbound-${email.id}`;
+      if (listOnly) {
+        return {
+          id: email.id,
+          from: email.from,
+          to: email.to,
+          subject: email.subject || 'Email ticket',
+          bodyText: '',
+          bodyHtml: null,
+          attachments: [],
+          receivedAt: email.receivedAt,
+          messageId,
+          status: email.status,
+        };
+      }
+      return {
+        id: email.id,
+        from: email.from,
+        to: email.to,
+        subject: email.subject || 'Email ticket',
+        bodyText: email.bodyText || '',
+        bodyHtml: email.bodyHtml || null,
+        attachments: email.attachments || [],
+        receivedAt: email.receivedAt,
+        messageId,
+        status: email.status,
+      };
+    });
     const totalMs = Date.now() - t0;
     this.logger.log(`[SERVICE] ===== findInboundEmails END (SUCCESS) totalMs=${totalMs} =====`, 'InboundEmailService');
     return result;
