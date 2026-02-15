@@ -20,10 +20,10 @@ interface S3EndpointBody {
   key?: string;
 }
 
-/** Body for POST /email/inbound/delivery-confirmation (helpdesk callback) */
+/** Body for POST /email/inbound/delivery-confirmation (helpdesk callback). subscriptionId optional when status=delivered (e.g. email received via poll). */
 interface DeliveryConfirmationBody {
   inboundEmailId: string;
-  subscriptionId: string;
+  subscriptionId?: string | null;
   status: 'delivered' | 'failed';
   ticketId?: string | null;
   commentId?: string | null;
@@ -279,22 +279,33 @@ export class InboundEmailController {
     @Body() body: DeliveryConfirmationBody,
   ): Promise<{ success: boolean; message: string }> {
     try {
-      if (!body?.inboundEmailId || !body?.subscriptionId || !body?.status) {
+      if (!body?.inboundEmailId || !body?.status) {
         this.logger.warn(`[CONTROLLER] delivery-confirmation missing required fields`, 'InboundEmailController');
-        return { success: false, message: 'Missing inboundEmailId, subscriptionId, or status' };
+        return { success: false, message: 'Missing inboundEmailId or status' };
       }
       if (body.status !== 'delivered' && body.status !== 'failed') {
         return { success: false, message: "status must be 'delivered' or 'failed'" };
       }
-      const result = await this.webhookDeliveryService.confirmDelivery({
-        inboundEmailId: body.inboundEmailId,
-        subscriptionId: body.subscriptionId,
-        status: body.status,
-        ticketId: body.ticketId ?? null,
-        commentId: body.commentId ?? null,
-        error: body.error ?? null,
-      });
-      return result;
+      if (body.subscriptionId) {
+        const result = await this.webhookDeliveryService.confirmDelivery({
+          inboundEmailId: body.inboundEmailId,
+          subscriptionId: body.subscriptionId,
+          status: body.status,
+          ticketId: body.ticketId ?? null,
+          commentId: body.commentId ?? null,
+          error: body.error ?? null,
+        });
+        return result;
+      }
+      if (body.status === 'delivered') {
+        return await this.webhookDeliveryService.confirmDeliveryByInboundEmailIdOnly({
+          inboundEmailId: body.inboundEmailId,
+          status: 'delivered',
+          ticketId: body.ticketId ?? null,
+          commentId: body.commentId ?? null,
+        });
+      }
+      return { success: false, message: 'subscriptionId required when status is failed' };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Error in delivery-confirmation: ${errorMessage}`, undefined, 'InboundEmailController');

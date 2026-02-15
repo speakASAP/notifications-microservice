@@ -1734,6 +1734,11 @@ export class InboundEmailService {
       queryBuilder.andWhere('email.to NOT IN (:...excludeTo)', { excludeTo: filters.excludeTo });
     }
 
+    // Exclude emails already confirmed delivered to helpdesk (prevents duplicate tickets from poll_new_emails)
+    queryBuilder.andWhere(
+      `email.id NOT IN (SELECT wd.inbound_email_id FROM webhook_deliveries wd INNER JOIN webhook_subscriptions ws ON ws.id = wd.subscription_id WHERE ws."serviceName" = 'helpdesk' AND wd.status = 'delivered')`,
+    );
+
     // Order by receivedAt descending
     queryBuilder.orderBy('email.receivedAt', 'DESC');
 
