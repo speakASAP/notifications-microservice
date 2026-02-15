@@ -1746,11 +1746,16 @@ export class InboundEmailService {
       queryBuilder.take(filters.limit);
     }
 
-    // listOnly: minimal columns (no body/attachments) for fast list; full: same as before (no rawData).
+    // listOnly: minimal columns (no body/attachments, no rawData) for fast list and to avoid rawData column reference (PostgreSQL column may be rawData or rawdata).
     if (listOnly) {
-      queryBuilder
-        .select(['email.id', 'email.from', 'email.to', 'email.subject', 'email.receivedAt', 'email.status'])
-        .addSelect("email.rawData->'mail'->>'messageId'", 'messageId');
+      queryBuilder.select([
+        'email.id',
+        'email.from',
+        'email.to',
+        'email.subject',
+        'email.receivedAt',
+        'email.status',
+      ]);
     } else {
       queryBuilder
         .select([
@@ -1764,7 +1769,7 @@ export class InboundEmailService {
           'email.receivedAt',
           'email.status',
         ])
-        .addSelect("email.rawData->'mail'->>'messageId'", 'messageId');
+        .addSelect('email."rawData"->\'mail\'->>\'messageId\'', 'messageId');
     }
 
     this.logger.log(`[SERVICE] Executing database query (listOnly=${listOnly}, no rawData load)...`, 'InboundEmailService');
