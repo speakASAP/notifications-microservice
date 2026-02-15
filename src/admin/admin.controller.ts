@@ -94,6 +94,11 @@ export class AdminController {
     @Query('status') status?: string,
     @Query('timeframe') timeframe?: string,
   ) {
+    const requestStart = Date.now();
+    this.logger.log(
+      `[AdminController] getHistory() - START limit=${limit} offset=${offset}`,
+      'AdminController',
+    );
     try {
       const limitNum = limit ? Number(limit) : 50;
       const offsetNum = offset ? Number(offset) : 0;
@@ -106,12 +111,16 @@ export class AdminController {
         0,
       );
 
-      // Get inbound emails (same window so merge by date is correct)
+      // Get inbound emails (listOnly: true = no bodyHtml/bodyText/attachments; faster and smaller payload)
       const inboundEmails = await this.inboundEmailService.findInboundEmails({
         limit: fetchSize,
+        listOnly: true,
       });
 
-      // Combine and sort by date (newest first)
+      const toTime = (d: Date | null | undefined): number =>
+        d instanceof Date && !Number.isNaN(d.getTime()) ? d.getTime() : 0;
+
+      // Combine and sort by date (newest first); guard against null/undefined dates
       const baseCombined = [
         ...notifications.map((n) => ({
           id: n.id,
@@ -135,64 +144,86 @@ export class AdminController {
           updatedAt: e.receivedAt,
           direction: 'inbound' as const,
         })),
-      ]
-        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      ].sort((a, b) => toTime(b.createdAt) - toTime(a.createdAt));
 
       // Fast path: no filters → behave exactly as before (only sort + paginate)
-      if (!direction && !channel && !status && !timeframe) {
-        const fastPaged = baseCombined.slice(offsetNum, offsetNum + limitNum);
-        return ApiResponseUtil.success(fastPaged);
-      }
-
-      // When filters are present, work on a mutable copy
       let combined = baseCombined;
-
-      // Optional filtering by direction (inbound/outbound)
-      if (direction) {
-        const dir = direction.toLowerCase();
-        if (dir === 'inbound' || dir === 'outbound') {
-          combined = combined.filter((item) => item.direction === dir);
+      if (direction || channel || status || timeframe) {
+        if (direction) {
+          const dir = direction.toLowerCase();
+          if (dir === 'inbound' || dir === 'outbound') {
+            combined = combined.filter((item) => item.direction === dir);
+          }
+        }
+        if (channel) {
+          const ch = channel.toLowerCase();
+          combined = combined.filter(
+            (item) => (item.channel || '').toLowerCase() === ch,
+          );
+        }
+        if (status) {
+          const st = status.toLowerCase();
+          combined = combined.filter(
+            (item) => (item.status || '').toLowerCase() === st,
+          );
+        }
+        if (timeframe) {
+          const now = Date.now();
+          let thresholdTs = 0;
+          if (timeframe === '24h') {
+            thresholdTs = now - 24 * 60 * 60 * 1000;
+          } else if (timeframe === '7d' || timeframe === '7days') {
+            thresholdTs = now - 7 * 24 * 60 * 60 * 1000;
+          }
+          if (thresholdTs > 0) {
+            combined = combined.filter(
+              (item) => toTime(item.createdAt) >= thresholdTs,
+            );
+          }
         }
       }
 
-      // Optional filtering by channel (email, telegram, whatsapp, etc.)
-      if (channel) {
-        const ch = channel.toLowerCase();
-        combined = combined.filter(
-          (item) => (item.channel || '').toLowerCase() === ch,
-        );
-      }
-
-      // Optional filtering by status (pending, sent, failed, etc.)
-      if (status) {
-        const st = status.toLowerCase();
-        combined = combined.filter(
-          (item) => (item.status || '').toLowerCase() === st,
-        );
-      }
-
-      // Optional timeframe filtering (e.g. last 24h, last 7d)
-      if (timeframe) {
-        const now = new Date();
-        let threshold: Date | null = null;
-
-        if (timeframe === '24h') {
-          threshold = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        } else if (timeframe === '7d' || timeframe === '7days') {
-          threshold = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        }
-
-        if (threshold) {
-          combined = combined.filter((item) => item.createdAt >= threshold);
-        }
-      }
-
-      // Apply pagination after filtering
       const paged = combined.slice(offsetNum, offsetNum + limitNum);
 
-      return ApiResponseUtil.success(paged);
+      // Ensure JSON-serializable response: Date -> ISO string (avoids non-JSON or serialization errors)
+      const serialized = paged.map((item) => ({
+        id: item.id,
+        channel: item.channel,
+        service: item.service,
+        recipient: item.recipient,
+        subject: item.subject,
+        status: item.status,
+        createdAt:
+          item.createdAt instanceof Date
+            ? item.createdAt.toISOString()
+            : item.createdAt,
+        updatedAt:
+          item.updatedAt instanceof Date
+            ? item.updatedAt.toISOString()
+            : item.updatedAt,
+        direction: item.direction,
+      }));
+
+      const totalMs = Date.now() - requestStart;
+      this.logger.log(
+        `[AdminController] getHistory() - END success totalTimeMs=${totalMs} count=${serialized.length}`,
+        'AdminController',
+      );
+      return ApiResponseUtil.success(serialized);
     } catch (error: unknown) {
+      const totalMs = Date.now() - requestStart;
       const msg = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.log(
+        `[AdminController] getHistory() - END failed after ${totalMs}ms: ${msg}`,
+        'AdminController',
+      );
+      if (error instanceof Error && error.stack) {
+        this.logger.error(
+          `[AdminController] getHistory() error`,
+          error.stack,
+          'AdminController',
+        );
+      }
       throw new HttpException(
         ApiResponseUtil.error('HISTORY_FAILED', msg),
         HttpStatus.INTERNAL_SERVER_ERROR,
