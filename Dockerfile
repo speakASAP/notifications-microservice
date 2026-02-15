@@ -34,7 +34,7 @@ COPY --from=builder /app/node_modules ./node_modules
 EXPOSE ${PORT:-3368}
 
 # Set Node.js memory limit (can be overridden via NODE_OPTIONS env var)
-ENV NODE_OPTIONS="--max-old-space-size=512"
+ENV NODE_OPTIONS="--max-old-space-size=640"
 
 # Start application
 CMD ["node", "dist/src/main"]
