@@ -269,7 +269,7 @@ WHATSAPP_API_URL=https://graph.facebook.com/v18.0
 AUTH_SERVICE_URL=http://auth-microservice:3370
 AUTH_SERVICE_PUBLIC_URL=https://auth.statex.cz
 
-# Logging Configuration
+# Logging Configuration (central logging-microservice; port 3367, same for blue/green)
 LOG_LEVEL=info
 LOGGING_SERVICE_URL=http://logging-microservice:${PORT:-3367}  # PORT configured in logging-microservice/.env
 ```

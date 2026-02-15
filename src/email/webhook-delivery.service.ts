@@ -674,6 +674,70 @@ export class WebhookDeliveryService {
   }
 
   /**
+   * List inbound email IDs that are already confirmed delivered to helpdesk.
+   * Used by GET /email/inbound to exclude them so poll_new_emails never sees the same email twice.
+   */
+  async getInboundEmailIdsDeliveredToHelpdesk(): Promise<string[]> {
+    const subs = await this.subscriptionRepository.find({ where: { serviceName: 'helpdesk', status: 'active' } });
+    if (subs.length === 0) return [];
+    const subIds = subs.map((s) => s.id);
+    const rows = await this.webhookDeliveryRepository
+      .createQueryBuilder('d')
+      .select('DISTINCT d.inbound_email_id', 'inbound_email_id')
+      .where('d.subscriptionId IN (:...subIds)', { subIds })
+      .andWhere("d.status = 'delivered'")
+      .getRawMany();
+    return rows.map((r) => r.inbound_email_id as string);
+  }
+
+  /**
+   * Confirm delivery by inboundEmailId only (e.g. when helpdesk received email via poll and has no subscriptionId).
+   * Creates or updates webhook_delivery rows for all helpdesk subscriptions so GET /email/inbound excludes this email.
+   */
+  async confirmDeliveryByInboundEmailIdOnly(params: {
+    inboundEmailId: string;
+    status: 'delivered';
+    ticketId?: string | null;
+    commentId?: string | null;
+  }): Promise<{ success: boolean; message: string }> {
+    const { inboundEmailId, status, ticketId, commentId } = params;
+    this.logger.log(`[WEBHOOK_DELIVERY] confirmDeliveryByInboundEmailIdOnly inboundEmailId=${inboundEmailId} status=${status} ticketId=${ticketId || 'n/a'} commentId=${commentId || 'n/a'}`, 'WebhookDeliveryService');
+
+    const helpdeskSubs = await this.subscriptionRepository.find({ where: { serviceName: 'helpdesk', status: 'active' } });
+    if (helpdeskSubs.length === 0) {
+      this.logger.warn(`[WEBHOOK_DELIVERY] confirmDeliveryByInboundEmailIdOnly: no active helpdesk subscription`, 'WebhookDeliveryService');
+      return { success: false, message: 'No active helpdesk subscription' };
+    }
+
+    for (const sub of helpdeskSubs) {
+      let delivery = await this.webhookDeliveryRepository.findOne({
+        where: { inboundEmailId, subscriptionId: sub.id },
+        order: { createdAt: 'DESC' },
+      });
+      if (delivery) {
+        delivery.status = 'delivered' as WebhookDeliveryStatus;
+        delivery.deliveredAt = new Date();
+        delivery.ticketId = ticketId ?? null;
+        delivery.commentId = commentId ?? null;
+        await this.webhookDeliveryRepository.save(delivery);
+        this.logger.log(`[WEBHOOK_DELIVERY] confirmDeliveryByInboundEmailIdOnly: updated delivery id=${delivery.id} for subscription=${sub.id}`, 'WebhookDeliveryService');
+      } else {
+        delivery = this.webhookDeliveryRepository.create({
+          inboundEmailId,
+          subscriptionId: sub.id,
+          status: 'delivered' as WebhookDeliveryStatus,
+          deliveredAt: new Date(),
+          ticketId: ticketId ?? null,
+          commentId: commentId ?? null,
+        });
+        await this.webhookDeliveryRepository.save(delivery);
+        this.logger.log(`[WEBHOOK_DELIVERY] confirmDeliveryByInboundEmailIdOnly: created delivery id=${delivery.id} for subscription=${sub.id} (email was received via poll)`, 'WebhookDeliveryService');
+      }
+    }
+    return { success: true, message: 'Delivery confirmed for helpdesk' };
+  }
+
+  /**
    * List inbound emails sent to helpdesk but not yet confirmed delivered (for monitoring/retry).
    */
   async getUndeliveredToHelpdesk(limit: number = 100): Promise<{ inboundEmailId: string; subscriptionId: string; createdAt: string }[]> {
