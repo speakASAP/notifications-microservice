@@ -218,6 +218,7 @@ export class InboundEmailController {
   /**
    * Get list of inbound emails
    * GET /email/inbound?limit=100&toFilter=@speakasap.com&excludeTo=support@speakasap.com&status=processed
+   * GET /email/inbound?listOnly=1&limit=10 - lightweight list (id, from, to, subject, receivedAt, messageId, status only) for poll; fetch full by GET /email/inbound/:id
    */
   @Get('inbound')
   async getInboundEmails(
@@ -226,10 +227,12 @@ export class InboundEmailController {
     @Query('toFilter') toFilter?: string,
     @Query('excludeTo') excludeTo?: string | string[],
     @Query('status') status?: string,
+    @Query('listOnly') listOnly?: string,
   ): Promise<{ success: boolean; data: InboundEmailSummary[]; count: number }> {
     const t0 = Date.now();
-    this.logger.log(`[CONTROLLER] ===== GET /email/inbound START =====`, 'InboundEmailController');
-    this.logger.log(`[CONTROLLER] Query params: limit=${limit}, offset=${offset}, toFilter=${toFilter}, excludeTo=${excludeTo}, status=${status}`, 'InboundEmailController');
+    const listOnlyMode = listOnly === '1' || listOnly === 'true';
+    this.logger.log(`[CONTROLLER] ===== GET /email/inbound START (listOnly=${listOnlyMode}) =====`, 'InboundEmailController');
+    this.logger.log(`[CONTROLLER] Query params: limit=${limit}, offset=${offset}, toFilter=${toFilter}, excludeTo=${excludeTo}, status=${status}, listOnly=${listOnly}`, 'InboundEmailController');
     try {
       const limitNum = limit ? parseInt(limit, 10) : 100;
       const safeLimit =
@@ -245,6 +248,7 @@ export class InboundEmailController {
         toFilter: toFilter || '@speakasap.com',
         excludeTo: excludeToList,
         status: statusFilter,
+        listOnly: listOnlyMode,
       });
 
       const elapsed = Date.now() - t0;
@@ -315,6 +319,19 @@ export class InboundEmailController {
       this.logger.error(`Error getting undelivered: ${errorMessage}`, undefined, 'InboundEmailController');
       throw error;
     }
+  }
+
+  /**
+   * Get one inbound email by ID (full body and attachments).
+   * Used by helpdesk poll flow: list with listOnly=1, then fetch full email by ID for each item to create ticket.
+   * GET /email/inbound/:id (must be after static routes like inbound/undelivered)
+   */
+  @Get('inbound/:id')
+  async getInboundEmailById(
+    @Param('id') id: string,
+  ): Promise<{ success: boolean; data: InboundEmailSummary | null }> {
+    const email = await this.inboundEmailService.getInboundEmailById(id);
+    return { success: true, data: email };
   }
 
   /**
