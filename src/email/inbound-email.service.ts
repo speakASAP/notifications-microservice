@@ -1331,20 +1331,48 @@ export class InboundEmailService {
    * Modify raw MIME message to replace From header with verified SES address
    * This preserves attachments, formatting, and all other headers while satisfying SES requirements
    * Adds Reply-To header so recipients can reply to the original sender
+   * Handles base64-encoded content (as stored in rawData.content)
    */
-  private modifyRawMimeForForwarding(rawMime: string, originalFrom: string, verifiedFromEmail: string, verifiedFromName?: string): string {
+  private modifyRawMimeForForwarding(rawMime: string | Buffer, originalFrom: string, verifiedFromEmail: string, verifiedFromName?: string): string {
+    // rawData.content is stored as base64 string, decode it first
+    let decodedMime: string;
+    if (Buffer.isBuffer(rawMime)) {
+      decodedMime = rawMime.toString('latin1');
+    } else if (typeof rawMime === 'string') {
+      // Check if it's base64 encoded (typical pattern: no newlines in first 100 chars, or base64-like)
+      // Try to decode if it looks like base64 (no \r\n or \n in first part)
+      const firstPart = rawMime.substring(0, Math.min(200, rawMime.length));
+      const hasLineBreaks = firstPart.includes('\r\n') || firstPart.includes('\n');
+      if (!hasLineBreaks && rawMime.length > 50) {
+        // Likely base64 encoded, try to decode
+        try {
+          decodedMime = Buffer.from(rawMime, 'base64').toString('latin1');
+          this.logger.log(`[FORWARD] Decoded base64 raw MIME content (length: ${decodedMime.length})`, 'InboundEmailService');
+        } catch (e) {
+          // Not base64, use as-is
+          this.logger.log(`[FORWARD] Raw MIME content is not base64, using as-is`, 'InboundEmailService');
+          decodedMime = rawMime;
+        }
+      } else {
+        // Already decoded (has line breaks), use as-is
+        decodedMime = rawMime;
+      }
+    } else {
+      throw new Error('Invalid rawMime type, expected string or Buffer');
+    }
+
     // MIME format: headers (lines ending with \r\n), blank line (\r\n\r\n), then body
-    const headerBodySplit = rawMime.indexOf('\r\n\r\n');
+    const headerBodySplit = decodedMime.indexOf('\r\n\r\n');
     if (headerBodySplit === -1) {
       // Fallback: try \n\n (some systems use LF only)
-      const headerBodySplitLF = rawMime.indexOf('\n\n');
+      const headerBodySplitLF = decodedMime.indexOf('\n\n');
       if (headerBodySplitLF === -1) {
         this.logger.warn(`[FORWARD] Could not find header/body separator in raw MIME, returning as-is`, 'InboundEmailService');
-        return rawMime;
+        return decodedMime;
       }
-      return this.modifyRawMimeHeaders(rawMime, headerBodySplitLF, '\n', originalFrom, verifiedFromEmail, verifiedFromName);
+      return this.modifyRawMimeHeaders(decodedMime, headerBodySplitLF, '\n', originalFrom, verifiedFromEmail, verifiedFromName);
     }
-    return this.modifyRawMimeHeaders(rawMime, headerBodySplit, '\r\n', originalFrom, verifiedFromEmail, verifiedFromName);
+    return this.modifyRawMimeHeaders(decodedMime, headerBodySplit, '\r\n', originalFrom, verifiedFromEmail, verifiedFromName);
   }
 
   /**
@@ -1483,9 +1511,16 @@ export class InboundEmailService {
         );
 
         // Modify raw MIME: replace From header with verified address, preserve original Reply-To if exists
-        const modifiedRawMime = this.modifyRawMimeForForwarding(rawContent, email.from, verifiedFromEmail, verifiedFromName);
-        // Extract original Reply-To from raw MIME for logging
-        const replyToMatch = rawContent.match(/^reply-to:\s*(.+)$/im);
+        // rawContent is base64 string, modifyRawMimeForForwarding will decode it
+        const modifiedRawMimeString = this.modifyRawMimeForForwarding(rawContent, email.from, verifiedFromEmail, verifiedFromName);
+        // Convert back to Buffer (latin1 encoding preserves bytes) for SES
+        const modifiedRawMimeBuffer = Buffer.from(modifiedRawMimeString, 'latin1');
+        
+        // Extract original Reply-To from decoded MIME for logging
+        const decodedForLogging = typeof rawContent === 'string' && !rawContent.includes('\r\n') && !rawContent.includes('\n')
+          ? Buffer.from(rawContent, 'base64').toString('latin1')
+          : rawContent;
+        const replyToMatch = typeof decodedForLogging === 'string' ? decodedForLogging.match(/^reply-to:\s*(.+)$/im) : null;
         const originalReplyTo = replyToMatch ? replyToMatch[1].trim() : email.from;
         this.logger.log(
           `[FORWARD] Modified raw MIME: replaced From="${email.from}" with "${verifiedFromEmail}", Reply-To="${originalReplyTo}" (preserved if existed), added X-Original-From="${email.from}"`,
@@ -1496,7 +1531,7 @@ export class InboundEmailService {
           to: forwardTo,
           subject: email.subject || '(no subject)',
           message: '', // Not used for raw
-          rawMessage: modifiedRawMime,
+          rawMessage: modifiedRawMimeBuffer,
           emailProvider: 'ses',
         });
         this.logger.log(`[FORWARD] ✅ Successfully forwarded raw email from ${email.to} to ${forwardTo} (${rawDecodedSizeEst} bytes, attachments preserved)`, 'InboundEmailService');
