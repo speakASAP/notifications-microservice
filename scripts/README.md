@@ -57,7 +57,7 @@ Use `up -d --build` after a pull; `restart` alone does not rebuild the image.
 
 To test the admin panel (`/admin/`):
 
-1. Create a test user in auth-microservice: `cd ../auth-microservice && ./scripts/create-test-user.sh` (default: <test@example.com> / testpassword123).
+1. Create a test user in auth-microservice: `cd ../auth-microservice && ./scripts/create-test-user.sh` (uses TEST_EMAIL and TEST_PASSWORD from auth-microservice `.env`).
 2. Ensure notifications-microservice `.env` has `AUTH_SERVICE_URL` and `AUTH_SERVICE_PUBLIC_URL` (run `./scripts/update-env-auth-vars.sh` if needed).
 3. Open `https://${DOMAIN}/admin/` and sign in with the test user. You should see statistics, message history, and service parameters.
 
