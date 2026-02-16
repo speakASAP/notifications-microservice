@@ -16,14 +16,22 @@
 
 **Production .env change (do on server after backup):**
 
+**Issue:** The hostname `logging-microservice` doesn't resolve on the Docker network. Use the **public URL** (same as auth-microservice, payments-microservice in production):
+
 1. Backup: `cp .env .env.bak.$(date +%Y%m%d_%H%M%S)`
-2. Set the correct URL (port **3367**; hostname **logging-microservice**):
+2. Set the public URL (works from containers, same for blue/green):
 
 ```bash
-LOGGING_SERVICE_URL=http://logging-microservice:3367
+LOGGING_SERVICE_URL=https://logging.statex.cz
 ```
 
-1. Restart notifications-microservice (blue/green) so the new env is picked up.
+1. Restart notifications-microservice (blue/green) so the new env is picked up:
+
+   ```bash
+   docker compose -f docker-compose.blue.yml up -d --force-recreate
+   # or docker-compose.green.yml if green is active
+   ```
+
 2. Confirm: open <https://logging.statex.cz/admin/>, query service `notifications-microservice`; logs should appear after the next requests.
 
 ---

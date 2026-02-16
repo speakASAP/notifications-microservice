@@ -1328,6 +1328,116 @@ export class InboundEmailService {
   }
 
   /**
+   * Modify raw MIME message to replace From header with verified SES address
+   * This preserves attachments, formatting, and all other headers while satisfying SES requirements
+   * Adds Reply-To header so recipients can reply to the original sender
+   */
+  private modifyRawMimeForForwarding(rawMime: string, originalFrom: string, verifiedFromEmail: string, verifiedFromName?: string): string {
+    // MIME format: headers (lines ending with \r\n), blank line (\r\n\r\n), then body
+    const headerBodySplit = rawMime.indexOf('\r\n\r\n');
+    if (headerBodySplit === -1) {
+      // Fallback: try \n\n (some systems use LF only)
+      const headerBodySplitLF = rawMime.indexOf('\n\n');
+      if (headerBodySplitLF === -1) {
+        this.logger.warn(`[FORWARD] Could not find header/body separator in raw MIME, returning as-is`, 'InboundEmailService');
+        return rawMime;
+      }
+      return this.modifyRawMimeHeaders(rawMime, headerBodySplitLF, '\n', originalFrom, verifiedFromEmail, verifiedFromName);
+    }
+    return this.modifyRawMimeHeaders(rawMime, headerBodySplit, '\r\n', originalFrom, verifiedFromEmail, verifiedFromName);
+  }
+
+  /**
+   * Extract header value from header line (handles "Header: value" format)
+   */
+  private extractHeaderValue(headerLine: string): string {
+    const colonIndex = headerLine.indexOf(':');
+    if (colonIndex === -1) return '';
+    return headerLine.substring(colonIndex + 1).trim();
+  }
+
+  /**
+   * Modify headers section of raw MIME message
+   * Preserves original Reply-To if it exists (may differ from From)
+   * Adds X-Original-From to preserve original sender information
+   */
+  private modifyRawMimeHeaders(
+    rawMime: string,
+    headerBodySplit: number,
+    lineEnding: string,
+    originalFrom: string,
+    verifiedFromEmail: string,
+    verifiedFromName?: string,
+  ): string {
+    const headersSection = rawMime.substring(0, headerBodySplit);
+    const bodySection = rawMime.substring(headerBodySplit + (lineEnding === '\r\n' ? 4 : 2));
+
+    // Split headers into lines (handle folded headers - lines starting with space/tab are continuations)
+    const headerLines: string[] = [];
+    let currentHeader = '';
+    for (const line of headersSection.split(lineEnding)) {
+      if (line.match(/^[\t ]/)) {
+        // Continuation of previous header
+        currentHeader += lineEnding + line;
+      } else {
+        if (currentHeader) {
+          headerLines.push(currentHeader);
+        }
+        currentHeader = line;
+      }
+    }
+    if (currentHeader) {
+      headerLines.push(currentHeader);
+    }
+
+    // Process headers: replace From, preserve original Reply-To, add X-Original-From
+    const modifiedHeaders: string[] = [];
+    let hasFrom = false;
+    let hasReplyTo = false;
+    let hasXOriginalFrom = false;
+
+    for (const headerLine of headerLines) {
+      const headerLower = headerLine.toLowerCase();
+      if (headerLower.startsWith('from:')) {
+        // Replace From header with verified address
+        const fromDisplay = verifiedFromName ? `${verifiedFromName} <${verifiedFromEmail}>` : verifiedFromEmail;
+        modifiedHeaders.push(`From: ${fromDisplay}`);
+        hasFrom = true;
+      } else if (headerLower.startsWith('reply-to:')) {
+        // Preserve original Reply-To (may differ from From - e.g., bot sender with human Reply-To)
+        modifiedHeaders.push(headerLine); // Keep original Reply-To as-is
+        hasReplyTo = true;
+      } else if (headerLower.startsWith('x-original-from:')) {
+        // Skip if already exists (we'll add our own)
+        hasXOriginalFrom = true;
+      } else {
+        // Keep all other headers as-is
+        modifiedHeaders.push(headerLine);
+      }
+    }
+
+    // Ensure From header exists (should always exist, but safety check)
+    if (!hasFrom) {
+      const fromDisplay = verifiedFromName ? `${verifiedFromName} <${verifiedFromEmail}>` : verifiedFromEmail;
+      modifiedHeaders.unshift(`From: ${fromDisplay}`);
+    }
+
+    // Add X-Original-From header to preserve original sender info (for transparency)
+    if (!hasXOriginalFrom) {
+      modifiedHeaders.push(`X-Original-From: ${originalFrom}`);
+    }
+
+    // Add Reply-To if not present (use original From, since no Reply-To was specified)
+    // If Reply-To existed, we preserved it above (may differ from From)
+    if (!hasReplyTo) {
+      modifiedHeaders.push(`Reply-To: ${originalFrom}`);
+    }
+
+    // Reconstruct MIME message
+    return modifiedHeaders.join(lineEnding) + lineEnding + lineEnding + bodySection;
+  }
+
+  /**
    * Forward email if forwarding rule exists for the recipient
    */
   private async forwardEmailIfNeeded(email: InboundEmail): Promise<void> {
@@ -1362,19 +1472,34 @@ export class InboundEmailService {
       const rawDecodedSizeEst = typeof rawContent === 'string' ? Math.floor((rawContent.length * 3) / 4) : 0;
       const rawWithinSesLimit = rawContent && rawDecodedSizeEst <= SES_MAX_RAW_DECODED_BYTES;
 
-      if (rawWithinSesLimit) {
+      // Get verified SES From address (required for SES to accept the email)
+      const verifiedFromEmail = process.env.AWS_SES_FROM_EMAIL || 'contact@speakasap.com';
+      const verifiedFromName = process.env.AWS_SES_FROM_NAME;
+
+      if (rawWithinSesLimit && rawContent) {
         this.logger.log(
-          `[FORWARD] Using raw SES forward path: decodedSizeBytes=${rawDecodedSizeEst} to=${forwardTo}`,
+          `[FORWARD] Using raw SES forward path (with From header modification): decodedSizeBytes=${rawDecodedSizeEst} to=${forwardTo}`,
           'InboundEmailService',
         );
+
+        // Modify raw MIME: replace From header with verified address, preserve original Reply-To if exists
+        const modifiedRawMime = this.modifyRawMimeForForwarding(rawContent, email.from, verifiedFromEmail, verifiedFromName);
+        // Extract original Reply-To from raw MIME for logging
+        const replyToMatch = rawContent.match(/^reply-to:\s*(.+)$/im);
+        const originalReplyTo = replyToMatch ? replyToMatch[1].trim() : email.from;
+        this.logger.log(
+          `[FORWARD] Modified raw MIME: replaced From="${email.from}" with "${verifiedFromEmail}", Reply-To="${originalReplyTo}" (preserved if existed), added X-Original-From="${email.from}"`,
+          'InboundEmailService',
+        );
+
         await this.emailService.send({
           to: forwardTo,
           subject: email.subject || '(no subject)',
           message: '', // Not used for raw
-          rawMessage: rawContent,
+          rawMessage: modifiedRawMime,
           emailProvider: 'ses',
         });
-        this.logger.log(`[FORWARD] ✅ Successfully forwarded raw email from ${email.to} to ${forwardTo} (${rawDecodedSizeEst} bytes)`, 'InboundEmailService');
+        this.logger.log(`[FORWARD] ✅ Successfully forwarded raw email from ${email.to} to ${forwardTo} (${rawDecodedSizeEst} bytes, attachments preserved)`, 'InboundEmailService');
         return;
       }
 
