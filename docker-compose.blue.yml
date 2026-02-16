@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: notifications-microservice-blue
     ports:
-      - "${PORT:-3368}:${PORT:-3368}"
+      - "${PORT_BLUE:-3368}:${PORT:-3368}"
     env_file:
       - .env
     environment:
