@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
 import { S3Client, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { simpleParser, ParsedMail } from 'mailparser';
 import { LoggerService } from '../../shared/logger/logger.service';
 import { InboundEmail } from './entities/inbound-email.entity';
 import { WebhookDeliveryService } from './webhook-delivery.service';
@@ -1328,7 +1329,218 @@ export class InboundEmailService {
   }
 
   /**
+   * Rebuild MIME message properly for forwarding
+   * Parses original email, creates new message with verified From address
+   * Removes Reply-To (SES validates it), adds X-Original-From
+   * Preserves body, attachments, and formatting
+   */
+  private async rebuildMimeForForwarding(
+    rawMime: string | Buffer,
+    originalFrom: string,
+    verifiedFromEmail: string,
+    verifiedFromName?: string,
+  ): Promise<Buffer> {
+    try {
+      // Decode base64 if needed
+      let rawBuffer: Buffer;
+      if (Buffer.isBuffer(rawMime)) {
+        rawBuffer = rawMime;
+      } else if (typeof rawMime === 'string') {
+        // Check if base64 encoded
+        const firstPart = rawMime.substring(0, Math.min(200, rawMime.length));
+        const hasLineBreaks = firstPart.includes('\r\n') || firstPart.includes('\n');
+        if (!hasLineBreaks && rawMime.length > 50) {
+          try {
+            rawBuffer = Buffer.from(rawMime, 'base64');
+            this.logger.log(`[FORWARD] Decoded base64 raw MIME content (length: ${rawBuffer.length})`, 'InboundEmailService');
+          } catch (e) {
+            rawBuffer = Buffer.from(rawMime, 'latin1');
+          }
+        } else {
+          rawBuffer = Buffer.from(rawMime, 'latin1');
+        }
+      } else {
+        throw new Error('Invalid rawMime type, expected string or Buffer');
+      }
+
+      // Parse original email
+      const parsed: ParsedMail = await simpleParser(rawBuffer);
+      this.logger.log(`[FORWARD] Parsed original email - subject: ${parsed.subject}, attachments: ${parsed.attachments?.length || 0}`, 'InboundEmailService');
+
+      // Build new MIME message
+      const lines: string[] = [];
+      
+      // Helper to format address
+      const formatAddress = (addr: any): string => {
+        if (!addr) return '';
+        if (Array.isArray(addr)) {
+          return addr.map(a => a.text || a.value || '').join(', ');
+        }
+        return addr.text || addr.value || '';
+      };
+
+      // Headers
+      lines.push(`From: ${verifiedFromName ? `${verifiedFromName} <${verifiedFromEmail}>` : verifiedFromEmail}`);
+      lines.push(`To: ${formatAddress(parsed.to)}`);
+      if (parsed.cc) {
+        lines.push(`Cc: ${formatAddress(parsed.cc)}`);
+      }
+      lines.push(`Subject: ${parsed.subject || '(no subject)'}`);
+      lines.push(`Date: ${parsed.date ? parsed.date.toUTCString() : new Date().toUTCString()}`);
+      if (parsed.messageId) {
+        lines.push(`Message-ID: ${parsed.messageId}`);
+      }
+      if (parsed.inReplyTo) {
+        lines.push(`In-Reply-To: ${parsed.inReplyTo}`);
+      }
+      if (parsed.references) {
+        lines.push(`References: ${parsed.references}`);
+      }
+      
+      // X-Original-From header (preserve original sender)
+      lines.push(`X-Original-From: ${originalFrom}`);
+      
+      // Remove Reply-To (SES validates it, we'll handle replies via X-Original-From)
+      // Don't include Reply-To header at all
+      
+      // Content-Type
+      const hasAttachments = parsed.attachments && parsed.attachments.length > 0;
+      const hasHtml = !!parsed.html;
+      const hasText = !!parsed.text;
+      
+      if (hasAttachments || (hasHtml && hasText)) {
+        // Multipart message
+        const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+        lines.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+        lines.push('');
+        lines.push(`--${boundary}`);
+        
+        // Body part (multipart/alternative if both HTML and text)
+        if (hasHtml && hasText) {
+          const altBoundary = `----=_Part_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+          lines.push(`Content-Type: multipart/alternative; boundary="${altBoundary}"`);
+          lines.push('');
+          lines.push(`--${altBoundary}`);
+          lines.push('Content-Type: text/plain; charset=UTF-8');
+          lines.push('Content-Transfer-Encoding: quoted-printable');
+          lines.push('');
+          lines.push(this.encodeQuotedPrintable(parsed.text || ''));
+          lines.push(`--${altBoundary}`);
+          lines.push('Content-Type: text/html; charset=UTF-8');
+          lines.push('Content-Transfer-Encoding: quoted-printable');
+          lines.push('');
+          lines.push(this.encodeQuotedPrintable(parsed.html || ''));
+          lines.push(`--${altBoundary}--`);
+        } else if (hasHtml) {
+          lines.push('Content-Type: text/html; charset=UTF-8');
+          lines.push('Content-Transfer-Encoding: quoted-printable');
+          lines.push('');
+          lines.push(this.encodeQuotedPrintable(parsed.html || ''));
+        } else {
+          lines.push('Content-Type: text/plain; charset=UTF-8');
+          lines.push('Content-Transfer-Encoding: quoted-printable');
+          lines.push('');
+          lines.push(this.encodeQuotedPrintable(parsed.text || ''));
+        }
+        
+        // Attachments
+        if (hasAttachments && parsed.attachments) {
+          for (const attachment of parsed.attachments) {
+            lines.push(`--${boundary}`);
+            lines.push(`Content-Type: ${attachment.contentType || 'application/octet-stream'}`);
+            if (attachment.filename) {
+              lines.push(`Content-Disposition: attachment; filename="${attachment.filename}"`);
+            }
+            lines.push('Content-Transfer-Encoding: base64');
+            lines.push('');
+            if (attachment.content) {
+              const contentBuffer = Buffer.isBuffer(attachment.content) 
+                ? attachment.content 
+                : Buffer.from(attachment.content as string, 'base64');
+              lines.push(contentBuffer.toString('base64').match(/.{1,76}/g)?.join('\r\n') || '');
+            }
+          }
+        }
+        
+        lines.push(`--${boundary}--`);
+      } else {
+        // Simple message (no attachments)
+        if (hasHtml) {
+          lines.push('Content-Type: text/html; charset=UTF-8');
+          lines.push('Content-Transfer-Encoding: quoted-printable');
+          lines.push('');
+          lines.push(this.encodeQuotedPrintable(parsed.html || ''));
+        } else {
+          lines.push('Content-Type: text/plain; charset=UTF-8');
+          lines.push('Content-Transfer-Encoding: quoted-printable');
+          lines.push('');
+          lines.push(this.encodeQuotedPrintable(parsed.text || ''));
+        }
+      }
+
+      const rebuiltMime = lines.join('\r\n');
+      this.logger.log(`[FORWARD] Rebuilt MIME message (length: ${rebuiltMime.length}, attachments: ${parsed.attachments?.length || 0})`, 'InboundEmailService');
+      
+      return Buffer.from(rebuiltMime, 'utf-8');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`[FORWARD] Failed to rebuild MIME: ${errorMessage}`, undefined, 'InboundEmailService');
+      throw error;
+    }
+  }
+
+  /**
+   * Encode text as quoted-printable (RFC 2045)
+   * Lines must not exceed 76 characters (excluding CRLF)
+   */
+  private encodeQuotedPrintable(text: string): string {
+    const lines = text.split(/\r?\n/);
+    const encodedLines: string[] = [];
+    
+    for (const line of lines) {
+      let currentLine = '';
+      
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const code = char.charCodeAt(0);
+        let encodedChar: string;
+        
+        // Characters that must be encoded
+        if (char === '=') {
+          encodedChar = '=3D';
+        } else if (code > 126 || (code < 32 && code !== 9 && code !== 13 && code !== 10)) {
+          // Non-printable or non-ASCII (except tab, CR, LF)
+          const utf8Bytes = Buffer.from(char, 'utf-8');
+          encodedChar = Array.from(utf8Bytes)
+            .map(b => '=' + b.toString(16).toUpperCase().padStart(2, '0'))
+            .join('');
+        } else if (code === 9) {
+          // Tab - keep as-is but check line length
+          encodedChar = '\t';
+        } else {
+          encodedChar = char;
+        }
+        
+        // Check if adding this char would exceed 76 chars (soft line break needed)
+        if (currentLine.length + encodedChar.length > 75) {
+          encodedLines.push(currentLine + '=');
+          currentLine = encodedChar;
+        } else {
+          currentLine += encodedChar;
+        }
+      }
+      
+      if (currentLine.length > 0) {
+        encodedLines.push(currentLine);
+      }
+    }
+    
+    return encodedLines.join('\r\n');
+  }
+
+  /**
    * Modify raw MIME message to replace From header with verified SES address
+   * DEPRECATED: Use rebuildMimeForForwarding instead for proper MIME rebuilding
    * This preserves attachments, formatting, and all other headers while satisfying SES requirements
    * Adds Reply-To header so recipients can reply to the original sender
    * Handles base64-encoded content (as stored in rawData.content)
@@ -1432,7 +1644,8 @@ export class InboundEmailService {
         modifiedHeaders.push(`From: ${fromDisplay}`);
         hasFrom = true;
       } else if (headerLower.startsWith('reply-to:')) {
-        // Preserve original Reply-To (may differ from From - e.g., bot sender with human Reply-To)
+        // Preserve original Reply-To so recipients can reply to original sender
+        // SES may validate Reply-To, but we'll try to keep it for proper email flow
         modifiedHeaders.push(headerLine); // Keep original Reply-To as-is
         hasReplyTo = true;
       } else if (headerLower.startsWith('x-original-from:')) {
@@ -1455,8 +1668,7 @@ export class InboundEmailService {
       modifiedHeaders.push(`X-Original-From: ${originalFrom}`);
     }
 
-    // Add Reply-To if not present (use original From, since no Reply-To was specified)
-    // If Reply-To existed, we preserved it above (may differ from From)
+    // Add Reply-To if not present (use original From, so recipients can reply to original sender)
     if (!hasReplyTo) {
       modifiedHeaders.push(`Reply-To: ${originalFrom}`);
     }
@@ -1506,24 +1718,16 @@ export class InboundEmailService {
 
       if (rawWithinSesLimit && rawContent) {
         this.logger.log(
-          `[FORWARD] Using raw SES forward path (with From header modification): decodedSizeBytes=${rawDecodedSizeEst} to=${forwardTo}`,
+          `[FORWARD] Using raw SES forward path (rebuilding MIME properly): decodedSizeBytes=${rawDecodedSizeEst} to=${forwardTo}`,
           'InboundEmailService',
         );
 
-        // Modify raw MIME: replace From header with verified address, preserve original Reply-To if exists
-        // rawContent is base64 string, modifyRawMimeForForwarding will decode it
-        const modifiedRawMimeString = this.modifyRawMimeForForwarding(rawContent, email.from, verifiedFromEmail, verifiedFromName);
-        // Convert back to Buffer (latin1 encoding preserves bytes) for SES
-        const modifiedRawMimeBuffer = Buffer.from(modifiedRawMimeString, 'latin1');
+        // Rebuild MIME message properly: parse original, create new message with verified From
+        // Removes Reply-To (SES validates it), adds X-Original-From for transparency
+        const rebuiltMimeBuffer = await this.rebuildMimeForForwarding(rawContent, email.from, verifiedFromEmail, verifiedFromName);
         
-        // Extract original Reply-To from decoded MIME for logging
-        const decodedForLogging = typeof rawContent === 'string' && !rawContent.includes('\r\n') && !rawContent.includes('\n')
-          ? Buffer.from(rawContent, 'base64').toString('latin1')
-          : rawContent;
-        const replyToMatch = typeof decodedForLogging === 'string' ? decodedForLogging.match(/^reply-to:\s*(.+)$/im) : null;
-        const originalReplyTo = replyToMatch ? replyToMatch[1].trim() : email.from;
         this.logger.log(
-          `[FORWARD] Modified raw MIME: replaced From="${email.from}" with "${verifiedFromEmail}", Reply-To="${originalReplyTo}" (preserved if existed), added X-Original-From="${email.from}"`,
+          `[FORWARD] Rebuilt MIME: From="${verifiedFromEmail}", Reply-To removed (SES validation), X-Original-From="${email.from}"`,
           'InboundEmailService',
         );
 
@@ -1531,10 +1735,10 @@ export class InboundEmailService {
           to: forwardTo,
           subject: email.subject || '(no subject)',
           message: '', // Not used for raw
-          rawMessage: modifiedRawMimeBuffer,
+          rawMessage: rebuiltMimeBuffer,
           emailProvider: 'ses',
         });
-        this.logger.log(`[FORWARD] ✅ Successfully forwarded raw email from ${email.to} to ${forwardTo} (${rawDecodedSizeEst} bytes, attachments preserved)`, 'InboundEmailService');
+        this.logger.log(`[FORWARD] ✅ Successfully forwarded rebuilt email from ${email.to} to ${forwardTo} (${rawDecodedSizeEst} bytes, attachments preserved)`, 'InboundEmailService');
         return;
       }
 
