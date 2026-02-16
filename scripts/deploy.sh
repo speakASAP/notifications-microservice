@@ -23,14 +23,32 @@ RED='\033[0;31m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Load NODE_ENV from .env file to determine environment
+NODE_ENV=""
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    set -a
+    # shellcheck source=/dev/null
+    source "$PROJECT_ROOT/.env" 2>/dev/null || true
+    set +a
+    NODE_ENV="${NODE_ENV:-}"
+fi
+
 # Deploy only code from repository: sync with remote (discard local changes on server)
+# Only sync if NODE_ENV is set to "production"
 if [ -d ".git" ]; then
-    echo -e "${BLUE}Syncing with remote repository...${NC}"
-    git fetch origin
-    BRANCH=$(git rev-parse --abbrev-ref HEAD)
-    git reset --hard "origin/$BRANCH"
-    echo -e "${GREEN}✓ Repository synced to origin/$BRANCH${NC}"
-    echo ""
+    if [ "$NODE_ENV" = "production" ]; then
+        echo -e "${BLUE}Production environment detected (NODE_ENV=production)${NC}"
+        echo -e "${BLUE}Syncing with remote repository (discarding local changes)...${NC}"
+        git fetch origin
+        BRANCH=$(git rev-parse --abbrev-ref HEAD)
+        git reset --hard "origin/$BRANCH"
+        echo -e "${GREEN}✓ Repository synced to origin/$BRANCH${NC}"
+        echo ""
+    else
+        echo -e "${YELLOW}Development environment detected (NODE_ENV=${NODE_ENV:-not set})${NC}"
+        echo -e "${YELLOW}Skipping git sync - local changes will be preserved${NC}"
+        echo ""
+    fi
 fi
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════════════════════════╗${NC}"
