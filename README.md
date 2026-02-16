@@ -763,7 +763,7 @@ The service is available at:
    ```bash
    # On prod or where auth-microservice is running:
    cd /path/to/auth-microservice && ./scripts/create-test-user.sh
-   # Default: test@example.com / testpassword123 (override with TEST_EMAIL, TEST_PASSWORD)
+   # Uses TEST_EMAIL and TEST_PASSWORD from auth-microservice .env
    ```
 
    Or register via API:
