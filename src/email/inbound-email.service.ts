@@ -1,6 +1,7 @@
 /**
  * Inbound Email Service
- * Handles inbound emails received via AWS SES SNS webhook
+ * Handles inbound emails received via S3 events (S3-only mode).
+ * Legacy SES notification parsing (parseEmailContent) kept for backward compatibility (reparseEmailFromRawData).
  */
 
 import { Injectable, Inject } from '@nestjs/common';
@@ -129,109 +130,10 @@ export class InboundEmailService {
   }
 
   /**
-   * Handle SES notification directly (raw message delivery format)
-   * Body is the SES notification directly, no SNS wrapper
+   * Legacy methods removed: handleSESNotification, handleSNSNotification, extractEmailFromSNS
+   * SES notifications are no longer processed (S3-only mode).
+   * parseEmailContent is kept for backward compatibility (reparseEmailFromRawData).
    */
-  async handleSESNotification(sesNotification: SESNotification): Promise<void> {
-    this.logger.log(`[SERVICE] ===== HANDLE SES NOTIFICATION (RAW) START =====`, 'InboundEmailService');
-    this.logger.log(`[SERVICE] SES notification - source: ${sesNotification.mail?.source}, destination: ${JSON.stringify(sesNotification.mail?.destination)}, messageId: ${sesNotification.mail?.messageId}`, 'InboundEmailService');
-
-    try {
-      const messageId = normalizeMessageId(sesNotification.mail?.messageId);
-      if (messageId) {
-        const existing = await this.inboundEmailRepository
-          .createQueryBuilder('e')
-          .where('e."rawData"->\'mail\'->>\'messageId\' = :messageId', { messageId })
-          .getOne();
-        if (existing) {
-          this.logger.log(
-            `[SERVICE] Email with messageId ${messageId} already exists (ID: ${existing.id}), skipping store and webhook to avoid duplicate tickets`,
-            'InboundEmailService',
-          );
-          this.logger.log(`[SERVICE] ===== HANDLE SES NOTIFICATION (RAW) END (SKIP - DUPLICATE) =====`, 'InboundEmailService');
-          return;
-        }
-      }
-
-      this.logger.log(`[SERVICE] Calling parseEmailContent...`, 'InboundEmailService');
-      const inboundEmail = await this.parseEmailContent(sesNotification);
-      this.logger.log(`[SERVICE] ✅ Parsed email content, email ID: ${inboundEmail.id || 'NEW'}, from: ${inboundEmail.from}, to: ${inboundEmail.to}`, 'InboundEmailService');
-
-      this.logger.log(`[SERVICE] Calling storeInboundEmail...`, 'InboundEmailService');
-      await this.storeInboundEmail(inboundEmail);
-      this.logger.log(`[SERVICE] ✅ Stored inbound email, ID: ${inboundEmail.id}`, 'InboundEmailService');
-
-      this.logger.log(`[SERVICE] Calling processInboundEmail...`, 'InboundEmailService');
-      await this.processInboundEmail(inboundEmail);
-      this.logger.log(`[SERVICE] ✅ Processed inbound email successfully`, 'InboundEmailService');
-      this.logger.log(`[SERVICE] ===== HANDLE SES NOTIFICATION (RAW) END (SUCCESS) =====`, 'InboundEmailService');
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const errorStack = error instanceof Error ? error.stack : undefined;
-      this.logger.error(`[SERVICE] ❌ Failed to process SES notification (raw): ${errorMessage}`, errorStack, 'InboundEmailService');
-      this.logger.log(`[SERVICE] ===== HANDLE SES NOTIFICATION (RAW) END (ERROR) =====`, 'InboundEmailService');
-      throw error;
-    }
-  }
-
-  /**
-   * Handle SNS notification (wrapped format - raw delivery disabled)
-   * Body has SNS wrapper with Message field containing SES notification as JSON string
-   */
-  async handleSNSNotification(snsMessage: SNSMessage): Promise<void> {
-    this.logger.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION (WRAPPED) START =====`, 'InboundEmailService');
-    this.logger.log(`[SERVICE] SNS notification type: ${snsMessage.Type}`, 'InboundEmailService');
-    this.logger.log(`[SERVICE] MessageId: ${snsMessage.MessageId}`, 'InboundEmailService');
-    this.logger.log(`[SERVICE] TopicArn: ${snsMessage.TopicArn}`, 'InboundEmailService');
-    this.logger.log(`[SERVICE] Has Message field: ${!!snsMessage.Message}, Message length: ${snsMessage.Message?.length || 0}`, 'InboundEmailService');
-
-    if (snsMessage.Type === 'SubscriptionConfirmation') {
-      this.logger.log(`[SERVICE] SubscriptionConfirmation - handled by controller, skipping`, 'InboundEmailService');
-      this.logger.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION (WRAPPED) END =====`, 'InboundEmailService');
-      return;
-    }
-
-    if (snsMessage.Type === 'Notification' && snsMessage.Message) {
-      this.logger.log(`[SERVICE] Processing Notification with Message field`, 'InboundEmailService');
-      try {
-        // Parse SES notification from SNS Message field (JSON string)
-        this.logger.log(`[SERVICE] Parsing Message field as JSON...`, 'InboundEmailService');
-        const sesNotification: SESNotification = JSON.parse(snsMessage.Message);
-        this.logger.log(`[SERVICE] ✅ Parsed SES notification successfully`, 'InboundEmailService');
-        this.logger.log(`[SERVICE] SES notification - source: ${sesNotification.mail?.source}, destination: ${JSON.stringify(sesNotification.mail?.destination)}, messageId: ${sesNotification.mail?.messageId}`, 'InboundEmailService');
-
-        // Use the same processing logic as raw format
-        await this.handleSESNotification(sesNotification);
-        this.logger.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION (WRAPPED) END (SUCCESS) =====`, 'InboundEmailService');
-      } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        const errorStack = error instanceof Error ? error.stack : undefined;
-        this.logger.error(`[SERVICE] ❌ Failed to process SNS notification: ${errorMessage}`, errorStack, 'InboundEmailService');
-        this.logger.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION (WRAPPED) END (ERROR) =====`, 'InboundEmailService');
-        throw error;
-      }
-    } else {
-      this.logger.warn(`[SERVICE] ⚠️ Unknown SNS message type or missing Message field: Type=${snsMessage.Type}, HasMessage=${!!snsMessage.Message}`, 'InboundEmailService');
-      this.logger.log(`[SERVICE] ===== HANDLE SNS NOTIFICATION (WRAPPED) END (IGNORED) =====`, 'InboundEmailService');
-    }
-  }
-
-  /**
-   * Extract SES notification from SNS message
-   */
-  extractEmailFromSNS(snsMessage: SNSMessage): SESNotification | null {
-    if (snsMessage.Type !== 'Notification' || !snsMessage.Message) {
-      return null;
-    }
-
-    try {
-      return JSON.parse(snsMessage.Message) as SESNotification;
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Failed to parse SNS Message: ${errorMessage}`, undefined, 'InboundEmailService');
-      return null;
-    }
-  }
 
   /**
    * Fetch email content from S3 if stored there
@@ -1392,17 +1294,46 @@ export class InboundEmailService {
     const messageId = normalizeMessageId(messageIdRaw);
     const date = dateMatch ? dateMatch[1].trim() : new Date().toISOString();
 
-    this.logger.log(`[S3_PROCESS] Parsed headers - from: ${from}, to: ${to}, subject: ${subject || 'N/A'}`, 'InboundEmailService');
+    this.logger.log(`[S3_PROCESS] Parsed headers - from: ${from}, to: ${to}, subject: ${subject || 'N/A'}, messageId: ${messageId}`, 'InboundEmailService');
 
-    // Check if email already exists (by messageId, normalized so SES and S3 match)
-    const existingEmails = await this.inboundEmailRepository.find({
-      where: {},
-    });
-    const existingEmail = existingEmails.find(
-      (e) =>
-        normalizeMessageId(e.rawData?.mail?.messageId) === messageId ||
-        e.rawData?.receipt?.action?.objectKey === objectKey,
-    );
+    // Check if email already exists (by messageId, objectKey, or from+to+subject+date match)
+    // Use database query instead of fetching all emails for efficiency
+    // Check 1: By Message-ID header (normalized)
+    let existingEmail = await this.inboundEmailRepository
+      .createQueryBuilder('e')
+      .where('e."rawData"->\'mail\'->>\'messageId\' = :messageId', { messageId })
+      .getOne();
+
+    // Check 2: By objectKey (same S3 object processed twice)
+    if (!existingEmail && objectKey) {
+      existingEmail = await this.inboundEmailRepository
+        .createQueryBuilder('e')
+        .where('e."rawData"->\'receipt\'->\'action\'->>\'objectKey\' = :objectKey', { objectKey })
+        .getOne();
+    }
+
+    // Check 3: By from+to+subject+date (within 5 minutes) - catches cases where Message-ID differs
+    // This handles emails that were processed via SES (with SES messageId) and then via S3 (with Message-ID header)
+    if (!existingEmail && from && to && subject && date) {
+      const dateObj = new Date(date);
+      const fiveMinutesAgo = new Date(dateObj.getTime() - 5 * 60 * 1000);
+      const fiveMinutesLater = new Date(dateObj.getTime() + 5 * 60 * 1000);
+      
+      const candidates = await this.inboundEmailRepository
+        .createQueryBuilder('e')
+        .where('LOWER(e.from) = LOWER(:from)', { from })
+        .andWhere('LOWER(e.to) = LOWER(:to)', { to })
+        .andWhere('e.subject = :subject', { subject })
+        .andWhere('e.receivedAt >= :fiveMinutesAgo', { fiveMinutesAgo })
+        .andWhere('e.receivedAt <= :fiveMinutesLater', { fiveMinutesLater })
+        .getMany();
+      
+      if (candidates.length > 0) {
+        // Found potential duplicate - log for investigation
+        this.logger.log(`[S3_PROCESS] Found ${candidates.length} potential duplicate(s) by from+to+subject+date match`, 'InboundEmailService');
+        existingEmail = candidates[0]; // Use first match
+      }
+    }
 
     if (existingEmail) {
       this.logger.log(`[S3_PROCESS] Email already exists with ID: ${existingEmail.id}, updating content only (no webhook)`, 'InboundEmailService');
