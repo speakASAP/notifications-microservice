@@ -8,19 +8,16 @@ import {
   Get,
   Query,
   Param,
-  UseGuards,
   HttpException,
   HttpStatus,
   Inject,
 } from '@nestjs/common';
 import { NotificationsService } from '../notifications/notifications.service';
 import { InboundEmailService } from '../email/inbound-email.service';
-import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { ApiResponseUtil } from '../../shared/utils/api-response.util';
 import { LoggerService } from '../../shared/logger/logger.service';
 
 @Controller('admin')
-@UseGuards(JwtAuthGuard)
 export class AdminController {
   constructor(
     private readonly notificationsService: NotificationsService,

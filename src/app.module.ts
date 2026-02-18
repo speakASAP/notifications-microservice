@@ -4,6 +4,7 @@
 
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AdminModule } from './admin/admin.module';
@@ -12,6 +13,8 @@ import { HealthController } from './health/health.controller';
 import { InfoController } from './info/info.controller';
 import { DatabaseModule } from '../shared/database/database.module';
 import { LoggerModule } from '../shared/logger/logger.module';
+import { AuthModule } from './auth/auth.module';
+import { JwtRolesGuard } from './auth/jwt-roles.guard';
 
 @Module({
   imports: [
@@ -20,6 +23,7 @@ import { LoggerModule } from '../shared/logger/logger.module';
       envFilePath: ['.env'],
     }),
     ScheduleModule.forRoot(),
+    AuthModule,
     DatabaseModule,
     LoggerModule,
     NotificationsModule,
@@ -27,6 +31,8 @@ import { LoggerModule } from '../shared/logger/logger.module';
     ApiConfigModule,
   ],
   controllers: [HealthController, InfoController],
-  providers: [],
+  providers: [
+    { provide: APP_GUARD, useClass: JwtRolesGuard },
+  ],
 })
 export class AppModule {}
