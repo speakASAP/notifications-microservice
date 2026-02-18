@@ -40,7 +40,7 @@ Use `up -d --build` after a pull; `restart` alone does not rebuild the image.
 - **`check-undelivered-to-helpdesk.sh`** - List inbound emails sent to helpdesk webhook but not yet confirmed delivered (helpdesk calls delivery-confirmation when ticket/comment is created).
   - Usage: `./scripts/check-undelivered-to-helpdesk.sh [limit]`
   - On prod: `ssh statex 'cd ~/notifications-microservice && ./scripts/check-undelivered-to-helpdesk.sh'`
-- **`update-helpdesk-subscription-filter.sh`** - Set helpdesk webhook subscription `filters.to` to `["*@speakasap.com"]` so all inbound emails to any @speakasap.com address (including contact@) are delivered to Helpdesk.
+- **`update-helpdesk-subscription-filter.sh`** - Set helpdesk webhook subscription `filters.to` to `["*@speakasap.com"]` so all inbound emails to any @speakasap.com address (including contact@, stashok@) are delivered to Helpdesk. See `docs/EMAIL_DELIVERY_POLICY.md`.
   - Usage: `./scripts/update-helpdesk-subscription-filter.sh`
   - On prod: `ssh statex 'cd ~/notifications-microservice && ./scripts/update-helpdesk-subscription-filter.sh'`
 - **`trace-webhook-flow.sh`** - Print recent logs for the inbound-email → webhook delivery flow to find where it hangs when a ticket does not appear. See also `docs/TRACE_WEBHOOK_HANG.md`.
