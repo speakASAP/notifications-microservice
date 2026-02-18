@@ -57,6 +57,26 @@ Duplicate tickets sometimes had different subjects: one correct (e.g. "Napływ K
 
 After this fix, subjects from the S3 path should match those from the SES path (e.g. "Napływ Klientów ze strony").
 
+## Duplicate helpdesk subscriptions and delivery confirmation (Feb 2026)
+
+Two additional causes of duplicate tickets were identified:
+
+1. **Multiple helpdesk webhook subscriptions**  
+   If notifications-microservice has two (or more) active subscriptions with `serviceName: 'helpdesk'` (e.g. one URL for `/api/email/inbound/` and one for `/api/email/webhook/`), each inbound email is delivered to each subscription → 2+ webhooks per email → 2+ Celery tasks → duplicate tickets or duplicate processing.  
+   **Action:** Keep only one active helpdesk subscription. Check with `GET /webhooks/subscriptions` and remove duplicates (or use speakasap-portal’s `python manage.py check_webhook_subscriptions`).
+
+2. **Delivery confirmation not received**  
+   After the helpdesk creates a ticket it must call `POST /email/inbound/delivery-confirmation` so notifications-microservice marks the webhook_delivery as `delivered`. If this fails (timeout, wrong NOTIFICATION_SERVICE_URL, or Celery task crash before `finally`), the email stays “undelivered”. Then `GET /email/inbound` (used by poll_new_emails) still returns it → the same email is queued again every poll cycle → duplicate processing and, when listOnly returned a synthetic `messageId: inbound-{id}`, the poll idempotency check did not match webhook-created tickets → duplicate tickets.  
+   **Action:** Ensure NOTIFICATION_SERVICE_URL from speakasap-portal reaches notifications-microservice; check helpdesk/Celery logs for “Failed to confirm delivery”. List undelivered: `./scripts/check-undelivered-to-helpdesk.sh` (on prod: `ssh statex 'cd ~/notifications-microservice && ./scripts/check-undelivered-to-helpdesk.sh'`).
+
+### listOnly messageId fix (notifications-microservice)
+
+`findInboundEmails` with `listOnly: true` now returns the real `messageId` from `rawData.mail.messageId` (when present) instead of a synthetic `inbound-{email.id}`. That allows the helpdesk poll idempotency check (by message_id) to match tickets already created by webhook, so the same email is not re-queued and duplicate tickets from poll are avoided.
+
+### Poll confirms delivery when skipping (speakasap-portal, Feb 2026)
+
+When `poll_new_emails` skips an email because a ticket or comment with the same `message_id` already exists, it now calls the delivery-confirmation endpoint so the email is marked as delivered. Otherwise the email would keep appearing in `GET /email/inbound` every poll cycle. The confirmation URL uses the same `NOTIFICATION_SERVICE_URL` fallback (settings + env) as the rest of the helpdesk tasks.
+
 ## Deployment
 
 Redeploy notifications-microservice after pulling these changes. No DB migrations or config changes are required.

@@ -8,7 +8,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
 import { S3Client, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
-import { simpleParser, ParsedMail } from 'mailparser';
 import { LoggerService } from '../../shared/logger/logger.service';
 import { InboundEmail } from './entities/inbound-email.entity';
 import { WebhookDeliveryService } from './webhook-delivery.service';
@@ -1245,9 +1244,6 @@ export class InboundEmailService {
       await this.inboundEmailRepository.save(email);
       this.logger.log(`[PROCESS] ✅ Email marked as processed`, 'InboundEmailService');
 
-      // Check and forward email if forwarding rule exists
-      await this.forwardEmailIfNeeded(email);
-
       // Deliver to all subscribed services via webhooks
       this.logger.log(`[PROCESS] Delivering to subscribed services...`, 'InboundEmailService');
       await this.webhookDeliveryService.deliverToSubscriptions(email);
@@ -1265,509 +1261,6 @@ export class InboundEmailService {
       
       this.logger.log(`[PROCESS] ===== PROCESS INBOUND EMAIL END (ERROR) =====`, 'InboundEmailService');
       throw error;
-    }
-  }
-
-  /**
-   * Normalize recipient for forwarding lookup: extract address from "Name <addr>" and lowercase.
-   * So "Stashok <stashok@speakasap.com>" and "stashok@speakasap.com" both match rule key "stashok@speakasap.com".
-   */
-  private normalizeRecipientForForwarding(recipient: string): string {
-    if (!recipient || typeof recipient !== 'string') return '';
-    const s = recipient.trim();
-    const angle = s.indexOf('<');
-    if (angle !== -1) {
-      const end = s.indexOf('>', angle);
-      const addr = end !== -1 ? s.slice(angle + 1, end).trim() : s.slice(angle + 1).trim();
-      return addr.toLowerCase();
-    }
-    const emailMatch = s.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-    return emailMatch ? emailMatch[1].toLowerCase() : s.toLowerCase();
-  }
-
-  /**
-   * Get email forwarding rules from environment variable
-   * Format: JSON object like {"stashok@speakasap.com": "ssfskype@gmail.com"}
-   * Keys are normalized to lowercase for case-insensitive match.
-   */
-  private getForwardingRules(): Record<string, string> {
-    let forwardingRulesEnv = process.env.EMAIL_FORWARDING_RULES;
-    if (!forwardingRulesEnv) {
-      return {};
-    }
-    forwardingRulesEnv = forwardingRulesEnv.trim();
-    if ((forwardingRulesEnv.startsWith("'") && forwardingRulesEnv.endsWith("'")) ||
-        (forwardingRulesEnv.startsWith('"') && forwardingRulesEnv.endsWith('"'))) {
-      forwardingRulesEnv = forwardingRulesEnv.slice(1, -1);
-    }
-
-    try {
-      const rules = JSON.parse(forwardingRulesEnv);
-      if (typeof rules !== 'object' || Array.isArray(rules)) {
-        this.logger.warn(`[FORWARD] Invalid EMAIL_FORWARDING_RULES format, expected object`, 'InboundEmailService');
-        return {};
-      }
-      const normalized: Record<string, string> = {};
-      for (const [key, value] of Object.entries(rules)) {
-        if (typeof key === 'string' && typeof value === 'string') {
-          normalized[key.toLowerCase().trim()] = value.trim();
-        }
-      }
-      const entriesPreview = Object.entries(normalized)
-        .map(([from, to]) => `${from} -> ${to}`)
-        .join(', ');
-      this.logger.log(
-        `[FORWARD] Loaded EMAIL_FORWARDING_RULES: count=${Object.keys(normalized).length} rules=${entriesPreview || 'none'}`,
-        'InboundEmailService',
-      );
-      return normalized;
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`[FORWARD] Failed to parse EMAIL_FORWARDING_RULES: ${errorMessage}`, undefined, 'InboundEmailService');
-      return {};
-    }
-  }
-
-  /**
-   * Rebuild MIME message properly for forwarding
-   * Parses original email, creates new message with verified From address
-   * Removes Reply-To (SES validates it), adds X-Original-From
-   * Preserves body, attachments, and formatting
-   */
-  private async rebuildMimeForForwarding(
-    rawMime: string | Buffer,
-    originalFrom: string,
-    verifiedFromEmail: string,
-    verifiedFromName?: string,
-  ): Promise<Buffer> {
-    try {
-      // Decode base64 if needed
-      let rawBuffer: Buffer;
-      if (Buffer.isBuffer(rawMime)) {
-        rawBuffer = rawMime;
-      } else if (typeof rawMime === 'string') {
-        // Check if base64 encoded
-        const firstPart = rawMime.substring(0, Math.min(200, rawMime.length));
-        const hasLineBreaks = firstPart.includes('\r\n') || firstPart.includes('\n');
-        if (!hasLineBreaks && rawMime.length > 50) {
-          try {
-            rawBuffer = Buffer.from(rawMime, 'base64');
-            this.logger.log(`[FORWARD] Decoded base64 raw MIME content (length: ${rawBuffer.length})`, 'InboundEmailService');
-          } catch (e) {
-            rawBuffer = Buffer.from(rawMime, 'latin1');
-          }
-        } else {
-          rawBuffer = Buffer.from(rawMime, 'latin1');
-        }
-      } else {
-        throw new Error('Invalid rawMime type, expected string or Buffer');
-      }
-
-      // Parse original email
-      const parsed: ParsedMail = await simpleParser(rawBuffer);
-      this.logger.log(`[FORWARD] Parsed original email - subject: ${parsed.subject}, attachments: ${parsed.attachments?.length || 0}`, 'InboundEmailService');
-
-      // Build new MIME message
-      const lines: string[] = [];
-      
-      // Helper to format address
-      const formatAddress = (addr: any): string => {
-        if (!addr) return '';
-        if (Array.isArray(addr)) {
-          return addr.map(a => a.text || a.value || '').join(', ');
-        }
-        return addr.text || addr.value || '';
-      };
-
-      // Headers
-      lines.push(`From: ${verifiedFromName ? `${verifiedFromName} <${verifiedFromEmail}>` : verifiedFromEmail}`);
-      lines.push(`To: ${formatAddress(parsed.to)}`);
-      if (parsed.cc) {
-        lines.push(`Cc: ${formatAddress(parsed.cc)}`);
-      }
-      lines.push(`Subject: ${parsed.subject || '(no subject)'}`);
-      lines.push(`Date: ${parsed.date ? parsed.date.toUTCString() : new Date().toUTCString()}`);
-      if (parsed.messageId) {
-        lines.push(`Message-ID: ${parsed.messageId}`);
-      }
-      if (parsed.inReplyTo) {
-        lines.push(`In-Reply-To: ${parsed.inReplyTo}`);
-      }
-      if (parsed.references) {
-        lines.push(`References: ${parsed.references}`);
-      }
-      
-      // X-Original-From header (preserve original sender)
-      lines.push(`X-Original-From: ${originalFrom}`);
-      
-      // Remove Reply-To (SES validates it, we'll handle replies via X-Original-From)
-      // Don't include Reply-To header at all
-      
-      // Content-Type
-      const hasAttachments = parsed.attachments && parsed.attachments.length > 0;
-      const hasHtml = !!parsed.html;
-      const hasText = !!parsed.text;
-      
-      if (hasAttachments || (hasHtml && hasText)) {
-        // Multipart message
-        const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-        lines.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
-        lines.push('');
-        lines.push(`--${boundary}`);
-        
-        // Body part (multipart/alternative if both HTML and text)
-        if (hasHtml && hasText) {
-          const altBoundary = `----=_Part_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-          lines.push(`Content-Type: multipart/alternative; boundary="${altBoundary}"`);
-          lines.push('');
-          lines.push(`--${altBoundary}`);
-          lines.push('Content-Type: text/plain; charset=UTF-8');
-          lines.push('Content-Transfer-Encoding: quoted-printable');
-          lines.push('');
-          lines.push(this.encodeQuotedPrintable(parsed.text || ''));
-          lines.push(`--${altBoundary}`);
-          lines.push('Content-Type: text/html; charset=UTF-8');
-          lines.push('Content-Transfer-Encoding: quoted-printable');
-          lines.push('');
-          lines.push(this.encodeQuotedPrintable(parsed.html || ''));
-          lines.push(`--${altBoundary}--`);
-        } else if (hasHtml) {
-          lines.push('Content-Type: text/html; charset=UTF-8');
-          lines.push('Content-Transfer-Encoding: quoted-printable');
-          lines.push('');
-          lines.push(this.encodeQuotedPrintable(parsed.html || ''));
-        } else {
-          lines.push('Content-Type: text/plain; charset=UTF-8');
-          lines.push('Content-Transfer-Encoding: quoted-printable');
-          lines.push('');
-          lines.push(this.encodeQuotedPrintable(parsed.text || ''));
-        }
-        
-        // Attachments
-        if (hasAttachments && parsed.attachments) {
-          for (const attachment of parsed.attachments) {
-            lines.push(`--${boundary}`);
-            lines.push(`Content-Type: ${attachment.contentType || 'application/octet-stream'}`);
-            if (attachment.filename) {
-              lines.push(`Content-Disposition: attachment; filename="${attachment.filename}"`);
-            }
-            lines.push('Content-Transfer-Encoding: base64');
-            lines.push('');
-            if (attachment.content) {
-              const contentBuffer = Buffer.isBuffer(attachment.content) 
-                ? attachment.content 
-                : Buffer.from(attachment.content as string, 'base64');
-              lines.push(contentBuffer.toString('base64').match(/.{1,76}/g)?.join('\r\n') || '');
-            }
-          }
-        }
-        
-        lines.push(`--${boundary}--`);
-      } else {
-        // Simple message (no attachments)
-        if (hasHtml) {
-          lines.push('Content-Type: text/html; charset=UTF-8');
-          lines.push('Content-Transfer-Encoding: quoted-printable');
-          lines.push('');
-          lines.push(this.encodeQuotedPrintable(parsed.html || ''));
-        } else {
-          lines.push('Content-Type: text/plain; charset=UTF-8');
-          lines.push('Content-Transfer-Encoding: quoted-printable');
-          lines.push('');
-          lines.push(this.encodeQuotedPrintable(parsed.text || ''));
-        }
-      }
-
-      const rebuiltMime = lines.join('\r\n');
-      this.logger.log(`[FORWARD] Rebuilt MIME message (length: ${rebuiltMime.length}, attachments: ${parsed.attachments?.length || 0})`, 'InboundEmailService');
-      
-      return Buffer.from(rebuiltMime, 'utf-8');
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`[FORWARD] Failed to rebuild MIME: ${errorMessage}`, undefined, 'InboundEmailService');
-      throw error;
-    }
-  }
-
-  /**
-   * Encode text as quoted-printable (RFC 2045)
-   * Lines must not exceed 76 characters (excluding CRLF)
-   */
-  private encodeQuotedPrintable(text: string): string {
-    const lines = text.split(/\r?\n/);
-    const encodedLines: string[] = [];
-    
-    for (const line of lines) {
-      let currentLine = '';
-      
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        const code = char.charCodeAt(0);
-        let encodedChar: string;
-        
-        // Characters that must be encoded
-        if (char === '=') {
-          encodedChar = '=3D';
-        } else if (code > 126 || (code < 32 && code !== 9 && code !== 13 && code !== 10)) {
-          // Non-printable or non-ASCII (except tab, CR, LF)
-          const utf8Bytes = Buffer.from(char, 'utf-8');
-          encodedChar = Array.from(utf8Bytes)
-            .map(b => '=' + b.toString(16).toUpperCase().padStart(2, '0'))
-            .join('');
-        } else if (code === 9) {
-          // Tab - keep as-is but check line length
-          encodedChar = '\t';
-        } else {
-          encodedChar = char;
-        }
-        
-        // Check if adding this char would exceed 76 chars (soft line break needed)
-        if (currentLine.length + encodedChar.length > 75) {
-          encodedLines.push(currentLine + '=');
-          currentLine = encodedChar;
-        } else {
-          currentLine += encodedChar;
-        }
-      }
-      
-      if (currentLine.length > 0) {
-        encodedLines.push(currentLine);
-      }
-    }
-    
-    return encodedLines.join('\r\n');
-  }
-
-  /**
-   * Modify raw MIME message to replace From header with verified SES address
-   * DEPRECATED: Use rebuildMimeForForwarding instead for proper MIME rebuilding
-   * This preserves attachments, formatting, and all other headers while satisfying SES requirements
-   * Adds Reply-To header so recipients can reply to the original sender
-   * Handles base64-encoded content (as stored in rawData.content)
-   */
-  private modifyRawMimeForForwarding(rawMime: string | Buffer, originalFrom: string, verifiedFromEmail: string, verifiedFromName?: string): string {
-    // rawData.content is stored as base64 string, decode it first
-    let decodedMime: string;
-    if (Buffer.isBuffer(rawMime)) {
-      decodedMime = rawMime.toString('latin1');
-    } else if (typeof rawMime === 'string') {
-      // Check if it's base64 encoded (typical pattern: no newlines in first 100 chars, or base64-like)
-      // Try to decode if it looks like base64 (no \r\n or \n in first part)
-      const firstPart = rawMime.substring(0, Math.min(200, rawMime.length));
-      const hasLineBreaks = firstPart.includes('\r\n') || firstPart.includes('\n');
-      if (!hasLineBreaks && rawMime.length > 50) {
-        // Likely base64 encoded, try to decode
-        try {
-          decodedMime = Buffer.from(rawMime, 'base64').toString('latin1');
-          this.logger.log(`[FORWARD] Decoded base64 raw MIME content (length: ${decodedMime.length})`, 'InboundEmailService');
-        } catch (e) {
-          // Not base64, use as-is
-          this.logger.log(`[FORWARD] Raw MIME content is not base64, using as-is`, 'InboundEmailService');
-          decodedMime = rawMime;
-        }
-      } else {
-        // Already decoded (has line breaks), use as-is
-        decodedMime = rawMime;
-      }
-    } else {
-      throw new Error('Invalid rawMime type, expected string or Buffer');
-    }
-
-    // MIME format: headers (lines ending with \r\n), blank line (\r\n\r\n), then body
-    const headerBodySplit = decodedMime.indexOf('\r\n\r\n');
-    if (headerBodySplit === -1) {
-      // Fallback: try \n\n (some systems use LF only)
-      const headerBodySplitLF = decodedMime.indexOf('\n\n');
-      if (headerBodySplitLF === -1) {
-        this.logger.warn(`[FORWARD] Could not find header/body separator in raw MIME, returning as-is`, 'InboundEmailService');
-        return decodedMime;
-      }
-      return this.modifyRawMimeHeaders(decodedMime, headerBodySplitLF, '\n', originalFrom, verifiedFromEmail, verifiedFromName);
-    }
-    return this.modifyRawMimeHeaders(decodedMime, headerBodySplit, '\r\n', originalFrom, verifiedFromEmail, verifiedFromName);
-  }
-
-  /**
-   * Extract header value from header line (handles "Header: value" format)
-   */
-  private extractHeaderValue(headerLine: string): string {
-    const colonIndex = headerLine.indexOf(':');
-    if (colonIndex === -1) return '';
-    return headerLine.substring(colonIndex + 1).trim();
-  }
-
-  /**
-   * Modify headers section of raw MIME message
-   * Preserves original Reply-To if it exists (may differ from From)
-   * Adds X-Original-From to preserve original sender information
-   */
-  private modifyRawMimeHeaders(
-    rawMime: string,
-    headerBodySplit: number,
-    lineEnding: string,
-    originalFrom: string,
-    verifiedFromEmail: string,
-    verifiedFromName?: string,
-  ): string {
-    const headersSection = rawMime.substring(0, headerBodySplit);
-    const bodySection = rawMime.substring(headerBodySplit + (lineEnding === '\r\n' ? 4 : 2));
-
-    // Split headers into lines (handle folded headers - lines starting with space/tab are continuations)
-    const headerLines: string[] = [];
-    let currentHeader = '';
-    for (const line of headersSection.split(lineEnding)) {
-      if (line.match(/^[\t ]/)) {
-        // Continuation of previous header
-        currentHeader += lineEnding + line;
-      } else {
-        if (currentHeader) {
-          headerLines.push(currentHeader);
-        }
-        currentHeader = line;
-      }
-    }
-    if (currentHeader) {
-      headerLines.push(currentHeader);
-    }
-
-    // Process headers: replace From, preserve original Reply-To, add X-Original-From
-    const modifiedHeaders: string[] = [];
-    let hasFrom = false;
-    let hasReplyTo = false;
-    let hasXOriginalFrom = false;
-
-    for (const headerLine of headerLines) {
-      const headerLower = headerLine.toLowerCase();
-      if (headerLower.startsWith('from:')) {
-        // Replace From header with verified address
-        const fromDisplay = verifiedFromName ? `${verifiedFromName} <${verifiedFromEmail}>` : verifiedFromEmail;
-        modifiedHeaders.push(`From: ${fromDisplay}`);
-        hasFrom = true;
-      } else if (headerLower.startsWith('reply-to:')) {
-        // Preserve original Reply-To so recipients can reply to original sender
-        // SES may validate Reply-To, but we'll try to keep it for proper email flow
-        modifiedHeaders.push(headerLine); // Keep original Reply-To as-is
-        hasReplyTo = true;
-      } else if (headerLower.startsWith('x-original-from:')) {
-        // Skip if already exists (we'll add our own)
-        hasXOriginalFrom = true;
-      } else {
-        // Keep all other headers as-is
-        modifiedHeaders.push(headerLine);
-      }
-    }
-
-    // Ensure From header exists (should always exist, but safety check)
-    if (!hasFrom) {
-      const fromDisplay = verifiedFromName ? `${verifiedFromName} <${verifiedFromEmail}>` : verifiedFromEmail;
-      modifiedHeaders.unshift(`From: ${fromDisplay}`);
-    }
-
-    // Add X-Original-From header to preserve original sender info (for transparency)
-    if (!hasXOriginalFrom) {
-      modifiedHeaders.push(`X-Original-From: ${originalFrom}`);
-    }
-
-    // Add Reply-To if not present (use original From, so recipients can reply to original sender)
-    if (!hasReplyTo) {
-      modifiedHeaders.push(`Reply-To: ${originalFrom}`);
-    }
-
-    // Reconstruct MIME message
-    return modifiedHeaders.join(lineEnding) + lineEnding + lineEnding + bodySection;
-  }
-
-  /**
-   * Forward email if forwarding rule exists for the recipient
-   */
-  private async forwardEmailIfNeeded(email: InboundEmail): Promise<void> {
-    const forwardingRules = this.getForwardingRules();
-    const recipientKey = this.normalizeRecipientForForwarding(email.to);
-    const forwardTo = recipientKey ? forwardingRules[recipientKey] : undefined;
-    const rulesCount = Object.keys(forwardingRules).length;
-    const rawMessageId = email.rawData?.mail?.messageId || email.rawData?.messageId || 'n/a';
-    this.logger.log(
-      `[FORWARD] Check emailId=${email.id || 'n/a'} messageId=${rawMessageId} to="${email.to}" normalizedKey="${recipientKey}" rulesCount=${rulesCount} forwardTo=${forwardTo || 'none'}`,
-      'InboundEmailService',
-    );
-
-    if (!forwardTo) {
-      if (rulesCount > 0) {
-        this.logger.log(`[FORWARD] No rule for recipient "${email.to}" (normalized: ${recipientKey}), skipping forward`, 'InboundEmailService');
-      } else {
-        this.logger.log(`[FORWARD] No forwarding rules configured (EMAIL_FORWARDING_RULES empty or invalid), skipping`, 'InboundEmailService');
-      }
-      return; // No forwarding rule for this recipient
-    }
-
-    this.logger.log(
-      `[FORWARD] Forwarding email id=${email.id || 'n/a'} messageId=${rawMessageId} from=${email.from} to=${email.to} -> ${forwardTo}`,
-      'InboundEmailService',
-    );
-
-    try {
-      // SES max message size: 40MB (v2 default). Raw MIME over that cannot be sent in one go.
-      const SES_MAX_RAW_DECODED_BYTES = 40 * 1024 * 1024;
-      const rawContent = email.rawData?.content;
-      const rawDecodedSizeEst = typeof rawContent === 'string' ? Math.floor((rawContent.length * 3) / 4) : 0;
-      const rawWithinSesLimit = rawContent && rawDecodedSizeEst <= SES_MAX_RAW_DECODED_BYTES;
-
-      // Get verified SES From address (required for SES to accept the email)
-      const verifiedFromEmail = process.env.AWS_SES_FROM_EMAIL || 'contact@speakasap.com';
-      const verifiedFromName = process.env.AWS_SES_FROM_NAME;
-
-      if (rawWithinSesLimit && rawContent) {
-        this.logger.log(
-          `[FORWARD] Using raw SES forward path (rebuilding MIME properly): decodedSizeBytes=${rawDecodedSizeEst} to=${forwardTo}`,
-          'InboundEmailService',
-        );
-
-        // Rebuild MIME message properly: parse original, create new message with verified From
-        // Removes Reply-To (SES validates it), adds X-Original-From for transparency
-        const rebuiltMimeBuffer = await this.rebuildMimeForForwarding(rawContent, email.from, verifiedFromEmail, verifiedFromName);
-        
-        this.logger.log(
-          `[FORWARD] Rebuilt MIME: From="${verifiedFromEmail}", Reply-To removed (SES validation), X-Original-From="${email.from}"`,
-          'InboundEmailService',
-        );
-
-        await this.emailService.send({
-          to: forwardTo,
-          subject: email.subject || '(no subject)',
-          message: '', // Not used for raw
-          rawMessage: rebuiltMimeBuffer,
-          emailProvider: 'ses',
-        });
-        this.logger.log(`[FORWARD] ✅ Successfully forwarded rebuilt email from ${email.to} to ${forwardTo} (${rawDecodedSizeEst} bytes, attachments preserved)`, 'InboundEmailService');
-        return;
-      }
-
-      if (rawContent && rawDecodedSizeEst > SES_MAX_RAW_DECODED_BYTES) {
-        this.logger.warn(
-          `[FORWARD] Raw email ~${Math.round(rawDecodedSizeEst / 1024 / 1024)}MB exceeds SES limit ${SES_MAX_RAW_DECODED_BYTES / 1024 / 1024}MB; forwarding body only to ${forwardTo}`,
-          'InboundEmailService',
-        );
-      }
-
-      // Fallback: forward body only (no attachments when over SES limit, or when no raw)
-      const originalBody = email.bodyHtml || email.bodyText || '';
-      this.logger.log(
-        `[FORWARD] Using body-only forward path: provider=auto contentType=${email.bodyHtml ? 'text/html' : 'text/plain'} bodyLength=${originalBody.length} to=${forwardTo}`,
-        'InboundEmailService',
-      );
-      await this.emailService.send({
-        to: forwardTo,
-        subject: email.subject || '(no subject)',
-        message: originalBody,
-        contentType: email.bodyHtml ? 'text/html' : 'text/plain',
-        emailProvider: 'auto',
-      });
-      this.logger.log(`[FORWARD] ✅ Successfully forwarded email (fallback) from ${email.to} to ${forwardTo}`, 'InboundEmailService');
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const errorStack = error instanceof Error ? error.stack : undefined;
-      this.logger.error(`[FORWARD] ❌ Failed to forward email from ${email.to} to ${forwardTo}: ${errorMessage}`, errorStack, 'InboundEmailService');
-      // Don't throw - forwarding failure shouldn't break email processing
     }
   }
 
@@ -2115,35 +1608,43 @@ export class InboundEmailService {
       queryBuilder.take(filters.limit);
     }
 
-    // listOnly: minimal columns only, use getMany() so we never reference rawData (avoids "column email.rawdata does not exist" on PG).
+    // listOnly: minimal columns + real messageId from rawData so helpdesk poll idempotency matches webhook-created tickets.
+    // Without real messageId, poll sees messageId "inbound-{id}" and never matches tickets created by webhook (real SES messageId), causing re-queue and duplicate tickets when full fetch fails.
     if (listOnly) {
-      queryBuilder.select([
-        'email.id',
-        'email.from',
-        'email.to',
-        'email.subject',
-        'email.receivedAt',
-        'email.status',
-      ]);
-      this.logger.log(`[SERVICE] Executing database query (listOnly=true, getMany only)...`, 'InboundEmailService');
+      queryBuilder
+        .select([
+          'email.id',
+          'email.from',
+          'email.to',
+          'email.subject',
+          'email.receivedAt',
+          'email.status',
+        ])
+        .addSelect('email."rawData"->\'mail\'->>\'messageId\'', 'messageId');
+      this.logger.log(`[SERVICE] Executing database query (listOnly=true, with messageId)...`, 'InboundEmailService');
       const queryStart = Date.now();
-      const emails = await queryBuilder.getMany();
+      const { entities: emails, raw: rawRows } = await queryBuilder.getRawAndEntities();
       const queryMs = Date.now() - queryStart;
       this.logger.log(`[SERVICE] ✅ Database query completed in ${queryMs}ms, found ${emails.length} emails`, 'InboundEmailService');
       this.logger.log(`[SERVICE] Formatting response (listOnly)...`, 'InboundEmailService');
       const totalMs = Date.now() - t0;
-      const result = emails.map((email) => ({
-        id: email.id,
-        from: email.from,
-        to: email.to,
-        subject: email.subject || 'Email ticket',
-        bodyText: '',
-        bodyHtml: null,
-        attachments: [],
-        receivedAt: email.receivedAt,
-        messageId: `inbound-${email.id}`,
-        status: email.status,
-      }));
+      const result = emails.map((email, i) => {
+        const rawMsgId = rawRows[i]?.messageId ?? rawRows[i]?.message_id;
+        const messageId =
+          rawMsgId && String(rawMsgId).trim() ? String(rawMsgId).trim() : `inbound-${email.id}`;
+        return {
+          id: email.id,
+          from: email.from,
+          to: email.to,
+          subject: email.subject || 'Email ticket',
+          bodyText: '',
+          bodyHtml: null,
+          attachments: [],
+          receivedAt: email.receivedAt,
+          messageId,
+          status: email.status,
+        };
+      });
       this.logger.log(`[SERVICE] ===== findInboundEmails END (SUCCESS) totalMs=${totalMs} =====`, 'InboundEmailService');
       return result;
     }
