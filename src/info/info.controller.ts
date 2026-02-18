@@ -4,9 +4,11 @@
  */
 
 import { Controller, Get } from '@nestjs/common';
+import { Public } from '../auth/roles.decorator';
 
 @Controller()
 export class InfoController {
+  @Public()
   @Get()
   getServiceInfo() {
     return {
@@ -31,6 +33,7 @@ export class InfoController {
     };
   }
 
+  @Public()
   @Get('api')
   getApiInfo() {
     return {
