@@ -477,10 +477,23 @@ export class InboundEmailService {
           // Content is already decoded in parseMultipart
           const contentType = part.contentType || '';
           const contentLength = part.content?.length || 0;
+          const hasFilename = !!(part.filename && part.filename.trim());
           this.logger.log(`[PARSE] Processing part: contentType=${contentType}, contentLength=${contentLength}, filename=${part.filename || 'N/A'}`, 'InboundEmailService');
 
-          if (contentType.includes('text/plain')) {
+          // CRITICAL FIX: Check for filename FIRST - if a part has a filename, it's an attachment
+          // even if it's text/plain or text/html (e.g., CSV files, HTML attachments)
+          if (hasFilename) {
+            // Part has filename - treat as attachment regardless of content type
+            parts.attachments.push({
+              filename: part.filename,
+              contentType: part.contentType || 'application/octet-stream',
+              content: part.content,
+              rawBase64: part.rawBase64,
+            });
+            this.logger.log(`[PARSE] ✅ Detected attachment (has filename): ${part.filename} (${part.contentType || 'N/A'})${part.rawBase64 ? ' [raw base64]' : ''}, contentLength: ${contentLength}`, 'InboundEmailService');
+          } else if (contentType.includes('text/plain')) {
             // Preserve text/plain content even if it's mostly whitespace (e.g., "------\nBest regards")
+            // Only if it doesn't have a filename (already handled above)
             if (part.content) {
               parts.bodyText = part.content;
               this.logger.log(`[PARSE] ✅ Set bodyText from text/plain part (length: ${parts.bodyText.length}, trimmed length: ${parts.bodyText.trim().length})`, 'InboundEmailService');
@@ -489,6 +502,7 @@ export class InboundEmailService {
             }
           } else if (contentType.includes('text/html')) {
             // Preserve text/html content even if it's mostly whitespace
+            // Only if it doesn't have a filename (already handled above)
             if (part.content) {
               parts.bodyHtml = part.content;
               this.logger.log(`[PARSE] ✅ Set bodyHtml from text/html part (length: ${parts.bodyHtml.length}, trimmed length: ${parts.bodyHtml.trim().length})`, 'InboundEmailService');
@@ -497,11 +511,10 @@ export class InboundEmailService {
             }
           } else {
             // Detect attachments: check Content-Disposition or Content-Type
+            const contentDispositionLower = part.contentDisposition?.toLowerCase() || '';
             const isAttachment = 
               // Explicit attachment disposition
-              part.contentDisposition?.toLowerCase().includes('attachment') ||
-              // Has filename in Content-Disposition (even if inline)
-              (part.filename && part.contentDisposition?.toLowerCase().includes('filename')) ||
+              contentDispositionLower.includes('attachment') ||
               // Content-Type indicates attachment (not text/plain, text/html, or multipart)
               (part.contentType && 
                !part.contentType.includes('text/plain') && 
@@ -516,9 +529,9 @@ export class InboundEmailService {
                 content: part.content,
                 rawBase64: part.rawBase64,
               });
-              this.logger.log(`[PARSE] Detected attachment: ${part.filename || 'attachment'} (${part.contentType || 'N/A'})${part.rawBase64 ? ' [raw base64]' : ''}`, 'InboundEmailService');
+              this.logger.log(`[PARSE] Detected attachment: ${part.filename || 'attachment'} (${part.contentType || 'N/A'})${part.rawBase64 ? ' [raw base64]' : ''}, contentDisposition: ${part.contentDisposition || 'N/A'}`, 'InboundEmailService');
             } else if (contentType) {
-              this.logger.log(`[PARSE] Skipped part with contentType: ${contentType} (not text/plain, text/html, or attachment)`, 'InboundEmailService');
+              this.logger.log(`[PARSE] Skipped part with contentType: ${contentType}, filename: ${part.filename || 'N/A'}, contentDisposition: ${part.contentDisposition || 'N/A'} (not text/plain, text/html, or attachment)`, 'InboundEmailService');
             }
           }
           // Note: Nested multipart messages are now handled recursively in parseMultipart itself,
@@ -623,7 +636,9 @@ export class InboundEmailService {
 
       const contentTypeMatch = partHeaders.match(/Content-Type:\s*([^;\r\n]+)/i);
       const contentDispositionMatch = partHeaders.match(/Content-Disposition:\s*([^;\r\n]+)/i);
-      const filenameMatch = partHeaders.match(/filename="?([^";\r\n]+)"?/i);
+      // Match filename in Content-Disposition: filename="file.pdf" or filename*=UTF-8''file.pdf or filename=file.pdf
+      const filenameMatch = partHeaders.match(/filename\*?=(?:UTF-8[''])?["']?([^";\r\n]+)["']?/i) ||
+                            partHeaders.match(/filename=["']?([^";\r\n]+)["']?/i);
       const transferEncodingMatch = partHeaders.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
       const charsetMatch = partHeaders.match(/charset=["']?([^"'\s;]+)["']?/i);
       const partCharset = charsetMatch ? charsetMatch[1].trim() : undefined;
@@ -819,6 +834,7 @@ export class InboundEmailService {
 
   /**
    * Check if a MIME part is an attachment (by Content-Disposition or Content-Type)
+   * Fix: Check filename first (most reliable), then Content-Disposition, then Content-Type
    */
   private isAttachmentPart(
     contentType: string | undefined,
@@ -827,8 +843,11 @@ export class InboundEmailService {
   ): boolean {
     const contentDisposition = contentDispositionMatch?.[1]?.trim().toLowerCase() ?? '';
     const hasFilename = !!(filenameMatch?.[1]?.trim());
+    // Filename is the strongest indicator of attachment (even without Content-Disposition header)
+    if (hasFilename) return true;
+    // Explicit attachment disposition
     if (contentDisposition.includes('attachment')) return true;
-    if (hasFilename && contentDisposition.includes('filename')) return true;
+    // Content-Type indicates attachment (not text/plain, text/html, or multipart)
     if (
       contentType &&
       !contentType.includes('text/plain') &&
