@@ -19,6 +19,9 @@ export class WebhookSubscriptionService {
     private logger: LoggerService,
   ) {}
 
+  /** Default filters for helpdesk: all *@speakasap.com (including stashok@speakasap.com) go to helpdesk. */
+  private static readonly HELPDESK_DEFAULT_FILTERS = { to: ['*@speakasap.com'] };
+
   async create(createDto: CreateSubscriptionDto): Promise<WebhookSubscription> {
     this.logger.log(`[SUBSCRIPTION] Creating subscription for service: ${createDto.serviceName}`, 'WebhookSubscriptionService');
 
@@ -27,6 +30,13 @@ export class WebhookSubscriptionService {
       new URL(createDto.webhookUrl);
     } catch (error) {
       throw new BadRequestException('Invalid webhook URL');
+    }
+
+    // Ensure helpdesk subscription receives all @speakasap.com addresses unless filters.to provided
+    let filters = createDto.filters ?? null;
+    if (createDto.serviceName === 'helpdesk' && (!filters || !filters.to?.length)) {
+      filters = { ...(filters || {}), ...WebhookSubscriptionService.HELPDESK_DEFAULT_FILTERS };
+      this.logger.log('[SUBSCRIPTION] Helpdesk subscription: using default filters.to = ["*@speakasap.com"]', 'WebhookSubscriptionService');
     }
 
     const subscription = this.subscriptionRepository.create({
