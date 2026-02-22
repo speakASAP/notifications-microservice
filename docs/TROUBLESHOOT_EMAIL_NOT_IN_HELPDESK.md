@@ -1,0 +1,161 @@
+# Troubleshoot: Email not appearing in Helpdesk
+
+When an inbound email (e.g. to <stashok@speakasap.com>) does not show up in <https://speakasap.com/helpdesk/>, use this checklist to find where the pipeline breaks.
+
+**Pipeline:** SES → (Lambda) → S3 → **S3 event** → SNS → **notifications-microservice** `/email/inbound/s3` → store + **webhook** → **speakasap-portal** helpdesk → ticket.
+
+**Reference email (your test):** from `lisapet@ukr.net`, to `stashok@speakasap.com`, subject "Сташок тест", messageId `8o7nele9c5j7rbdrcutg7hon7ne7ossan51d9qg1`, timestamp ~2026-02-21T12:34:55Z.
+
+---
+
+## 1. On statex (notifications-microservice): did the email reach the service?
+
+**Connect:** `ssh statex`
+
+### 1.1 Is the email in the database?
+
+```bash
+cd ~/notifications-microservice
+# If you have psql to the notifications DB (adjust DB name/host if needed)
+docker exec -it $(docker ps -q -f name=notifications-microservice | head -1) sh -c '
+  node -e "
+    const { Client } = require(\"pg\");
+    const c = new Client({
+      host: process.env.DB_HOST || \"db-server-postgres\",
+      port: process.env.DB_PORT || 5432,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME || \"notifications\"
+    });
+    c.connect().then(() =>
+      c.query(\"SELECT id, \\\"from\\\", \\\"to\\\", subject, status, \\\"receivedAt\\\" FROM inbound_emails ORDER BY \\\"receivedAt\\\" DESC LIMIT 20\")
+    ).then(r => { console.log(JSON.stringify(r.rows, null, 2)); return c.end(); }).catch(e => { console.error(e); process.exit(1); });
+  "
+'
+```
+
+Or query via API (from statex or your machine):
+
+```bash
+curl -s 'https://notifications.statex.cz/email/inbound?limit=20&toFilter=@speakasap.com' | jq '.data[] | {id, from, to, subject, status, receivedAt}'
+```
+
+**Look for:** Your email (to <stashok@speakasap.com>, subject "Сташок тест" or similar). If it **is not** in the list:
+
+- The email may **not have been processed** by notifications-microservice. Then either:
+  - **S3 event** did not fire (check S3 bucket → Properties → Event notifications for `forwards/` prefix → SNS topic).
+  - **SNS subscription** to `https://notifications.statex.cz/email/inbound/s3` is missing or not **Confirmed** (SNS Console → s3-email-events → Subscriptions).
+  - The service received the request but failed (see logs below).
+
+If the email **is** in the list, note its `id` and continue.
+
+### 1.2 Was the webhook sent to helpdesk?
+
+From the same DB or API, check webhook deliveries for that inbound email. Replace `INBOUND_EMAIL_ID` with the `id` from 1.1:
+
+```bash
+# API (undelivered list often shows recent sent-but-not-confirmed)
+curl -s 'https://notifications.statex.cz/email/inbound/undelivered?limit=50' | jq .
+```
+
+If the email is in `inbound_emails` but **not** in undelivered and you need to confirm deliveries, query the DB for `webhook_deliveries` for that `inbound_email_id` (see 1.1). In the notifications DB:
+
+```sql
+SELECT wd.id, wd.inbound_email_id, wd.subscription_id, wd.status, wd.http_status, ws."serviceName", ws.webhook_url
+FROM webhook_deliveries wd
+JOIN webhook_subscriptions ws ON ws.id = wd.subscription_id
+WHERE wd.inbound_email_id = 'INBOUND_EMAIL_ID';
+```
+
+**Look for:** A row with `status = 'sent'` or `'delivered'` for helpdesk. If there is **no** row for helpdesk:
+
+- Subscription filter may not match: helpdesk subscription should have `filters.to = ["*@speakasap.com"]`. Check: `curl -s https://notifications.statex.cz/webhooks/subscriptions | jq '.[] | select(.serviceName=="helpdesk") | {id, serviceName, webhookUrl, filters, status}'`.
+- Health check may be failing (service logs).
+
+### 1.3 Notifications-microservice logs
+
+```bash
+# On statex, follow container logs (adjust container name if needed)
+docker logs -f --tail 500 $(docker ps -q -f name=notifications-microservice | head -1) 2>&1 | grep -E 'inbound|WEBHOOK_DELIVERY|8o7nele9c5j7rbdrcutg7hon7ne7ossan51d9qg1|stashok|lisapet|Сташок'
+```
+
+Or check central logging (e.g. <https://logging.statex.cz>) for service `notifications-microservice` and the same keywords.
+
+**Look for:**  
+
+- `POST /email/inbound/s3` and `processEmailFromS3` / `Stored new email` (email reached and was stored).  
+- `DELIVER TO SUBSCRIPTIONS`, `Filter check result`, `Successfully delivered to helpdesk` or `Exception caught during delivery` (webhook sent or failed).
+
+---
+
+## 2. On speakasap (speakasap-portal): did the helpdesk receive and process the webhook?
+
+**Connect:** `ssh speakasap && cd speakasap-portal`
+
+### 2.1 Helpdesk / webhook logs
+
+```bash
+# Django/celery logs (paths may vary; adjust if your app logs elsewhere)
+grep -E 'WEBHOOK|email.received|process_inbound_email|lisapet|stashok|Сташок|8o7nele9c5j7rbdrcutg7hon7ne7ossan51d9qg1' /var/log/speakasap/*.log 2>/dev/null | tail -100
+# Or wherever helpdesk/celery log (e.g. journalctl, supervisor logs)
+```
+
+**Look for:** Inbound webhook received (`[WEBHOOK]`), `process_inbound_email_async`, and any errors or stack traces.
+
+### 2.2 Celery (async task that creates the ticket)
+
+The webhook returns 200 quickly and processing runs in Celery. If Celery is down or the task fails, no ticket is created.
+
+```bash
+# Check Celery worker is running and recent tasks
+celery -A portal inspect active 2>/dev/null || true
+# If you use flower or task results, check for failed tasks for queue 'email' or task name 'process_inbound_email_async'
+```
+
+Check Celery logs for errors around the time of the email (e.g. 2026-02-21 12:34–12:36 UTC):
+
+```bash
+grep -E 'process_inbound_email_async|Error|Exception|lisapet|stashok' /var/log/celery/*.log 2>/dev/null | tail -80
+```
+
+### 2.3 Webhook URL and subscription
+
+Ensure the helpdesk subscription in notifications-microservice points to the URL that speakasap-portal actually serves:
+
+```bash
+curl -s 'https://notifications.statex.cz/webhooks/subscriptions' | jq '.[] | select(.serviceName=="helpdesk") | {webhookUrl, status, filters}'
+```
+
+The `webhookUrl` should be reachable from statex (e.g. `https://speakasap.com/api/email/webhook/` or `https://speakasap.com/helpdesk/api/email/webhook/` — match your `helpdesk/urls.py`). Test from statex:
+
+```bash
+# On statex
+curl -s -o /dev/null -w "%{http_code}" https://speakasap.com/api/email/webhook/
+# or the URL from the subscription; expect 200 or 405 (method not allowed for GET), not connection/timeout errors
+```
+
+### 2.4 Manual reprocess (if email is in notifications but not in helpdesk)
+
+If the email is in `inbound_emails` (step 1.1) but no ticket exists, trigger the poll task or reprocess:
+
+```bash
+cd ~/speakasap-portal
+# Option A: Reprocess recent emails (fetches from notifications-microservice API and queues tickets)
+python manage.py reprocess_inbound_emails --limit 10
+
+# Option B: Run the periodic poll task once (same logic as the scheduled job)
+celery -A portal call helpdesk.poll_new_emails
+```
+
+---
+
+## 3. Quick summary
+
+| Step | Where | What to check |
+|------|--------|----------------|
+| 1 | AWS | Lambda returned CONTINUE → email saved to S3. S3 event notification enabled for bucket/prefix. SNS topic subscription to `https://notifications.statex.cz/email/inbound/s3` is **Confirmed**. |
+| 2 | statex | Email appears in `GET /email/inbound` or DB `inbound_emails`. Logs show `processEmailFromS3` and `DELIVER TO SUBSCRIPTIONS` for that message. |
+| 3 | statex | Helpdesk subscription is **active**, `filters.to` includes `*@speakasap.com`, `webhookUrl` is the helpdesk URL. Logs show "Successfully delivered to helpdesk" or an error. |
+| 4 | speakasap | Webhook URL is reachable. Django/Celery logs show webhook received and `process_inbound_email_async` run (and no errors). Ticket created in DB or UI. |
+
+If the email **is not** in `inbound_emails`, the break is before or at notifications-microservice (S3 event → SNS → `/email/inbound/s3`). If it **is** in `inbound_emails` but no ticket, the break is webhook delivery or helpdesk processing (subscription filter, health check, webhook POST, or Celery task).
