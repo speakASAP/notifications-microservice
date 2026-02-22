@@ -1109,7 +1109,7 @@ export class InboundEmailService {
       }
     }
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+       
       const iconv = require('iconv-lite');
       if (iconv && iconv.decode) {
         const decoded = iconv.decode(buffer, enc);
