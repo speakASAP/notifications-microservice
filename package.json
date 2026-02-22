@@ -80,6 +80,7 @@
     "testEnvironment": "node"
   },
   "overrides": {
-    "rimraf": "^4.0.0"
+    "rimraf": "^4.0.0",
+    "glob": "10.4.5"
   }
 }
