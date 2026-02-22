@@ -5,6 +5,9 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
+# Suppress npm update notice (fixes deploy warnings)
+ENV npm_config_update_notifier=false
+
 # Install dependencies
 RUN npm ci
 
@@ -21,6 +24,9 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
+
+# Suppress npm update notice (fixes deploy warnings)
+ENV npm_config_update_notifier=false
 
 # Install production dependencies only
 RUN npm ci --omit=dev
