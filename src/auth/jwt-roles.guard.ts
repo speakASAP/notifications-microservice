@@ -43,6 +43,22 @@ export class JwtRolesGuard implements CanActivate {
     }
 
     const token = authHeader.slice(7);
+
+    // Service-to-service token support: allow static SERVICE_TOKEN to bypass JWT validation
+    // and grant internal admin roles for this service. This keeps JwtRolesGuard in place
+    // while enabling secure machine authentication without calling auth-microservice.
+    const serviceToken = process.env.SERVICE_TOKEN;
+    if (serviceToken && token === serviceToken) {
+      const serviceName = process.env.SERVICE_NAME || 'notifications-microservice';
+      const serviceRoles = [`global:superadmin`, `internal:${serviceName}:admin`];
+      (request as Request & { user: unknown }).user = {
+        sub: `service:${serviceName}`,
+        email: undefined,
+        roles: serviceRoles,
+      };
+      return true;
+    }
+
     try {
       const payload = this.jwtService.verify<{ sub: string; email?: string; roles?: string[] }>(token, {
         secret: process.env.JWT_SECRET,
