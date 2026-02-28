@@ -178,6 +178,69 @@ export class InboundEmailController {
   }
 
   /**
+   * Process all undelivered: DB (redeliver to helpdesk) + S3 (fetch, store, webhook).
+   * Use after redeploy. Auth: Bearer SERVICE_TOKEN.
+   * POST /email/inbound/process-undelivered?dbLimit=500&s3MaxKeys=500
+   */
+  @Post('inbound/process-undelivered')
+  @HttpCode(HttpStatus.OK)
+  async processUndelivered(
+    @Query('dbLimit') dbLimit?: string,
+    @Query('s3MaxKeys') s3MaxKeys?: string,
+  ): Promise<{
+    success: boolean;
+    db: { processed: number; failed: number };
+    s3: { processed: number; failed: number };
+    message?: string;
+  }> {
+    const dbLimitNum = Math.min(parseInt(dbLimit || '500', 10) || 500, 1000);
+    const s3MaxKeysNum = Math.min(parseInt(s3MaxKeys || '500', 10) || 500, 1000);
+    this.logger.log(`[CONTROLLER] process-undelivered started dbLimit=${dbLimitNum} s3MaxKeys=${s3MaxKeysNum}`, 'InboundEmailController');
+    let dbOk = 0;
+    let dbFail = 0;
+    let s3Ok = 0;
+    let s3Fail = 0;
+    try {
+      const dbIds = await this.inboundEmailService.findInboundEmailIdsNotDeliveredToHelpdesk(dbLimitNum);
+      for (const id of dbIds) {
+        try {
+          const email = await this.inboundEmailService.getInboundEmailEntityById(id);
+          if (email) {
+            await this.inboundEmailService.processInboundEmail(email);
+            dbOk += 1;
+          }
+        } catch {
+          dbFail += 1;
+        }
+      }
+      const s3Data = await this.inboundEmailService.findUnprocessedS3Keys({ maxKeys: s3MaxKeysNum });
+      for (const item of s3Data.unprocessed) {
+        try {
+          await this.inboundEmailService.processEmailFromS3(s3Data.bucket, item.key);
+          s3Ok += 1;
+        } catch {
+          s3Fail += 1;
+        }
+      }
+      this.logger.log(`[CONTROLLER] process-undelivered done dbOk=${dbOk} dbFail=${dbFail} s3Ok=${s3Ok} s3Fail=${s3Fail}`, 'InboundEmailController');
+      return {
+        success: true,
+        db: { processed: dbOk, failed: dbFail },
+        s3: { processed: s3Ok, failed: s3Fail },
+      };
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      this.logger.error(`[CONTROLLER] process-undelivered failed: ${msg}`, undefined, 'InboundEmailController');
+      return {
+        success: false,
+        db: { processed: dbOk, failed: dbFail },
+        s3: { processed: s3Ok, failed: s3Fail },
+        message: msg,
+      };
+    }
+  }
+
+  /**
    * List webhook deliveries sent to helpdesk but not yet confirmed (status=sent).
    * GET /email/inbound/undelivered?limit=100
    */
