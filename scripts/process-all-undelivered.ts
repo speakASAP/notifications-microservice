@@ -3,15 +3,15 @@
  * Use after redeploy to catch up. Run on prod: ssh statex 'cd ~/notifications-microservice && npx ts-node scripts/process-all-undelivered.ts'
  *
  * Usage: npx ts-node scripts/process-all-undelivered.ts [dbLimit] [s3MaxKeys]
- * Defaults: dbLimit=500, s3MaxKeys=500
+ * Defaults: dbLimit=5, s3MaxKeys=5
  */
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
 import { InboundEmailService } from '../src/email/inbound-email.service';
 
-const DB_LIMIT = Math.min(parseInt(process.argv[2] || '500', 10) || 500, 1000);
-const S3_MAX_KEYS = Math.min(parseInt(process.argv[3] || '500', 10) || 500, 1000);
+const DB_LIMIT = Math.min(parseInt(process.argv[2] || '5', 10) || 5, 1000);
+const S3_MAX_KEYS = Math.min(parseInt(process.argv[3] || '5', 10) || 5, 1000);
 
 async function run() {
   console.log('[CATCHUP] ===== Process all undelivered (DB + S3) =====');

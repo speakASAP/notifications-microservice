@@ -29,7 +29,7 @@ Use `up -d --build` after a pull; `restart` alone does not rebuild the image.
 ### S3 Email Processing
 
 - **`process-all-undelivered.ts`** - Process all undelivered emails from DB (redeliver to helpdesk) and from S3 (fetch, store, webhook). Use after redeploy.
-  - Usage: `npx ts-node scripts/process-all-undelivered.ts [dbLimit] [s3MaxKeys]` (defaults: 500, 500)
+  - Usage: `npx ts-node scripts/process-all-undelivered.ts [dbLimit] [s3MaxKeys]` (defaults: 5, 5)
   - On prod: `ssh statex 'cd ~/notifications-microservice && npx ts-node scripts/process-all-undelivered.ts'`
 - **`process-s3-email.ts`** - Manually process an email from S3 bucket
   - Usage: `ts-node scripts/process-s3-email.ts <bucket-name> <object-key>`
