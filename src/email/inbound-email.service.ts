@@ -13,6 +13,7 @@ import { LoggerService } from '../../shared/logger/logger.service';
 import { InboundEmail } from './entities/inbound-email.entity';
 import { WebhookDeliveryService } from './webhook-delivery.service';
 import { EmailService } from './email.service';
+import * as iconv from 'iconv-lite';
 
 export interface SNSMessage {
   Type: string;
@@ -1109,14 +1110,10 @@ export class InboundEmailService {
       }
     }
     try {
-       
-      const iconv = require('iconv-lite');
-      if (iconv && iconv.decode) {
-        const decoded = iconv.decode(buffer, enc);
-        if (decoded) return decoded;
-      }
+      const decoded = iconv.decode(buffer, enc);
+      if (decoded) return decoded;
     } catch {
-      /* iconv-lite optional */
+      /* iconv-lite may throw for unknown encoding */
     }
     return buffer.toString('utf-8');
   }
@@ -1315,43 +1312,21 @@ export class InboundEmailService {
 
     this.logger.log(`[S3_PROCESS] Parsed headers - from: ${from}, to: ${to}, subject: ${subject || 'N/A'}, messageId: ${messageId}`, 'InboundEmailService');
 
-    // Check if email already exists (by messageId, objectKey, or from+to+subject+date match)
-    // Use database query instead of fetching all emails for efficiency
+    // Check if email already exists (by messageId or objectKey only).
+    // Do NOT use from+to+subject+date: two different emails can match and get merged, causing
+    // the second to skip webhook (see TROUBLESHOOT_EMAIL_NOT_IN_HELPDESK.md).
     // Check 1: By Message-ID header (normalized)
     let existingEmail = await this.inboundEmailRepository
       .createQueryBuilder('e')
       .where('e."rawData"->\'mail\'->>\'messageId\' = :messageId', { messageId })
       .getOne();
 
-    // Check 2: By objectKey (same S3 object processed twice)
+    // Check 2: By objectKey (same S3 object processed twice, e.g. SNS retry)
     if (!existingEmail && objectKey) {
       existingEmail = await this.inboundEmailRepository
         .createQueryBuilder('e')
         .where('e."rawData"->\'receipt\'->\'action\'->>\'objectKey\' = :objectKey', { objectKey })
         .getOne();
-    }
-
-    // Check 3: By from+to+subject+date (within 5 minutes) - catches cases where Message-ID differs
-    // This handles emails that were processed via SES (with SES messageId) and then via S3 (with Message-ID header)
-    if (!existingEmail && from && to && subject && date) {
-      const dateObj = new Date(date);
-      const fiveMinutesAgo = new Date(dateObj.getTime() - 5 * 60 * 1000);
-      const fiveMinutesLater = new Date(dateObj.getTime() + 5 * 60 * 1000);
-      
-      const candidates = await this.inboundEmailRepository
-        .createQueryBuilder('e')
-        .where('LOWER(e.from) = LOWER(:from)', { from })
-        .andWhere('LOWER(e.to) = LOWER(:to)', { to })
-        .andWhere('e.subject = :subject', { subject })
-        .andWhere('e.receivedAt >= :fiveMinutesAgo', { fiveMinutesAgo })
-        .andWhere('e.receivedAt <= :fiveMinutesLater', { fiveMinutesLater })
-        .getMany();
-      
-      if (candidates.length > 0) {
-        // Found potential duplicate - log for investigation
-        this.logger.log(`[S3_PROCESS] Found ${candidates.length} potential duplicate(s) by from+to+subject+date match`, 'InboundEmailService');
-        existingEmail = candidates[0]; // Use first match
-      }
     }
 
     if (existingEmail) {
@@ -1408,11 +1383,10 @@ export class InboundEmailService {
       content: Buffer.from(fullContent, 'latin1').toString('base64'), // Store raw content as base64
     };
 
-    // Store new email
+    // Store new email first (always persist raw), then send webhook so helpdesk can create ticket or add to existing thread.
     await this.storeInboundEmail(inboundEmail);
     this.logger.log(`[S3_PROCESS] ✅ Stored new email with ID: ${inboundEmail.id}`, 'InboundEmailService');
 
-    // Process email (trigger webhooks)
     await this.processInboundEmail(inboundEmail);
     this.logger.log(`[S3_PROCESS] ✅ Processed email successfully`, 'InboundEmailService');
 

@@ -167,3 +167,30 @@ celery -A portal call helpdesk.poll_new_emails
 | 4 | speakasap | Webhook URL is reachable. Django/Celery logs show webhook received and `process_inbound_email_async` run (and no errors). Ticket created in DB or UI. |
 
 If the email **is not** in `inbound_emails`, the break is before or at notifications-microservice (S3 event → SNS → `/email/inbound/s3`). If it **is** in `inbound_emails` but no ticket, the break is webhook delivery or helpdesk processing (subscription filter, health check, webhook POST, or Celery task).
+
+---
+
+## 4. Root cause: duplicate check merging different emails (fixed Feb 2026)
+
+**Symptom:** Email is in S3 and Lambda returned CONTINUE, but no row in `inbound_emails` and no helpdesk ticket.
+
+**Cause:** The service used three duplicate checks before creating a new inbound email. **Check 3** (from+to+subject+date within 5 minutes) could treat two *different* emails as one: when a second email arrived from the same sender to the same recipient with the same subject within 5 minutes, it was treated as "existing" and only the DB row was updated—**no webhook was sent**, so no helpdesk ticket.
+
+**Fix applied:** Check 3 was removed. Duplicate detection now uses only:
+
+- **Check 1:** same Message-ID header (same email)
+- **Check 2:** same S3 object key (same object processed twice, e.g. SNS retry)
+
+After pulling the fix, redeploy the notifications-microservice so new S3 events are processed correctly.
+
+**Manual reprocess** (if the email is in S3 but was skipped): From statex, with `SERVICE_TOKEN` from `notifications-microservice/.env`:
+
+```bash
+source ~/notifications-microservice/.env
+curl -s -X POST "https://notifications.statex.cz/email/inbound/s3" \
+  -H "Authorization: Bearer $SERVICE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"bucket":"speakasap-email-forward","key":"forwards/<S3_OBJECT_KEY>"}'
+```
+
+Use the S3 object key (e.g. SES messageId like `ddicgd5evteehpiq0n0as99htk6ap1q30f5lqoo1`) from the S3 console or from the Lambda/CloudWatch mail.messageId.
