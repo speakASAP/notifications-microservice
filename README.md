@@ -441,6 +441,16 @@ If an email was not processed correctly but was saved to S3:
    - **Option 2**: Use the script: `ts-node scripts/process-s3-email.ts <bucket-name> <object-key>`
    - **Option 3**: Use the reparse endpoint: `POST /email/inbound/:id/reparse` (if email already exists in database)
 
+### Periodic S3 Sync (Ensure No Emails Missed)
+
+The service runs a **scheduled task** every 5 minutes (`S3_CATCHUP_CRON`, default `*/5 * * * *`) that:
+
+- Lists S3 objects in the configured bucket/prefix (with pagination)
+- Keeps only objects from the **last 24 hours** (by `LastModified`)
+- Compares with `inbound_emails` (by `rawData.receipt.action.objectKey`) and processes any S3 object not yet in the database (fetch from S3 → store as raw email → webhook to helpdesk)
+
+So **everything in S3 from the last day is kept in sync with the database**: no single email from the last 24h should be missed. Configure `S3_CATCHUP_MAX_KEYS_PER_RUN` (default 10, max 100) and `S3_CATCHUP_CRON` in `.env` if needed. For full backlog catchup (all time), use `POST /email/inbound/process-undelivered` or `npx ts-node scripts/process-all-undelivered.ts`.
+
 ### S3 Event Notifications Setup (Recommended for Large Emails)
 
 For emails larger than 150 KB, AWS SES may not send SNS notifications. To ensure all emails are processed automatically:
