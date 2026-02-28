@@ -8,6 +8,55 @@ When an inbound email (e.g. to <stashok@speakasap.com>) does not show up in <htt
 
 ---
 
+## 0. Quick check for one email (by Message-Id)
+
+For a specific email, use Message-Id **without angle brackets** (e.g. `1772299527.0493579000.d2juj2p5@frv63.fwdcdn.com`).
+
+**On statex (notifications-microservice):**
+
+```bash
+ssh statex
+cd ~/notifications-microservice
+
+# 1) Is the email in the DB? (use messageId without < >)
+./scripts/trace-email-with-attachments.sh stashok@speakasap.com 1772299527.0493579000.d2juj2p5@frv63.fwdcdn.com
+
+# 2) List recent inbound emails to stashok@speakasap.com (API)
+source .env
+curl -s -H "Authorization: Bearer $SERVICE_TOKEN" \
+  'https://notifications.statex.cz/email/inbound?limit=20&toFilter=@speakasap.com' | jq '.data[] | {id, from, to, subject, receivedAt, messageId}'
+
+# 3) Webhook deliveries not yet confirmed (sent to helpdesk but no callback)
+curl -s -H "Authorization: Bearer $SERVICE_TOKEN" \
+  'https://notifications.statex.cz/email/inbound/undelivered?limit=50' | jq .
+
+# 4) Helpdesk subscription (filters must include *@speakasap.com)
+curl -s -H "Authorization: Bearer $SERVICE_TOKEN" \
+  'https://notifications.statex.cz/webhooks/subscriptions' | jq '.[] | select(.serviceName=="helpdesk") | {id, webhookUrl, filters, status, lastDeliveryAt}'
+
+# 5) Recent logs (inbound + webhook delivery)
+./scripts/trace-webhook-flow.sh
+# Or: LINES=500 ./scripts/trace-webhook-flow.sh
+```
+
+**On speakasap (speakasap-portal):**
+
+```bash
+ssh speakasap
+cd speakasap-portal
+
+# 1) Helpdesk webhook and processing logs (adjust date if needed)
+grep -E 'WEBHOOK|1772299527|stashok|lisapet@ukr' logs/helpdesk.log | tail -80
+
+# 2) Application errors
+tail -100 logs/app_errors.log
+
+# 3) If email is in notifications DB but no ticket: reprocess
+python manage.py reprocess_inbound_emails --limit 10
+```
+
+---
+
 ## 1. On statex (notifications-microservice): did the email reach the service?
 
 **Connect:** `ssh statex`

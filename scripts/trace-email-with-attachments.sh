@@ -44,7 +44,7 @@ if command -v psql &> /dev/null && [ -f .env ]; then
         QUERY="SELECT id, \"from\", \"to\", subject, \"receivedAt\", status, 
                CASE WHEN attachments IS NULL THEN 0 ELSE jsonb_array_length(attachments) END as attachments_count
                FROM inbound_emails 
-               WHERE \"rawData\"->>'mail'->>'messageId' = '${MESSAGE_ID}' 
+               WHERE \"rawData\"->'mail'->>'messageId' = '${MESSAGE_ID}' 
                OR \"to\" = '${EMAIL_TO}'
                ORDER BY \"receivedAt\" DESC LIMIT 5;"
     else

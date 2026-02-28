@@ -33,6 +33,10 @@ Use `up -d --build` after a pull; `restart` alone does not rebuild the image.
   - On prod: `ssh statex 'cd ~/notifications-microservice && npx ts-node scripts/process-all-undelivered.ts'`
 - **`process-s3-email.ts`** - Manually process an email from S3 bucket
   - Usage: `ts-node scripts/process-s3-email.ts <bucket-name> <object-key>`
+- **`trace-email-by-message-id.sh`** - Trace a single email by Message-Id (or fragment): inbound_emails row, webhook_deliveries for helpdesk, and recent docker logs. Run on statex (psql and .env required).
+  - Usage: `./scripts/trace-email-by-message-id.sh <message_id_fragment>`
+  - Example: `./scripts/trace-email-by-message-id.sh 1772299527`
+  - On prod: `ssh statex 'cd ~/notifications-microservice && ./scripts/trace-email-by-message-id.sh 1772299527'`
 - **`find-s3-unprocessed-emails.sh`** - Find S3 objects that were never processed by notifications-microservice (compare S3 bucket with `inbound_emails` by `rawData.receipt.action.objectKey`). Use to trace emails with attachments that stayed in S3.
   - Usage: `./scripts/find-s3-unprocessed-emails.sh` (requires AWS CLI, psql, .env)
   - On prod: `ssh statex "cd ~/notifications-microservice && ./scripts/find-s3-unprocessed-emails.sh"`
