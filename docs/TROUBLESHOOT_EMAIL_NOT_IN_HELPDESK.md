@@ -12,6 +12,8 @@ When an inbound email (e.g. to <stashok@speakasap.com>) does not show up in <htt
 
 **Connect:** `ssh statex`
 
+**Note:** All notification API endpoints (e.g. `GET /email/inbound`, `GET /webhooks/subscriptions`, `GET /email/inbound/undelivered`) require auth. Use `Authorization: Bearer $SERVICE_TOKEN` where `SERVICE_TOKEN` is from `notifications-microservice/.env` (must match speakasap-portal `NOTIFICATION_SERVICE_AUTH_TOKEN`).
+
 ### 1.1 Is the email in the database?
 
 ```bash
@@ -34,10 +36,13 @@ docker exec -it $(docker ps -q -f name=notifications-microservice | head -1) sh 
 '
 ```
 
-Or query via API (from statex or your machine):
+Or query via API (from statex; use SERVICE_TOKEN from `.env`):
 
 ```bash
-curl -s 'https://notifications.statex.cz/email/inbound?limit=20&toFilter=@speakasap.com' | jq '.data[] | {id, from, to, subject, status, receivedAt}'
+source ~/notifications-microservice/.env
+curl -s -H "Authorization: Bearer $SERVICE_TOKEN" \
+  'https://notifications.statex.cz/email/inbound?limit=20&toFilter=@speakasap.com' | jq '.data[] | {id, from, to, subject, status, receivedAt}'
+# Pending emails (e.g. bounces): add &status=pending
 ```
 
 **Look for:** Your email (to <stashok@speakasap.com>, subject "Сташок тест" or similar). If it **is not** in the list:
@@ -54,8 +59,9 @@ If the email **is** in the list, note its `id` and continue.
 From the same DB or API, check webhook deliveries for that inbound email. Replace `INBOUND_EMAIL_ID` with the `id` from 1.1:
 
 ```bash
-# API (undelivered list often shows recent sent-but-not-confirmed)
-curl -s 'https://notifications.statex.cz/email/inbound/undelivered?limit=50' | jq .
+source ~/notifications-microservice/.env
+curl -s -H "Authorization: Bearer $SERVICE_TOKEN" \
+  'https://notifications.statex.cz/email/inbound/undelivered?limit=50' | jq .
 ```
 
 If the email is in `inbound_emails` but **not** in undelivered and you need to confirm deliveries, query the DB for `webhook_deliveries` for that `inbound_email_id` (see 1.1). In the notifications DB:
@@ -69,7 +75,7 @@ WHERE wd.inbound_email_id = 'INBOUND_EMAIL_ID';
 
 **Look for:** A row with `status = 'sent'` or `'delivered'` for helpdesk. If there is **no** row for helpdesk:
 
-- Subscription filter may not match: helpdesk subscription should have `filters.to = ["*@speakasap.com"]`. Check: `curl -s https://notifications.statex.cz/webhooks/subscriptions | jq '.[] | select(.serviceName=="helpdesk") | {id, serviceName, webhookUrl, filters, status}'`.
+- Subscription filter may not match: helpdesk subscription should have `filters.to = ["*@speakasap.com"]`. Check: `source ~/notifications-microservice/.env && curl -s -H "Authorization: Bearer $SERVICE_TOKEN" https://notifications.statex.cz/webhooks/subscriptions | jq '.[] | select(.serviceName=="helpdesk") | {id, serviceName, webhookUrl, filters, status, lastDeliveryAt}'`. If `lastDeliveryAt` is old (e.g. days ago), no successful webhook delivery since then—check central logs and helpdesk health.
 - Health check may be failing (service logs).
 
 ### 1.3 Notifications-microservice logs
@@ -79,7 +85,7 @@ WHERE wd.inbound_email_id = 'INBOUND_EMAIL_ID';
 docker logs -f --tail 500 $(docker ps -q -f name=notifications-microservice | head -1) 2>&1 | grep -E 'inbound|WEBHOOK_DELIVERY|8o7nele9c5j7rbdrcutg7hon7ne7ossan51d9qg1|stashok|lisapet|Сташок'
 ```
 
-Or check central logging (e.g. <https://logging.statex.cz>) for service `notifications-microservice` and the same keywords.
+Or check **central logging** (e.g. <https://logging.statex.cz>) for service `notifications-microservice` and keywords: `WEBHOOK_DELIVERY`, `DELIVER TO SUBSCRIPTIONS`, `Filter check result`, `Successfully delivered`, `Exception caught`. (Detailed delivery logs are often sent only to the logging microservice, not container stdout.)
 
 **Look for:**  
 
@@ -123,15 +129,17 @@ grep -E 'process_inbound_email_async|Error|Exception|lisapet|stashok' /var/log/c
 Ensure the helpdesk subscription in notifications-microservice points to the URL that speakasap-portal actually serves:
 
 ```bash
-curl -s 'https://notifications.statex.cz/webhooks/subscriptions' | jq '.[] | select(.serviceName=="helpdesk") | {webhookUrl, status, filters}'
+source ~/notifications-microservice/.env
+curl -s -H "Authorization: Bearer $SERVICE_TOKEN" 'https://notifications.statex.cz/webhooks/subscriptions' | jq '.[] | select(.serviceName=="helpdesk") | {webhookUrl, status, filters}'
 ```
 
-The `webhookUrl` should be reachable from statex (e.g. `https://speakasap.com/api/email/webhook/` or `https://speakasap.com/helpdesk/api/email/webhook/` — match your `helpdesk/urls.py`). Test from statex:
+The `webhookUrl` should be reachable from statex (e.g. `https://speakasap.com/helpdesk/api/email/inbound/`). Test from statex:
 
 ```bash
 # On statex
-curl -s -o /dev/null -w "%{http_code}" https://speakasap.com/api/email/webhook/
-# or the URL from the subscription; expect 200 or 405 (method not allowed for GET), not connection/timeout errors
+curl -s -o /dev/null -w "%{http_code}" https://speakasap.com/helpdesk/health/
+curl -s -o /dev/null -w "%{http_code}" -X POST -H "Content-Type: application/json" -d '{}' https://speakasap.com/helpdesk/api/email/inbound/
+# Expect 200 for both; if not, helpdesk may be down or blocking requests.
 ```
 
 ### 2.4 Manual reprocess (if email is in notifications but not in helpdesk)
