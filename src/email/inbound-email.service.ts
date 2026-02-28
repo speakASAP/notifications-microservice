@@ -1400,6 +1400,29 @@ export class InboundEmailService {
   /**
    * Get inbound email by ID
    */
+  /**
+   * Get full InboundEmail entity by ID (for internal use, e.g. processInboundEmail in catch-up script).
+   */
+  async getInboundEmailEntityById(id: string): Promise<InboundEmail | null> {
+    return this.inboundEmailRepository.findOne({ where: { id } });
+  }
+
+  /**
+   * Get inbound email IDs that are not yet confirmed delivered to helpdesk (for catch-up / redeliver script).
+   */
+  async findInboundEmailIdsNotDeliveredToHelpdesk(limit: number): Promise<string[]> {
+    const rows = await this.inboundEmailRepository
+      .createQueryBuilder('e')
+      .select('e.id')
+      .where(
+        `e.id NOT IN (SELECT wd.inbound_email_id FROM webhook_deliveries wd INNER JOIN webhook_subscriptions ws ON ws.id = wd.subscription_id WHERE ws."serviceName" = 'helpdesk' AND wd.status = 'delivered')`,
+      )
+      .orderBy('e.receivedAt', 'DESC')
+      .take(limit)
+      .getRawMany();
+    return rows.map((r) => r.e_id as string);
+  }
+
   async getInboundEmailById(id: string): Promise<InboundEmailSummary | null> {
     const email = await this.inboundEmailRepository.findOne({
       where: { id },
