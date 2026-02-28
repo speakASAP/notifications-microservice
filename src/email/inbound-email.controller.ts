@@ -180,7 +180,7 @@ export class InboundEmailController {
   /**
    * Process all undelivered: DB (redeliver to helpdesk) + S3 (fetch, store, webhook).
    * Use after redeploy. Auth: Bearer SERVICE_TOKEN.
-   * POST /email/inbound/process-undelivered?dbLimit=500&s3MaxKeys=500
+   * POST /email/inbound/process-undelivered?dbLimit=5&s3MaxKeys=5
    */
   @Post('inbound/process-undelivered')
   @HttpCode(HttpStatus.OK)
@@ -193,8 +193,8 @@ export class InboundEmailController {
     s3: { processed: number; failed: number };
     message?: string;
   }> {
-    const dbLimitNum = Math.min(parseInt(dbLimit || '500', 10) || 500, 1000);
-    const s3MaxKeysNum = Math.min(parseInt(s3MaxKeys || '500', 10) || 500, 1000);
+    const dbLimitNum = Math.min(parseInt(dbLimit || '5', 10) || 5, 1000);
+    const s3MaxKeysNum = Math.min(parseInt(s3MaxKeys || '5', 10) || 5, 1000);
     this.logger.log(`[CONTROLLER] process-undelivered started dbLimit=${dbLimitNum} s3MaxKeys=${s3MaxKeysNum}`, 'InboundEmailController');
     let dbOk = 0;
     let dbFail = 0;
