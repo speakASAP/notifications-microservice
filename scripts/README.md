@@ -40,6 +40,7 @@ Use `up -d --build` after a pull; `restart` alone does not rebuild the image.
   - Usage: `ts-node scripts/reparse-email.ts <email-id>`
 - **`trace-email-with-attachments.sh`** - Trace why an email (e.g. with attachments) did not reach helpdesk: DB, S3, logs, S3 event config.
   - Usage: `./scripts/trace-email-with-attachments.sh [recipient@domain] [message-id]`
+- **`delete-bounce-notifications.sh`** - Delete from DB all "Delivery Status Notification (Failure)" from <MAILER-DAEMON@amazonses.com> so they are never delivered. Run on prod: `cd ~/notifications-microservice && ./scripts/delete-bounce-notifications.sh`
 - **`count-undelivered-emails.sh`** - Count inbound emails in DB not yet delivered to helpdesk (no quoting issues). Run on prod: `cd ~/notifications-microservice && ./scripts/count-undelivered-emails.sh`
 - **`check-undelivered-to-helpdesk.sh`** - List inbound emails sent to helpdesk webhook but not yet confirmed delivered (helpdesk calls delivery-confirmation when ticket/comment is created).
   - Usage: `./scripts/check-undelivered-to-helpdesk.sh [limit]`
