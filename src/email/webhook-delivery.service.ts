@@ -220,15 +220,18 @@ export class WebhookDeliveryService {
       await this.subscriptionRepository.save(subscription);
       this.logger.log(`[WEBHOOK_DELIVERY] Subscription saved successfully`, 'WebhookDeliveryService');
 
-      // Record webhook delivery for confirmation tracking (helpdesk can confirm when ticket is created)
+      // Record webhook delivery. Mark as 'delivered' when we get 2xx so we never re-send the same email
+      // (prevents duplicate tickets if helpdesk never calls delivery-confirmation).
+      const isDelivered = response.status >= 200 && response.status < 300;
       const delivery = this.webhookDeliveryRepository.create({
         inboundEmailId: inboundEmail.id,
         subscriptionId: subscription.id,
-        status: 'sent' as WebhookDeliveryStatus,
+        status: (isDelivered ? 'delivered' : 'sent') as WebhookDeliveryStatus,
+        deliveredAt: isDelivered ? new Date() : null,
         httpStatus: response.status,
       });
       await this.webhookDeliveryRepository.save(delivery);
-      this.logger.log(`[WEBHOOK_DELIVERY] Recorded webhook_delivery id=${delivery.id} for inbound_email=${inboundEmail.id} subscription=${subscription.serviceName}`, 'WebhookDeliveryService');
+      this.logger.log(`[WEBHOOK_DELIVERY] Recorded webhook_delivery id=${delivery.id} status=${delivery.status} for inbound_email=${inboundEmail.id} subscription=${subscription.serviceName}`, 'WebhookDeliveryService');
 
       console.log(`[WEBHOOK_DELIVERY] ✅ Successfully delivered to ${subscription.serviceName} - Status: ${response.status}`);
       this.logger.log(`[WEBHOOK_DELIVERY] ✅ Successfully delivered to ${subscription.serviceName} - Status: ${response.status}`, 'WebhookDeliveryService');

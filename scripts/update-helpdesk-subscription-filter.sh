@@ -8,13 +8,23 @@ set -e
 BASE_URL="${NOTIFICATIONS_BASE_URL:-https://notifications.statex.cz}"
 
 echo "=========================================="
-echo "Update helpdesk subscription filter to *@speakasap.com"
+echo "Update helpdesk subscription filter to *@speakasap.com and *@speakasap.ru"
 echo "=========================================="
 echo "API: $BASE_URL"
 echo ""
 
-# Get all subscriptions
-resp=$(curl -s -w "\n%{http_code}" "$BASE_URL/webhooks/subscriptions" 2>/dev/null) || { echo "Failed to reach API"; exit 1; }
+# Need auth for PUT (use SERVICE_TOKEN from .env if available)
+if [ -f .env ]; then
+  SERVICE_TOKEN=$(grep "^SERVICE_TOKEN=" .env 2>/dev/null | cut -d= -f2-)
+  [ -n "$SERVICE_TOKEN" ] && export CURL_AUTH_HEADER="Authorization: Bearer $SERVICE_TOKEN"
+fi
+
+# Get all subscriptions (with auth if available)
+if [ -n "$CURL_AUTH_HEADER" ]; then
+  resp=$(curl -s -w "\n%{http_code}" -H "$CURL_AUTH_HEADER" "$BASE_URL/webhooks/subscriptions" 2>/dev/null) || { echo "Failed to reach API"; exit 1; }
+else
+  resp=$(curl -s -w "\n%{http_code}" "$BASE_URL/webhooks/subscriptions" 2>/dev/null) || { echo "Failed to reach API"; exit 1; }
+fi
 http_code=$(echo "$resp" | tail -n1)
 body=$(echo "$resp" | sed '$d')
 
@@ -46,11 +56,17 @@ if [ -z "$sub_id" ]; then
 fi
 
 echo "Found helpdesk subscription id: $sub_id"
-echo "Sending PUT with filters.to = [\"*@speakasap.com\"] ..."
+echo "Sending PUT with filters.to = [\"*@speakasap.com\", \"*@speakasap.ru\"] ..."
 
-update_resp=$(curl -s -w "\n%{http_code}" -X PUT "$BASE_URL/webhooks/subscriptions/$sub_id" \
-  -H "Content-Type: application/json" \
-  -d '{"filters":{"to":["*@speakasap.com"]}}' 2>/dev/null)
+if [ -n "$CURL_AUTH_HEADER" ]; then
+  update_resp=$(curl -s -w "\n%{http_code}" -X PUT "$BASE_URL/webhooks/subscriptions/$sub_id" \
+    -H "$CURL_AUTH_HEADER" -H "Content-Type: application/json" \
+    -d '{"filters":{"to":["*@speakasap.com","*@speakasap.ru"]}}' 2>/dev/null)
+else
+  update_resp=$(curl -s -w "\n%{http_code}" -X PUT "$BASE_URL/webhooks/subscriptions/$sub_id" \
+    -H "Content-Type: application/json" \
+    -d '{"filters":{"to":["*@speakasap.com","*@speakasap.ru"]}}' 2>/dev/null)
+fi
 update_code=$(echo "$update_resp" | tail -n1)
 update_body=$(echo "$update_resp" | sed '$d')
 
@@ -63,4 +79,4 @@ fi
 echo "OK. Updated subscription:"
 echo "$update_body" | python3 -m json.tool 2>/dev/null || echo "$update_body"
 echo ""
-echo "Done. All inbound emails to *@speakasap.com will be delivered to Helpdesk."
+echo "Done. Inbound emails to *@speakasap.com and *@speakasap.ru will be delivered to Helpdesk."
