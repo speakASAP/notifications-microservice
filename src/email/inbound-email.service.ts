@@ -1408,6 +1408,18 @@ export class InboundEmailService {
   }
 
   /**
+   * Count inbound emails not yet delivered to helpdesk (no limit).
+   */
+  async countInboundEmailsNotDeliveredToHelpdesk(): Promise<number> {
+    return this.inboundEmailRepository
+      .createQueryBuilder('e')
+      .where(
+        `e.id NOT IN (SELECT wd.inbound_email_id FROM webhook_deliveries wd INNER JOIN webhook_subscriptions ws ON ws.id = wd.subscription_id WHERE ws."serviceName" = 'helpdesk' AND wd.status = 'delivered')`,
+      )
+      .getCount();
+  }
+
+  /**
    * Get inbound email IDs that are not yet confirmed delivered to helpdesk (for catch-up / redeliver script).
    */
   async findInboundEmailIdsNotDeliveredToHelpdesk(limit: number): Promise<string[]> {
@@ -1639,9 +1651,9 @@ export class InboundEmailService {
 
   /**
    * List S3 objects in bucket/prefix and return those not present in inbound_emails (by rawData.receipt.action.objectKey).
-   * Used for periodic catchup and diagnostics. When sinceDate is set (e.g. last 24h), paginates S3 and filters by LastModified.
+   * Used for diagnostics when AWS CLI is not available on the host (e.g. run via service inside container).
    */
-  async findUnprocessedS3Keys(options?: { maxKeys?: number; sinceDate?: Date }): Promise<{
+  async findUnprocessedS3Keys(options?: { maxKeys?: number }): Promise<{
     s3Count: number;
     processedCount: number;
     unprocessed: Array<{ key: string; size: number; lastModified: string }>;
@@ -1651,62 +1663,31 @@ export class InboundEmailService {
   }> {
     const bucket = this.defaultS3Bucket || process.env.AWS_SES_S3_BUCKET;
     const prefix = this.defaultS3Prefix || process.env.AWS_SES_S3_OBJECT_KEY_PREFIX || 'forwards/';
-    const maxKeysPerPage = Math.min(options?.maxKeys ?? 500, 1000);
-    const sinceDate = options?.sinceDate;
-    const maxPages = 20;
+    const maxKeys = Math.min(options?.maxKeys ?? 500, 1000);
 
     if (!bucket) {
       throw new Error('S3 bucket not configured (AWS_SES_S3_BUCKET)');
     }
 
-    this.logger.log(
-      `[S3_UNPROCESSED] Listing S3 bucket=${bucket}, prefix=${prefix}, maxKeysPerPage=${maxKeysPerPage}, sinceDate=${sinceDate?.toISOString() ?? 'none'}`,
-      'InboundEmailService',
-    );
+    this.logger.log(`[S3_UNPROCESSED] Listing S3 bucket=${bucket}, prefix=${prefix}, maxKeys=${maxKeys}`, 'InboundEmailService');
 
-    const allContents: Array<{ Key?: string; Size?: number; LastModified?: Date }> = [];
-    let continuationToken: string | undefined;
-    let pageCount = 0;
-
+    let listResult: { Contents?: Array<{ Key?: string; Size?: number; LastModified?: Date }> };
     try {
-      do {
-        const listResult = await this.s3Client.send(
-          new ListObjectsV2Command({
-            Bucket: bucket,
-            Prefix: prefix,
-            MaxKeys: maxKeysPerPage,
-            ContinuationToken: continuationToken,
-          }),
-        );
-        const contents = listResult.Contents || [];
-        allContents.push(...contents);
-        continuationToken = listResult.NextContinuationToken;
-        pageCount += 1;
-        if (pageCount >= maxPages) {
-          this.logger.warn(`[S3_UNPROCESSED] Stopped after ${maxPages} pages (${allContents.length} keys); increase maxPages if bucket is larger`, 'InboundEmailService');
-          break;
-        }
-      } while (continuationToken);
+      listResult = await this.s3Client.send(
+        new ListObjectsV2Command({
+          Bucket: bucket,
+          Prefix: prefix,
+          MaxKeys: maxKeys,
+        }),
+      );
     } catch (s3Error: unknown) {
       const msg = s3Error instanceof Error ? s3Error.message : String(s3Error);
       this.logger.error(`[S3_UNPROCESSED] S3 ListObjectsV2 failed: ${msg}`, undefined, 'InboundEmailService');
       throw new Error(`S3 list failed: ${msg}`);
     }
 
-    let s3Keys = allContents.map((c) => ({
-      key: c.Key!,
-      size: c.Size ?? 0,
-      lastModified: c.LastModified?.toISOString() ?? '',
-    }));
-
-    if (sinceDate) {
-      const before = s3Keys.length;
-      s3Keys = s3Keys.filter((o) => {
-        const lm = o.lastModified ? new Date(o.lastModified) : null;
-        return lm && lm >= sinceDate;
-      });
-      this.logger.log(`[S3_UNPROCESSED] Filtered by sinceDate: ${s3Keys.length} of ${before} keys in time window`, 'InboundEmailService');
-    }
+    const contents = listResult.Contents || [];
+    const s3Keys = contents.map((c) => ({ key: c.Key!, size: c.Size ?? 0, lastModified: (c.LastModified?.toISOString() ?? '') }));
 
     const allEmails = await this.inboundEmailRepository.find({ select: ['rawData'] });
     const processedKeys = new Set<string>();

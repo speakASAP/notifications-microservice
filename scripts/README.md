@@ -33,10 +33,6 @@ Use `up -d --build` after a pull; `restart` alone does not rebuild the image.
   - On prod: `ssh statex 'cd ~/notifications-microservice && npx ts-node scripts/process-all-undelivered.ts'`
 - **`process-s3-email.ts`** - Manually process an email from S3 bucket
   - Usage: `ts-node scripts/process-s3-email.ts <bucket-name> <object-key>`
-- **`trace-email-by-message-id.sh`** - Trace a single email by Message-Id (or fragment): inbound_emails row, webhook_deliveries for helpdesk, and recent docker logs. Run on statex (psql and .env required).
-  - Usage: `./scripts/trace-email-by-message-id.sh <message_id_fragment>`
-  - Example: `./scripts/trace-email-by-message-id.sh 1772299527`
-  - On prod: `ssh statex 'cd ~/notifications-microservice && ./scripts/trace-email-by-message-id.sh 1772299527'`
 - **`find-s3-unprocessed-emails.sh`** - Find S3 objects that were never processed by notifications-microservice (compare S3 bucket with `inbound_emails` by `rawData.receipt.action.objectKey`). Use to trace emails with attachments that stayed in S3.
   - Usage: `./scripts/find-s3-unprocessed-emails.sh` (requires AWS CLI, psql, .env)
   - On prod: `ssh statex "cd ~/notifications-microservice && ./scripts/find-s3-unprocessed-emails.sh"`
@@ -44,6 +40,7 @@ Use `up -d --build` after a pull; `restart` alone does not rebuild the image.
   - Usage: `ts-node scripts/reparse-email.ts <email-id>`
 - **`trace-email-with-attachments.sh`** - Trace why an email (e.g. with attachments) did not reach helpdesk: DB, S3, logs, S3 event config.
   - Usage: `./scripts/trace-email-with-attachments.sh [recipient@domain] [message-id]`
+- **`count-undelivered-emails.sh`** - Count inbound emails in DB not yet delivered to helpdesk (no quoting issues). Run on prod: `cd ~/notifications-microservice && ./scripts/count-undelivered-emails.sh`
 - **`check-undelivered-to-helpdesk.sh`** - List inbound emails sent to helpdesk webhook but not yet confirmed delivered (helpdesk calls delivery-confirmation when ticket/comment is created).
   - Usage: `./scripts/check-undelivered-to-helpdesk.sh [limit]`
   - On prod: `ssh statex 'cd ~/notifications-microservice && ./scripts/check-undelivered-to-helpdesk.sh'`

@@ -241,6 +241,22 @@ export class InboundEmailController {
   }
 
   /**
+   * Count inbound emails (raw in DB) not yet delivered to helpdesk.
+   * GET /email/inbound/undelivered-count
+   */
+  @Get('inbound/undelivered-count')
+  async getUndeliveredCount(): Promise<{ success: boolean; count: number }> {
+    try {
+      const count = await this.inboundEmailService.countInboundEmailsNotDeliveredToHelpdesk();
+      return { success: true, count };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Error getting undelivered count: ${errorMessage}`, undefined, 'InboundEmailController');
+      throw error;
+    }
+  }
+
+  /**
    * List webhook deliveries sent to helpdesk but not yet confirmed (status=sent).
    * GET /email/inbound/undelivered?limit=100
    */
