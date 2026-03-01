@@ -43,13 +43,19 @@ export const handler = async (event) => {
 
     if (spf || dkim || spam || virus) {
         console.log('Dropping message (spf:', spf, 'dkim:', dkim, 'spam:', spam, 'virus:', virus, ')');
-        return { disposition: 'STOP_RULE_SET' };
+        const result = { disposition: 'STOP_RULE_SET' };
+        console.log('Returning disposition:', result);
+        return result;
     }
-    return { disposition: 'CONTINUE' };
+    const result = { disposition: 'CONTINUE' };
+    console.log('Returning disposition:', result);
+    return result;
 };
 ```
 
 **Node.js 24+:** Lambda no longer supports callback-based handlers. Use the above async handler that **returns** the disposition object (no `callback`). Works on Node.js 18, 20, and 24.
+
+The `console.log('Returning disposition:', result)` lines let you see `CONTINUE` or `STOP_RULE_SET` in CloudWatch (Lambda logs); Lambda does not log the return value by default.
 
 1. Click **Deploy** (top right of the code editor).
 
