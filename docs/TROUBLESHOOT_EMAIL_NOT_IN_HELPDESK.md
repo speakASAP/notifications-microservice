@@ -1,6 +1,6 @@
 # Troubleshoot: Email not appearing in Helpdesk
 
-When an inbound email (e.g. to <contact@speakasap.com>m>m><stashok@speakasap.com>com>com>) does not show up in <https://speakasap.com/helpdesk/>, use this checklist to find where the pipeline breaks.
+When an inbound email (e.g. to <contact@speakasap.com> or <stashok@speakasap.com>) does not show up in <https://speakasap.com/helpdesk/>, use this checklist to find where the pipeline breaks.
 
 **Pipeline:** SES → (Lambda) → S3 → **S3 event** → SNS → **notifications-microservice** `/email/inbound/s3` → store + **webhook** → **speakasap-portal** helpdesk → ticket.
 
@@ -15,6 +15,62 @@ cd ~/notifications-microservice
 ```
 
 Script prints: (1) whether the email is in `inbound_emails`, (2) helpdesk `webhook_deliveries` row and status, (3) where to check logs. Then follow sections 1–2 below for details.
+
+---
+
+## 0. AWS checklist + prod .env
+
+If emails reach S3 but not the notifications-microservice DB, confirm AWS and prod env first.
+
+### 0.1 AWS S3 (eu-central-1)
+
+- **Console:** <https://eu-central-1.console.aws.amazon.com/s3/home?region=eu-central-1>
+- **Bucket:** `speakasap-email-forward` must exist.
+- **Event notifications:** Bucket → **Properties** → scroll to **Event notifications**.
+  - At least one notification: **Name** (e.g. `ProcessInboundEmails`), **Event types** include **Put** (and optionally **Multipart upload completed**), **Prefix** `forwards/`, **Destination** = your SNS topic (e.g. `s3-email-events-new`).
+- If event notification is missing or points to a different topic, S3 will not notify SNS when new objects are created.
+
+### 0.2 AWS SNS (eu-central-1)
+
+- **Console:** <https://eu-central-1.console.aws.amazon.com/sns/v3/home?region=eu-central-1#/subscriptions>
+- **Topic:** The topic used by the S3 event (e.g. `s3-email-events-new`) must have at least one **subscription**:
+  - **Protocol:** HTTPS
+  - **Endpoint:** `https://notifications.statex.cz/email/inbound/s3` (exact URL your service serves)
+  - **Status:** **Confirmed** (if Pending, confirm via the link SNS sent by email)
+- If the subscription is missing or not Confirmed, SNS will not POST to the service when S3 events arrive.
+
+### 0.3 Prod .env (statex)
+
+Required for S3 → notifications flow and scripts:
+
+- **Check keys and empty values:** `ssh statex 'cat ~/notifications-microservice/.env'` — do not paste secrets; verify required keys exist and are non-empty.
+- **Required for inbound S3 and helpdesk:** `PORT`, `SERVICE_TOKEN`, `JWT_SECRET`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `AWS_SES_S3_BUCKET` (e.g. `speakasap-email-forward`), `AWS_SES_S3_OBJECT_KEY_PREFIX` (e.g. `forwards/`), `LOGGING_SERVICE_URL`. Optional but recommended: `AWS_SES_REGION`, `S3_CATCHUP_DISABLED` (set to `true` to stop backlog processing), `AUTH_SERVICE_URL` / `AUTH_SERVICE_PUBLIC_URL` (admin panel).
+- **speakasap-portal:** Must have `NOTIFICATION_SERVICE_AUTH_TOKEN` equal to `SERVICE_TOKEN` in notifications-microservice `.env` for API calls and delivery-confirmation.
+
+```bash
+# List .env keys only (values masked) — run on statex or locally with ssh
+ssh statex 'grep -E "^[A-Za-z_][A-Za-z0-9_]*=" ~/notifications-microservice/.env | sed "s/=.*/=***/"'
+# Check for empty values (keys that are set but empty)
+ssh statex 'grep -E "^[A-Za-z_][A-Za-z0-9_]*=" ~/notifications-microservice/.env | while IFS= read -r line; do key="${line%%=*}"; val="${line#*=}"; [ -z "$val" ] && echo "EMPTY: $key"; done'
+```
+
+### 0.4 Scripts for troubleshooting
+
+Run from project root on statex: `ssh statex` then `cd ~/notifications-microservice`. All scripts read `.env` for DB, PORT, and SERVICE_TOKEN as needed.
+
+| Script | Purpose | Example (prod) |
+|--------|---------|----------------|
+| **trace-email-helpdesk.sh** | Find where one email is stuck: in DB? helpdesk delivery? ticket_id? | `./scripts/trace-email-helpdesk.sh "message-id"` or `./scripts/trace-email-helpdesk.sh "" "from@ukr.net" "contact@speakasap.com"` |
+| **count-undelivered-emails.sh** | Count inbound emails in DB not yet delivered to helpdesk | `./scripts/count-undelivered-emails.sh` |
+| **check-undelivered-to-helpdesk.sh** | List emails sent to helpdesk webhook but not yet confirmed delivered | `./scripts/check-undelivered-to-helpdesk.sh 20` |
+| **drain-all-undelivered.sh** | Loop process-undelivered until backlog is 0 (DB + S3). Set `S3_CATCHUP_DISABLED=true` before running | `./scripts/drain-all-undelivered.sh` |
+| **delete-bounce-notifications.sh** | Remove MAILER-DAEMON bounce emails from DB so they are never delivered | `./scripts/delete-bounce-notifications.sh` |
+| **trace-webhook-flow.sh** | Print recent controller/webhook logs to find where delivery hangs | `./scripts/trace-webhook-flow.sh` or `LINES=500 ./scripts/trace-webhook-flow.sh` |
+| **update-helpdesk-subscription-filter.sh** | Set helpdesk subscription filters to `*@speakasap.com` (and *@speakasap.ru) | `./scripts/update-helpdesk-subscription-filter.sh` |
+| **trace-email-with-attachments.sh** | Trace email by recipient/message-id: DB, S3 objects, logs, S3 event config | `./scripts/trace-email-with-attachments.sh contact@speakasap.com "<message-id>"` |
+| **Manual process one S3 object** | Process a single S3 key (e.g. from S3 console) into DB + helpdesk | See section 4 "Manual reprocess" below for the full curl command; replace OBJECT_KEY with the key from S3. |
+
+See also `scripts/README.md` for full list (process-all-undelivered.ts, find-s3-unprocessed-emails.sh, reparse-email.ts, check-sns-subscription.sh, etc.).
 
 ---
 
