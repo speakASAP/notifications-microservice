@@ -15,18 +15,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_DIR"
 
-# Load SERVICE_TOKEN from .env
+# Load SERVICE_TOKEN and PORT from .env (same pattern as other scripts; PORT from .env = current container)
 TOKEN=""
+PORT="3368"
 if [ -f .env ]; then
   TOKEN=$(grep "^SERVICE_TOKEN=" .env 2>/dev/null | sed 's/^SERVICE_TOKEN=//' | tr -d "\r\n")
+  P=$(grep "^PORT=" .env 2>/dev/null | sed 's/^PORT=//' | tr -d "\r\n")
+  [ -n "$P" ] && PORT="$P"
 fi
 if [ -z "$TOKEN" ]; then
   echo "Error: SERVICE_TOKEN not found in .env"
   exit 1
 fi
 
-# Use localhost to avoid proxy timeout; override with NOTIFICATIONS_BASE_URL if needed
-BASE_URL="${NOTIFICATIONS_BASE_URL:-http://127.0.0.1:3368}"
+# Base URL: NOTIFICATIONS_BASE_URL if set, else localhost with PORT from .env (avoids proxy timeout, works for current blue/green)
+BASE_URL="${NOTIFICATIONS_BASE_URL:-http://127.0.0.1:${PORT}}"
 DB_BATCH="${DB_BATCH:-50}"
 S3_BATCH="${S3_BATCH:-50}"
 
@@ -49,8 +52,7 @@ while true; do
     "${BASE_URL}/email/inbound/process-undelivered?dbLimit=${DB_BATCH}&s3MaxKeys=${S3_BATCH}" 2>&1) || true
 
   if [ -z "$RESP" ]; then
-    echo "Round $ROUND: No response. Check: is notifications-microservice listening on $BASE_URL ?"
-    echo "From statex run: docker ps | grep notif; docker port \$(docker ps -q -f name=notif) 2>/dev/null"
+    echo "Round $ROUND: No response. Check: is notifications-microservice listening on $BASE_URL ? (PORT from .env: $PORT)"
     exit 1
   fi
   if echo "$RESP" | grep -q "^{"; then
