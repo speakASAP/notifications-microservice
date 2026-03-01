@@ -194,3 +194,54 @@ curl -s -X POST "https://notifications.statex.cz/email/inbound/s3" \
 ```
 
 Use the S3 object key (e.g. SES messageId like `ddicgd5evteehpiq0n0as99htk6ap1q30f5lqoo1`) from the S3 console or from the Lambda/CloudWatch mail.messageId.
+
+---
+
+## 5. Numbers and tickets increasing (no new emails from Amazon)
+
+**Symptom:** Undelivered count and helpdesk tickets keep increasing even though you don't expect new emails from S3.
+
+**Cause:** The **S3 catchup scheduler** runs every 5 minutes and processes "unprocessed" S3 object keys: it lists objects in the bucket, finds those not yet in `inbound_emails`, and calls `processEmailFromS3` for each (up to `S3_CATCHUP_MAX_KEYS_PER_RUN` per run, default 10). So old emails that were never ingested (e.g. from before SNS was set up) are processed over time, creating new DB rows and tickets.
+
+**Fix:**
+
+1. **Disable the scheduler** (stops all catchup from old S3 objects): On prod, add to `notifications-microservice/.env`:
+
+   ```bash
+   S3_CATCHUP_DISABLED=true
+   ```
+
+   Restart the service. New emails will still be processed when SNS sends events to `POST /email/inbound/s3`.
+
+2. **Only process recent S3 objects** (e.g. last 24 hours): Add to `.env`:
+
+   ```bash
+   S3_CATCHUP_ONLY_LAST_HOURS=24
+   ```
+
+   The scheduler will only consider objects with `LastModified` in the last 24 hours; old backlog is ignored.
+
+Check logs for `[S3_CATCHUP]` to confirm the scheduler is running and how many keys it processes each run.
+
+---
+
+## 6. Drain backlog: all emails in DB and marked delivered to helpdesk
+
+**Goal:** Every email stored in the notifications DB and marked as delivered to helpdesk (so after you close/delete tickets in helpdesk, the system is in a clean state: no re-sends, undelivered count 0).
+
+**Steps:**
+
+1. **Optional:** Ensure S3 catchup is enabled so old S3 objects are considered. If you previously set `S3_CATCHUP_DISABLED=true`, remove it or set to `false` for the drain. Do **not** set `S3_CATCHUP_ONLY_LAST_HOURS` during the drain (or the scheduler would skip old keys).
+
+2. **Run the drain script on prod** (uses localhost to avoid proxy timeout):
+
+   cd ~/notifications-microservice
+   ./scripts/drain-all-undelivered.sh
+
+   ```
+
+   This loops `POST /email/inbound/process-undelivered` with `dbLimit=50` and `s3MaxKeys=50` until no more DB undelivered and no more unprocessed S3 keys. Each successful webhook (2xx) is marked delivered automatically.
+
+3. **After the drain finishes:** Set `S3_CATCHUP_DISABLED=true` in `.env` and restart the service so only real-time SNS events are processed from now on (no more backlog). Or set `S3_CATCHUP_ONLY_LAST_HOURS=24` to only process S3 objects from the last 24 hours.
+
+4. You can then close or delete tickets in the helpdesk as needed; the notifications DB will show every email as delivered.
