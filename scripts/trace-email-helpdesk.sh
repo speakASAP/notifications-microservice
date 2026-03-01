@@ -98,21 +98,25 @@ echo "$FOUND" | while IFS='|' read -r id from to subject received_at status; do
 
   echo "2. Webhook deliveries for this email (helpdesk)"
   echo "-----------------------------------------------"
-  WSQL="SELECT wd.id, wd.status, wd.http_status, wd.\"deliveredAt\", ws.\"serviceName\", ws.webhook_url
+  WSQL="SELECT wd.id, wd.status, wd.http_status, wd.\"deliveredAt\", COALESCE(wd.ticket_id, ''), COALESCE(wd.comment_id, ''), ws.\"serviceName\", ws.webhook_url
 FROM webhook_deliveries wd
 JOIN webhook_subscriptions ws ON ws.id = wd.subscription_id
 WHERE wd.inbound_email_id = '$id'
   AND ws.\"serviceName\" = 'helpdesk';"
   WRESULT=$(docker exec -i db-server-postgres psql -U "$DB_USER" -d "$DB_NAME" -t -A -F'|' -c "$WSQL" 2>/dev/null) || true
+  HELPDESK_BASE="${HELPDESK_TICKET_URL_BASE:-https://speakasap.com/helpdesk/tickets}"
   if [ -z "$WRESULT" ] || [ "$WRESULT" = "" ]; then
     echo "  No helpdesk delivery row."
-    echo "  -> Filter did not match (*@speakasap.com), or health check failed, or deliverToSubscriptions threw before creating row. Check logs: WEBHOOK_DELIVERY, Filter check result, Successfully delivered, Exception caught."
+    echo "  -> Webhook may not have been sent, or ticket was created via helpdesk poll and delivery-confirmation not yet called. If you see the ticket in helpdesk UI, call POST /email/inbound/delivery-confirmation with inboundEmailId and ticketId so the row is created."
+    echo "  -> Or: filter did not match (*@speakasap.com), health check failed, or deliverToSubscriptions threw. Check logs: WEBHOOK_DELIVERY, Filter check result, Successfully delivered, Exception caught."
   else
-    echo "$WRESULT" | while IFS='|' read -r wd_id wd_status http_status delivered_at svc_name webhook_url; do
+    echo "$WRESULT" | while IFS='|' read -r wd_id wd_status http_status delivered_at ticket_id comment_id svc_name webhook_url; do
       echo "  delivery_id: $wd_id  status: $wd_status  http_status: $http_status  deliveredAt: $delivered_at"
+      [ -n "$ticket_id" ] && echo "  ticket_id: $ticket_id" && echo "  Ticket URL: ${HELPDESK_BASE%/}/$ticket_id/"
+      [ -n "$comment_id" ] && echo "  comment_id: $comment_id"
       echo "  webhook: $webhook_url"
       if [ "$wd_status" = "delivered" ]; then
-        echo "  -> Marked delivered (2xx). If ticket missing, check speakasap-portal/Celery and helpdesk webhook handler."
+        echo "  -> Marked delivered (2xx). Ticket created in helpdesk."
       elif [ "$wd_status" = "sent" ]; then
         echo "  -> Sent but not confirmed. Helpdesk may not have called delivery-confirmation, or Celery task failed."
       else
