@@ -5,6 +5,8 @@
 # email marked delivered to helpdesk. You can then close/delete tickets in helpdesk as needed.
 #
 # Run on prod: cd ~/notifications-microservice && ./scripts/drain-all-undelivered.sh
+# Before draining: set S3_CATCHUP_DISABLED=true and restart so the queue stops growing.
+# Optional: delete bounces first: ./scripts/delete-bounce-notifications.sh
 # Optional: DB_BATCH=100 S3_BATCH=100 ./scripts/drain-all-undelivered.sh
 
 set -e
@@ -41,6 +43,7 @@ TOTAL_S3=0
 
 while true; do
   ROUND=$((ROUND + 1))
+  echo "Round $ROUND starting (curl may take several min for ${DB_BATCH}+${S3_BATCH} items)..."
   RESP=$(curl -s -X POST -H "Authorization: Bearer $TOKEN" \
     "${BASE_URL}/email/inbound/process-undelivered?dbLimit=${DB_BATCH}&s3MaxKeys=${S3_BATCH}" 2>/dev/null) || true
 
