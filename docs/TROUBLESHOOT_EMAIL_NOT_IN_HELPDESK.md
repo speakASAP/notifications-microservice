@@ -1,10 +1,20 @@
 # Troubleshoot: Email not appearing in Helpdesk
 
-When an inbound email (e.g. to <stashok@speakasap.com>) does not show up in <https://speakasap.com/helpdesk/>, use this checklist to find where the pipeline breaks.
+When an inbound email (e.g. to <contact@speakasap.com>m>m><stashok@speakasap.com>com>com>) does not show up in <https://speakasap.com/helpdesk/>, use this checklist to find where the pipeline breaks.
 
 **Pipeline:** SES → (Lambda) → S3 → **S3 event** → SNS → **notifications-microservice** `/email/inbound/s3` → store + **webhook** → **speakasap-portal** helpdesk → ticket.
 
-**Reference email (your test):** from `lisapet@ukr.net`, to `stashok@speakasap.com`, subject "Сташок тест", messageId `8o7nele9c5j7rbdrcutg7hon7ne7ossan51d9qg1`, timestamp ~2026-02-21T12:34:55Z.
+**Quick trace (specific email):** Run on statex to see where it stuck (DB? helpdesk delivery? status?):
+
+```bash
+cd ~/notifications-microservice
+# By Message-Id (strip angle brackets or pass as-is)
+./scripts/trace-email-helpdesk.sh "1772359319.0556817000.g9aprhbf@frv63.fwdcdn.com"
+# Or by from/to (last 7 days)
+./scripts/trace-email-helpdesk.sh "" "lisapet@ukr.net" "contact@speakasap.com"
+```
+
+Script prints: (1) whether the email is in `inbound_emails`, (2) helpdesk `webhook_deliveries` row and status, (3) where to check logs. Then follow sections 1–2 below for details.
 
 ---
 
@@ -167,6 +177,15 @@ celery -A portal call helpdesk.poll_new_emails
 | 4 | speakasap | Webhook URL is reachable. Django/Celery logs show webhook received and `process_inbound_email_async` run (and no errors). Ticket created in DB or UI. |
 
 If the email **is not** in `inbound_emails`, the break is before or at notifications-microservice (S3 event → SNS → `/email/inbound/s3`). If it **is** in `inbound_emails` but no ticket, the break is webhook delivery or helpdesk processing (subscription filter, health check, webhook POST, or Celery task).
+
+**Where it can get stuck (summary):**
+
+| What you see | Where it's stuck |
+|--------------|-------------------|
+| Not in DB | SES/S3 not received; S3 event not firing; SNS not calling `/email/inbound/s3` or subscription not Confirmed; or `processEmailFromS3` failed (parse/DB error). Check AWS S3/SNS and container logs for `CONTROLLER`, `S3_PROCESS`. |
+| In DB, no helpdesk delivery row | Filter did not match (e.g. `to` not *@speakasap.com), or health check failed (helpdesk URL returned non-200), or exception before/during POST. Check logs: `WEBHOOK_DELIVERY`, `Filter check result`, `Exception caught`. |
+| In DB, helpdesk status= sent | Webhook returned 2xx but helpdesk did not call delivery-confirmation; or Celery task failed after receiving webhook. Check speakasap-portal/Celery. |
+| In DB, helpdesk status= delivered | Notifications did its part. If ticket still missing, check helpdesk/Celery (task failed after confirmation). |
 
 ---
 
