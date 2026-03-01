@@ -6,6 +6,7 @@
 
 import { Controller, Post, Get, Headers, HttpCode, HttpStatus, Req, Query, Param, Body } from '@nestjs/common';
 import { Request } from 'express';
+import { Public } from '../auth/roles.decorator';
 import { InboundEmailService, InboundEmailSummary } from './inbound-email.service';
 import { WebhookDeliveryService } from './webhook-delivery.service';
 import { LoggerService } from '../../shared/logger/logger.service';
@@ -313,10 +314,12 @@ export class InboundEmailController {
   }
 
   /**
-   * Process email from S3 bucket (for S3 event notifications or manual processing)
+   * Process email from S3 bucket (for S3 event notifications or manual processing).
+   * Public: AWS SNS does not send Authorization; subscription calls this URL on S3 events.
    * POST /email/inbound/s3
-   * Body: { bucket: string, key: string }
+   * Body: SNS envelope (SubscriptionConfirmation or Records with s3) or manual { bucket, key }.
    */
+  @Public()
   @Post('inbound/s3')
   async processFromS3(
     @Req() req: Request,
