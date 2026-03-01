@@ -28,7 +28,22 @@ WHERE "from" = 'MAILER-DAEMON@amazonses.com'
 EOSQL
 )
 COUNT=$(echo "$SQL_COUNT" | docker exec -i db-server-postgres psql -U "$DB_USER" -d "$DB_NAME" -t -A)
-echo "Found: $COUNT rows"
+echo "Found: $COUNT rows to delete"
+
+# Of these, how many are currently "undelivered" (no helpdesk delivered)? That is how much undelivered count will drop.
+SQL_UNDEL=$(cat << 'EOSQL'
+SELECT COUNT(*) FROM inbound_emails e
+WHERE e."from" = 'MAILER-DAEMON@amazonses.com'
+  AND e.subject LIKE '%Delivery Status Notification (Failure)%'
+  AND e.id NOT IN (
+    SELECT wd.inbound_email_id FROM webhook_deliveries wd
+    INNER JOIN webhook_subscriptions ws ON ws.id = wd.subscription_id
+    WHERE ws."serviceName" = 'helpdesk' AND wd.status = 'delivered'
+  );
+EOSQL
+)
+UNDEL=$(echo "$SQL_UNDEL" | docker exec -i db-server-postgres psql -U "$DB_USER" -d "$DB_NAME" -t -A)
+echo "Of these, $UNDEL are currently undelivered to helpdesk (undelivered count will drop by $UNDEL; the rest were already delivered)."
 
 if [ "${COUNT:-0}" -eq 0 ]; then
   echo "Nothing to delete."
