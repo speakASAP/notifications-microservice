@@ -1653,7 +1653,7 @@ export class InboundEmailService {
    * List S3 objects in bucket/prefix and return those not present in inbound_emails (by rawData.receipt.action.objectKey).
    * Used for diagnostics when AWS CLI is not available on the host (e.g. run via service inside container).
    */
-  async findUnprocessedS3Keys(options?: { maxKeys?: number }): Promise<{
+  async findUnprocessedS3Keys(options?: { maxKeys?: number; onlyLastHours?: number }): Promise<{
     s3Count: number;
     processedCount: number;
     unprocessed: Array<{ key: string; size: number; lastModified: string }>;
@@ -1664,6 +1664,7 @@ export class InboundEmailService {
     const bucket = this.defaultS3Bucket || process.env.AWS_SES_S3_BUCKET;
     const prefix = this.defaultS3Prefix || process.env.AWS_SES_S3_OBJECT_KEY_PREFIX || 'forwards/';
     const maxKeys = Math.min(options?.maxKeys ?? 500, 1000);
+    const onlyLastHours = options?.onlyLastHours;
 
     if (!bucket) {
       throw new Error('S3 bucket not configured (AWS_SES_S3_BUCKET)');
@@ -1696,7 +1697,14 @@ export class InboundEmailService {
       if (key && typeof key === 'string') processedKeys.add(key);
     }
 
-    const unprocessed = s3Keys.filter((o) => !processedKeys.has(o.key));
+    let unprocessed = s3Keys.filter((o) => !processedKeys.has(o.key));
+
+    if (onlyLastHours != null && onlyLastHours > 0) {
+      const since = new Date(Date.now() - onlyLastHours * 60 * 60 * 1000).toISOString();
+      const before = unprocessed.length;
+      unprocessed = unprocessed.filter((o) => o.lastModified >= since);
+      this.logger.log(`[S3_UNPROCESSED] onlyLastHours=${onlyLastHours}, filtered to last ${unprocessed.length} (was ${before})`, 'InboundEmailService');
+    }
 
     this.logger.log(`[S3_UNPROCESSED] s3Count=${s3Keys.length}, processedCount=${processedKeys.size}, unprocessed=${unprocessed.length}`, 'InboundEmailService');
 

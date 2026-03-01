@@ -32,10 +32,18 @@ export class S3UnprocessedCatchupScheduler {
 
   @Cron(process.env.S3_CATCHUP_CRON ?? DEFAULT_CRON)
   async handleCatchup(): Promise<void> {
+    if (process.env.S3_CATCHUP_DISABLED === 'true' || process.env.S3_CATCHUP_DISABLED === '1') {
+      this.logger.log('[S3_CATCHUP] Skipped (S3_CATCHUP_DISABLED)', 'S3UnprocessedCatchupScheduler');
+      return;
+    }
     const maxKeysPerRun = getMaxKeysPerRun();
+    const onlyLastHours = process.env.S3_CATCHUP_ONLY_LAST_HOURS != null
+      ? parseInt(process.env.S3_CATCHUP_ONLY_LAST_HOURS, 10)
+      : undefined;
     try {
       const data = await this.inboundEmailService.findUnprocessedS3Keys({
         maxKeys: maxKeysPerRun,
+        onlyLastHours,
       });
       const { bucket, unprocessed } = data;
       if (!unprocessed.length) {

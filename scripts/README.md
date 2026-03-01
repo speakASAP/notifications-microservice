@@ -28,6 +28,7 @@ Use `up -d --build` after a pull; `restart` alone does not rebuild the image.
 
 ### S3 Email Processing
 
+- **`drain-all-undelivered.sh`** - Loop process-undelivered until every email is in DB and delivered to helpdesk (all old S3 + DB backlog). After running, set `S3_CATCHUP_DISABLED=true` to stop new backlog. Run on prod: `cd ~/notifications-microservice && ./scripts/drain-all-undelivered.sh` (optional: `DB_BATCH=100 S3_BATCH=100`, or `NOTIFICATIONS_BASE_URL=http://127.0.0.1:3368`).
 - **`process-all-undelivered.ts`** - Process all undelivered emails from DB (redeliver to helpdesk) and from S3 (fetch, store, webhook). Use after redeploy.
   - Usage: `npx ts-node scripts/process-all-undelivered.ts [dbLimit] [s3MaxKeys]` (defaults: 5, 5)
   - On prod: `ssh statex 'cd ~/notifications-microservice && npx ts-node scripts/process-all-undelivered.ts'`
