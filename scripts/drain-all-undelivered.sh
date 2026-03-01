@@ -44,11 +44,19 @@ TOTAL_S3=0
 while true; do
   ROUND=$((ROUND + 1))
   echo "Round $ROUND starting (curl may take several min for ${DB_BATCH}+${S3_BATCH} items)..."
-  RESP=$(curl -s -X POST -H "Authorization: Bearer $TOKEN" \
-    "${BASE_URL}/email/inbound/process-undelivered?dbLimit=${DB_BATCH}&s3MaxKeys=${S3_BATCH}" 2>/dev/null) || true
+  # Allow up to 10 min per round (50+50 webhooks can be slow)
+  RESP=$(curl -s --max-time 600 -X POST -H "Authorization: Bearer $TOKEN" \
+    "${BASE_URL}/email/inbound/process-undelivered?dbLimit=${DB_BATCH}&s3MaxKeys=${S3_BATCH}" 2>&1) || true
 
   if [ -z "$RESP" ]; then
-    echo "Round $ROUND: No response (service down?). Stopping."
+    echo "Round $ROUND: No response. Check: is notifications-microservice listening on $BASE_URL ?"
+    echo "From statex run: docker ps | grep notif; docker port \$(docker ps -q -f name=notif) 2>/dev/null"
+    exit 1
+  fi
+  if echo "$RESP" | grep -q "^{"; then
+    :
+  else
+    echo "Round $ROUND: Response not JSON (maybe error): $RESP"
     exit 1
   fi
 
