@@ -249,8 +249,9 @@ export class WebhookDeliveryService {
         const prevTimeout = subscription.deliveryTimeoutMs ?? 120000;
         const newTimeout = Math.min(prevTimeout * 2, MAX_DELIVERY_TIMEOUT_MS);
         subscription.deliveryTimeoutMs = newTimeout;
-        this.logger.log(
-          `[WEBHOOK_DELIVERY] Timeout: doubled delivery timeout ${prevTimeout}ms -> ${newTimeout}ms for ${subscription.serviceName}`,
+        this.logger.error(
+          `[WEBHOOK_DELIVERY] ERROR: Timeout (connectivity or slow execution): doubled delivery timeout ${prevTimeout}ms -> ${newTimeout}ms for ${subscription.serviceName}`,
+          undefined,
           'WebhookDeliveryService',
         );
         await this.sendTimeoutAlert(subscription, errorMessage, prevTimeout, newTimeout);

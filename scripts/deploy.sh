@@ -33,16 +33,24 @@ if [ -f "$PROJECT_ROOT/.env" ]; then
     NODE_ENV="${NODE_ENV:-}"
 fi
 
-# Deploy only code from repository: sync with remote (discard local changes on server)
+# Pull from remote in production; preserve local changes (stash uncommitted if any, then reapply).
 # Only sync if NODE_ENV is set to "production"
 if [ -d ".git" ]; then
     if [ "$NODE_ENV" = "production" ]; then
         echo -e "${BLUE}Production environment detected (NODE_ENV=production)${NC}"
-        echo -e "${BLUE}Syncing with remote repository (discarding local changes)...${NC}"
+        echo -e "${BLUE}Pulling from remote (local changes preserved)...${NC}"
         git fetch origin
         BRANCH=$(git rev-parse --abbrev-ref HEAD)
-        git reset --hard "origin/$BRANCH"
-        echo -e "${GREEN}✓ Repository synced to origin/$BRANCH${NC}"
+        STASHED=0
+        if [ -n "$(git status --porcelain)" ]; then
+            git stash push -u -m "deploy.sh: stash before pull"
+            STASHED=1
+        fi
+        git pull origin "$BRANCH"
+        if [ "$STASHED" = "1" ]; then
+            git stash pop
+        fi
+        echo -e "${GREEN}✓ Repository updated from origin/$BRANCH (local changes preserved)${NC}"
         echo ""
     else
         echo -e "${YELLOW}Development environment detected (NODE_ENV=${NODE_ENV:-not set})${NC}"
