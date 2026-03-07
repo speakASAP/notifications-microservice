@@ -145,7 +145,6 @@ start_phase() {
     echo "$phase_name|START|$timestamp" >> "$PHASE_TIMING_FILE"
     local msg="⏱️  PHASE START: $phase_name"
     echo -e "${YELLOW}$msg${NC}" >&2
-    echo -e "${YELLOW}$msg${NC}"
 }
 
 end_phase() {
@@ -161,7 +160,6 @@ end_phase() {
         local duration=$(awk "BEGIN {printf \"%.2f\", $timestamp - $start_time}")
         local msg="⏱️  PHASE END: $phase_name (duration: ${duration}s)"
         echo -e "${GREEN}$msg${NC}" >&2
-        echo -e "${GREEN}$msg${NC}"
     fi
 }
 
