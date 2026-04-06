@@ -88,7 +88,20 @@ export class EmailService {
 
     // Handle provider selection
     if (provider === 'ses') {
-      return await this.sendViaSES({ ...options, contentType });
+      // Even when explicitly requesting SES, fall back to SendGrid on failure
+      // to avoid hard 500 errors propagating to the main portal.
+      try {
+        return await this.sendViaSES({ ...options, contentType });
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        this.logger.warn(`AWS SES failed, falling back to SendGrid: ${errorMessage}`, 'EmailService');
+
+        if (!process.env.SENDGRID_API_KEY) {
+          throw error;
+        }
+
+        return await this.sendViaSendGrid({ ...options, contentType });
+      }
     } else if (provider === 'auto') {
       // Try SES first, fallback to SendGrid on failure
       try {
