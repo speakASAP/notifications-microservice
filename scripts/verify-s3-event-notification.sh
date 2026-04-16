@@ -13,7 +13,7 @@ echo ""
 S3_BUCKET="speakasap-email-forward"
 S3_PREFIX="forwards/"
 SNS_TOPIC_NAME="s3-email-events-new"
-WEBHOOK_ENDPOINT="https://notifications.statex.cz/email/inbound/s3"
+WEBHOOK_ENDPOINT="https://notifications.alfares.cz/email/inbound/s3"
 AWS_REGION="eu-central-1"
 
 echo "Configuration to verify:"

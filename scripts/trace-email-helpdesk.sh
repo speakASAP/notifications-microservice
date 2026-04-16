@@ -128,4 +128,4 @@ WHERE wd.inbound_email_id = '$id'
 done
 
 echo "Logs (on statex): docker logs --tail 500 \$(docker ps -q -f name=notifications-microservice | head -1) 2>&1 | grep -E 'CONTROLLER|S3_PROCESS|WEBHOOK_DELIVERY|Filter check|Successfully delivered|Exception caught'"
-echo "Or central logging: https://logging.statex.cz service=notifications-microservice"
+echo "Or central logging: https://logging.alfares.cz service=notifications-microservice"

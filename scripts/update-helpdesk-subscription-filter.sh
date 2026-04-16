@@ -5,7 +5,7 @@
 
 set -e
 
-BASE_URL="${NOTIFICATIONS_BASE_URL:-https://notifications.statex.cz}"
+BASE_URL="${NOTIFICATIONS_BASE_URL:-https://notifications.alfares.cz}"
 
 echo "=========================================="
 echo "Update helpdesk subscription filter to *@speakasap.com and *@speakasap.ru"

@@ -13,7 +13,7 @@ Inbound to *@speakasap.com
     → 2) Save to S3
     → S3 event fires
     → SNS topic
-    → POST https://notifications.statex.cz/email/inbound/s3
+    → POST https://notifications.alfares.cz/email/inbound/s3
     → notifications-microservice stores & delivers to helpdesk
 ```
 
@@ -55,7 +55,7 @@ So: when SES saves an email to `forwards/`, S3 sends an event to that SNS topic.
 - **SNS** → **Topics** → select the topic used in step 2 (e.g. `s3-email-events` or `s3-email-events-new`)
 - **Create subscription**
   - **Protocol:** HTTPS
-  - **Endpoint:** `https://notifications.statex.cz/email/inbound/s3`
+  - **Endpoint:** `https://notifications.alfares.cz/email/inbound/s3`
   - **Enable raw message delivery:** **Yes** (recommended for S3 events)
 - Confirm the subscription (the service confirms automatically when it receives the request; check status **Confirmed**)
 
@@ -67,6 +67,6 @@ So: when SES saves an email to `forwards/`, S3 sends an event to that SNS topic.
 |------|--------|------|
 | 1 | SES → Email receiving → your rule | Actions: (1) Lambda `ses-inbound-drop-spam`, (2) Deliver to S3. **No** “Publish to SNS” in the rule. Spam and virus scanning **Enabled**. |
 | 2 | S3 → bucket `speakasap-email-forward` → Properties → Event notifications | One event: prefix `forwards/`, ObjectCreated, destination = your SNS topic. |
-| 3 | SNS → your topic → Subscriptions | One HTTPS subscription to `https://notifications.statex.cz/email/inbound/s3`, status **Confirmed**. |
+| 3 | SNS → your topic → Subscriptions | One HTTPS subscription to `https://notifications.alfares.cz/email/inbound/s3`, status **Confirmed**. |
 
 Result: all *@speakasap.com → spam filter → S3 → S3 event → SNS → notifications-microservice → helpdesk. No other AWS changes needed for this flow.

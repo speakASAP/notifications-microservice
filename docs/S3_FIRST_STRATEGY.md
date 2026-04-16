@@ -55,7 +55,7 @@ Configure both actions (in order):
 
 ### 3. SNS Subscription
 
-- Endpoint: `https://notifications.statex.cz/email/inbound`
+- Endpoint: `https://notifications.alfares.cz/email/inbound`
 - Enable raw message delivery: **No** (needed for SES notifications)
 
 ## Processing Flow

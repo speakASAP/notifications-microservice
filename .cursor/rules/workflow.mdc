@@ -78,7 +78,7 @@ After all internal AI checks and adjustments are complete:
 
 Our application consists of 3 microservices in /home/statex/. Access via ssh statex.
 
-nginx-microservice handles blue/green deployments. Use the same nginx and database setup to manage statex.cz:
+nginx-microservice handles blue/green deployments. Use the same nginx and database setup to manage alfares.cz:
 Run: ssh statex && cd nginx-microservice && ./scripts/blue-green/deploy.sh statex.
 
 database-server is the PostgreSQL database for the app.
@@ -92,4 +92,4 @@ All internal microservices (statex-website, statex-ai, statex-infrastructure, st
 
 This modular architecture improves development and separation of services.
 
-Success is when <https://statex.cz> is accessible without console or log errors.
+Success is when <https://alfares.cz> is accessible without console or log errors.

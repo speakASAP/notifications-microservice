@@ -22,7 +22,7 @@
 2. Set the public URL (works from containers, same for blue/green):
 
 ```bash
-LOGGING_SERVICE_URL=https://logging.statex.cz
+LOGGING_SERVICE_URL=https://logging.alfares.cz
 ```
 
 1. Restart notifications-microservice (blue/green) so the new env is picked up:
@@ -32,7 +32,7 @@ LOGGING_SERVICE_URL=https://logging.statex.cz
    # or docker-compose.green.yml if green is active
    ```
 
-2. Confirm: open <https://logging.statex.cz/admin/>, query service `notifications-microservice`; logs should appear after the next requests.
+2. Confirm: open <https://logging.alfares.cz/admin/>, query service `notifications-microservice`; logs should appear after the next requests.
 
 ---
 

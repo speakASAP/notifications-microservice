@@ -16,7 +16,7 @@ This guide covers the complete production deployment process for the notificatio
 - **Container Name**: `notifications-microservice`
 - **Port**: `${PORT:-3368}` (configured in `notifications-microservice/.env`)
 - **Network**: `nginx-network` (Docker network)
-- **External URL**: `https://notifications.statex.cz`
+- **External URL**: `https://notifications.alfares.cz`
 - **Internal URL**: `http://notifications-microservice:${PORT:-3368}` (port configured in `notifications-microservice/.env`)
 
 ## Deployment Steps
@@ -45,7 +45,7 @@ ssh statex "cd /home/statex/notifications-microservice && ./scripts/deploy.sh"
 If the domain is not already registered:
 
 ```bash
-ssh statex "cd /home/statex/nginx-microservice && ./scripts/add-domain.sh notifications.statex.cz notifications-microservice \${PORT:-3368} admin@statex.cz"  # PORT configured in notifications-microservice/.env
+ssh statex "cd /home/statex/nginx-microservice && ./scripts/add-domain.sh notifications.alfares.cz notifications-microservice \${PORT:-3368} admin@alfares.cz"  # PORT configured in notifications-microservice/.env
 ```
 
 This script will:
@@ -60,7 +60,7 @@ If the nginx configuration needs manual adjustment:
 
 ```bash
 # Fix proxy_pass if it has incorrect path
-ssh statex "sed -i 's|proxy_pass \$backend_api/api/;|proxy_pass \$backend_api;|' /home/statex/nginx-microservice/nginx/conf.d/notifications.statex.cz.conf"
+ssh statex "sed -i 's|proxy_pass \$backend_api/api/;|proxy_pass \$backend_api;|' /home/statex/nginx-microservice/nginx/conf.d/notifications.alfares.cz.conf"
 ```
 
 ### 5. Copy SSL Certificate (if add-domain failed)
@@ -68,7 +68,7 @@ ssh statex "sed -i 's|proxy_pass \$backend_api/api/;|proxy_pass \$backend_api;|'
 If the certificate wasn't automatically copied:
 
 ```bash
-ssh statex "cd /home/statex/nginx-microservice && mkdir -p certificates/notifications.statex.cz && docker exec nginx-certbot cat /etc/letsencrypt/live/notifications.statex.cz/fullchain.pem > certificates/notifications.statex.cz/fullchain.pem && docker exec nginx-certbot cat /etc/letsencrypt/live/notifications.statex.cz/privkey.pem > certificates/notifications.statex.cz/privkey.pem && chmod 600 certificates/notifications.statex.cz/privkey.pem"
+ssh statex "cd /home/statex/nginx-microservice && mkdir -p certificates/notifications.alfares.cz && docker exec nginx-certbot cat /etc/letsencrypt/live/notifications.alfares.cz/fullchain.pem > certificates/notifications.alfares.cz/fullchain.pem && docker exec nginx-certbot cat /etc/letsencrypt/live/notifications.alfares.cz/privkey.pem > certificates/notifications.alfares.cz/privkey.pem && chmod 600 certificates/notifications.alfares.cz/privkey.pem"
 ```
 
 ### 6. Reload Nginx
@@ -85,7 +85,7 @@ Check both external and internal access:
 
 ```bash
 # External HTTPS access
-ssh statex "curl -s https://notifications.statex.cz/health"
+ssh statex "curl -s https://notifications.alfares.cz/health"
 
 # Internal Docker network access
 # Port configured in notifications-microservice/.env: PORT (default: 3368)
@@ -180,19 +180,19 @@ Key variables:
 1. Check certificate existence:
 
    ```bash
-   ssh statex "docker exec nginx-certbot ls -la /etc/letsencrypt/live/notifications.statex.cz/"
+   ssh statex "docker exec nginx-certbot ls -la /etc/letsencrypt/live/notifications.alfares.cz/"
    ```
 
 2. Request new certificate:
 
    ```bash
-   ssh statex "docker exec nginx-certbot certbot certonly --webroot -w /var/www/html -d notifications.statex.cz --email admin@statex.cz --agree-tos --no-eff-email --non-interactive"
+   ssh statex "docker exec nginx-certbot certbot certonly --webroot -w /var/www/html -d notifications.alfares.cz --email admin@alfares.cz --agree-tos --no-eff-email --non-interactive"
    ```
 
 3. Copy certificate:
 
    ```bash
-   ssh statex "cd /home/statex/nginx-microservice && docker exec nginx-certbot cat /etc/letsencrypt/live/notifications.statex.cz/fullchain.pem > certificates/notifications.statex.cz/fullchain.pem && docker exec nginx-certbot cat /etc/letsencrypt/live/notifications.statex.cz/privkey.pem > certificates/notifications.statex.cz/privkey.pem && chmod 600 certificates/notifications.statex.cz/privkey.pem"
+   ssh statex "cd /home/statex/nginx-microservice && docker exec nginx-certbot cat /etc/letsencrypt/live/notifications.alfares.cz/fullchain.pem > certificates/notifications.alfares.cz/fullchain.pem && docker exec nginx-certbot cat /etc/letsencrypt/live/notifications.alfares.cz/privkey.pem > certificates/notifications.alfares.cz/privkey.pem && chmod 600 certificates/notifications.alfares.cz/privkey.pem"
    ```
 
 ### Old Container Conflicts
@@ -270,7 +270,7 @@ If deployment fails, you can rollback to a previous version:
 
 Deployment is successful when:
 
-- ✅ Service accessible: `https://notifications.statex.cz/health` returns success
+- ✅ Service accessible: `https://notifications.alfares.cz/health` returns success
 - ✅ Internal access: `http://notifications-microservice:${PORT:-3368}/health` returns success (port configured in `notifications-microservice/.env`)
 - ✅ Container status: `docker ps` shows `(healthy)` status
 - ✅ No errors in logs: `docker logs notifications-microservice | grep -i error`
@@ -280,6 +280,6 @@ Deployment is successful when:
 ## Additional Resources
 
 - Service repository: `/home/statex/notifications-microservice`
-- Nginx configuration: `/home/statex/nginx-microservice/nginx/conf.d/notifications.statex.cz.conf`
+- Nginx configuration: `/home/statex/nginx-microservice/nginx/conf.d/notifications.alfares.cz.conf`
 - Service registry: `/home/statex/nginx-microservice/service-registry/notifications-microservice.json`
 - Environment file: `/home/statex/notifications-microservice/.env`

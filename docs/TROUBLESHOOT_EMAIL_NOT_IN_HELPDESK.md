@@ -35,7 +35,7 @@ If emails reach S3 but not the notifications-microservice DB, confirm AWS and pr
 - **Console:** <https://eu-central-1.console.aws.amazon.com/sns/v3/home?region=eu-central-1#/subscriptions>
 - **Topic:** The topic used by the S3 event (e.g. `s3-email-events-new`) must have at least one **subscription**:
   - **Protocol:** HTTPS
-  - **Endpoint:** `https://notifications.statex.cz/email/inbound/s3` (exact URL your service serves)
+  - **Endpoint:** `https://notifications.alfares.cz/email/inbound/s3` (exact URL your service serves)
   - **Status:** **Confirmed** (if Pending, confirm via the link SNS sent by email)
 - If the subscription is missing or not Confirmed, SNS will not POST to the service when S3 events arrive.
 
@@ -107,7 +107,7 @@ Or query via API (from statex; use SERVICE_TOKEN from `.env`):
 ```bash
 source ~/notifications-microservice/.env
 curl -s -H "Authorization: Bearer $SERVICE_TOKEN" \
-  'https://notifications.statex.cz/email/inbound?limit=20&toFilter=@speakasap.com' | jq '.data[] | {id, from, to, subject, status, receivedAt}'
+  'https://notifications.alfares.cz/email/inbound?limit=20&toFilter=@speakasap.com' | jq '.data[] | {id, from, to, subject, status, receivedAt}'
 # Pending emails (e.g. bounces): add &status=pending
 ```
 
@@ -115,7 +115,7 @@ curl -s -H "Authorization: Bearer $SERVICE_TOKEN" \
 
 - The email may **not have been processed** by notifications-microservice. Then either:
   - **S3 event** did not fire (check S3 bucket → Properties → Event notifications for `forwards/` prefix → SNS topic).
-  - **SNS subscription** to `https://notifications.statex.cz/email/inbound/s3` is missing or not **Confirmed** (SNS Console → s3-email-events → Subscriptions).
+  - **SNS subscription** to `https://notifications.alfares.cz/email/inbound/s3` is missing or not **Confirmed** (SNS Console → s3-email-events → Subscriptions).
   - The service received the request but failed (see logs below).
 
 If the email **is** in the list, note its `id` and continue.
@@ -127,7 +127,7 @@ From the same DB or API, check webhook deliveries for that inbound email. Replac
 ```bash
 source ~/notifications-microservice/.env
 curl -s -H "Authorization: Bearer $SERVICE_TOKEN" \
-  'https://notifications.statex.cz/email/inbound/undelivered?limit=50' | jq .
+  'https://notifications.alfares.cz/email/inbound/undelivered?limit=50' | jq .
 ```
 
 If the email is in `inbound_emails` but **not** in undelivered and you need to confirm deliveries, query the DB for `webhook_deliveries` for that `inbound_email_id` (see 1.1). In the notifications DB:
@@ -141,7 +141,7 @@ WHERE wd.inbound_email_id = 'INBOUND_EMAIL_ID';
 
 **Look for:** A row with `status = 'sent'` or `'delivered'` for helpdesk. If there is **no** row for helpdesk:
 
-- Subscription filter may not match: helpdesk subscription should have `filters.to = ["*@speakasap.com"]`. Check: `source ~/notifications-microservice/.env && curl -s -H "Authorization: Bearer $SERVICE_TOKEN" https://notifications.statex.cz/webhooks/subscriptions | jq '.[] | select(.serviceName=="helpdesk") | {id, serviceName, webhookUrl, filters, status, lastDeliveryAt}'`. If `lastDeliveryAt` is old (e.g. days ago), no successful webhook delivery since then—check central logs and helpdesk health.
+- Subscription filter may not match: helpdesk subscription should have `filters.to = ["*@speakasap.com"]`. Check: `source ~/notifications-microservice/.env && curl -s -H "Authorization: Bearer $SERVICE_TOKEN" https://notifications.alfares.cz/webhooks/subscriptions | jq '.[] | select(.serviceName=="helpdesk") | {id, serviceName, webhookUrl, filters, status, lastDeliveryAt}'`. If `lastDeliveryAt` is old (e.g. days ago), no successful webhook delivery since then—check central logs and helpdesk health.
 - Health check may be failing (service logs).
 
 ### 1.3 Notifications-microservice logs
@@ -151,7 +151,7 @@ WHERE wd.inbound_email_id = 'INBOUND_EMAIL_ID';
 docker logs -f --tail 500 $(docker ps -q -f name=notifications-microservice | head -1) 2>&1 | grep -E 'inbound|WEBHOOK_DELIVERY|8o7nele9c5j7rbdrcutg7hon7ne7ossan51d9qg1|stashok|lisapet|Сташок'
 ```
 
-Or check **central logging** (e.g. <https://logging.statex.cz>) for service `notifications-microservice` and keywords: `WEBHOOK_DELIVERY`, `DELIVER TO SUBSCRIPTIONS`, `Filter check result`, `Successfully delivered`, `Exception caught`. (Detailed delivery logs are often sent only to the logging microservice, not container stdout.)
+Or check **central logging** (e.g. <https://logging.alfares.cz>) for service `notifications-microservice` and keywords: `WEBHOOK_DELIVERY`, `DELIVER TO SUBSCRIPTIONS`, `Filter check result`, `Successfully delivered`, `Exception caught`. (Detailed delivery logs are often sent only to the logging microservice, not container stdout.)
 
 **Look for:**  
 
@@ -196,7 +196,7 @@ Ensure the helpdesk subscription in notifications-microservice points to the URL
 
 ```bash
 source ~/notifications-microservice/.env
-curl -s -H "Authorization: Bearer $SERVICE_TOKEN" 'https://notifications.statex.cz/webhooks/subscriptions' | jq '.[] | select(.serviceName=="helpdesk") | {webhookUrl, status, filters}'
+curl -s -H "Authorization: Bearer $SERVICE_TOKEN" 'https://notifications.alfares.cz/webhooks/subscriptions' | jq '.[] | select(.serviceName=="helpdesk") | {webhookUrl, status, filters}'
 ```
 
 The `webhookUrl` should be reachable from statex (e.g. `https://speakasap.com/helpdesk/api/email/inbound/`). Test from statex:
@@ -227,7 +227,7 @@ celery -A portal call helpdesk.poll_new_emails
 
 | Step | Where | What to check |
 |------|--------|----------------|
-| 1 | AWS | Lambda returned CONTINUE → email saved to S3. S3 event notification enabled for bucket/prefix. SNS topic subscription to `https://notifications.statex.cz/email/inbound/s3` is **Confirmed**. |
+| 1 | AWS | Lambda returned CONTINUE → email saved to S3. S3 event notification enabled for bucket/prefix. SNS topic subscription to `https://notifications.alfares.cz/email/inbound/s3` is **Confirmed**. |
 | 2 | statex | Email appears in `GET /email/inbound` or DB `inbound_emails`. Logs show `processEmailFromS3` and `DELIVER TO SUBSCRIPTIONS` for that message. |
 | 3 | statex | Helpdesk subscription is **active**, `filters.to` includes `*@speakasap.com`, `webhookUrl` is the helpdesk URL. Logs show "Successfully delivered to helpdesk" or an error. |
 | 4 | speakasap | Webhook URL is reachable. Django/Celery logs show webhook received and `process_inbound_email_async` run (and no errors). Ticket created in DB or UI. |
@@ -262,7 +262,7 @@ After pulling the fix, redeploy the notifications-microservice so new S3 events 
 
 ```bash
 source ~/notifications-microservice/.env
-curl -s -X POST "https://notifications.statex.cz/email/inbound/s3" \
+curl -s -X POST "https://notifications.alfares.cz/email/inbound/s3" \
   -H "Authorization: Bearer $SERVICE_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"bucket":"speakasap-email-forward","key":"forwards/<S3_OBJECT_KEY>"}'

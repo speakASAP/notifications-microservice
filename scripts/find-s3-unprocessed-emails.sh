@@ -147,7 +147,7 @@ echo "Emails in S3 but not in DB usually mean:"
 echo "  1. S3 Event Notification is NOT configured for this bucket/prefix"
 echo "     → AWS never sends event to SNS → service never receives POST /email/inbound/s3"
 echo "  2. SNS subscription for S3 events is missing or not Confirmed"
-echo "     → Endpoint must be: https://notifications.statex.cz/email/inbound/s3"
+echo "     → Endpoint must be: https://notifications.alfares.cz/email/inbound/s3"
 echo "  3. Emails > 150 KB: SES often does NOT send SNS; only S3 receives the file"
 echo "     → Without S3 event notification, large emails (with attachments) stay only in S3"
 echo ""
@@ -161,7 +161,7 @@ echo "=============================================="
 echo "$UNPROCESSED" | while IFS= read -r line; do
   [ -z "$line" ] && continue
   key=$(echo "$line" | cut -f1)
-  echo "curl -X POST https://notifications.statex.cz/email/inbound/s3 \\"
+  echo "curl -X POST https://notifications.alfares.cz/email/inbound/s3 \\"
   echo "  -H 'Content-Type: application/json' \\"
   echo "  -d '{\"bucket\": \"$S3_BUCKET\", \"key\": \"$key\"}'"
   echo ""

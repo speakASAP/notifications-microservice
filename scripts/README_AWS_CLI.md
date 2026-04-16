@@ -74,7 +74,7 @@ aws sns unsubscribe \
 aws sns subscribe \
   --topic-arn 'arn:aws:sns:eu-central-1:781206275849:s3-email-events' \
   --protocol https \
-  --notification-endpoint 'https://notifications.statex.cz/email/inbound/s3' \
+  --notification-endpoint 'https://notifications.alfares.cz/email/inbound/s3' \
   --attributes '{"RawMessageDelivery":"true"}' \
   --region eu-central-1
 ```

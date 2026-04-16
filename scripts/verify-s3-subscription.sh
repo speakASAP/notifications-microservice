@@ -10,7 +10,7 @@ echo "=========================================="
 echo ""
 
 SNS_TOPIC_ARN="arn:aws:sns:eu-central-1:781206275849:s3-email-events"
-WEBHOOK_ENDPOINT="https://notifications.statex.cz/email/inbound/s3"
+WEBHOOK_ENDPOINT="https://notifications.alfares.cz/email/inbound/s3"
 AWS_REGION="eu-central-1"
 
 echo "Configuration:"

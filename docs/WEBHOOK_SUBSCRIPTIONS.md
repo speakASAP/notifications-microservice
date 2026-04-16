@@ -107,7 +107,7 @@ Notifications Microservice теперь поддерживает систему 
 Чтобы письма на **<contact@speakasap.com>** попадали в Helpdesk, в фильтр `to` нужно включить этот адрес или использовать wildcard `*@speakasap.com`:
 
 ```bash
-curl -X POST https://notifications.statex.cz/webhooks/subscriptions \
+curl -X POST https://notifications.alfares.cz/webhooks/subscriptions \
   -H "Content-Type: application/json" \
   -d '{
     "serviceName": "helpdesk",
