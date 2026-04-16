@@ -5,7 +5,7 @@ When a test email is sent but no helpdesk ticket appears, follow this to find wh
 ## Flow (short)
 
 1. **SES → Notifications**  
-   AWS SNS POST to `notifications.statex.cz/email/inbound` → controller → `handleSESNotification` → `parseEmailContent` → `storeInboundEmail` → **`processInboundEmail`** → **`deliverToSubscriptions`**.
+   AWS SNS POST to `notifications.alfares.cz/email/inbound` → controller → `handleSESNotification` → `parseEmailContent` → `storeInboundEmail` → **`processInboundEmail`** → **`deliverToSubscriptions`**.
 
 2. **Notifications → Portal**  
    For each active subscription: filter match → health check → **HTTP POST** to `https://speakasap.com/helpdesk/api/email/webhook/` (timeout 120s by default). Waits for 200.

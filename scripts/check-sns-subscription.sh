@@ -19,7 +19,7 @@ NC='\033[0m' # No Color
 
 # SNS Topic ARN (update if different)
 SNS_TOPIC_ARN="${1:-arn:aws:sns:eu-central-1:781206275849:inbound-email-speakasap}"
-WEBHOOK_ENDPOINT="${2:-https://notifications.statex.cz/email/inbound}"
+WEBHOOK_ENDPOINT="${2:-https://notifications.alfares.cz/email/inbound}"
 AWS_REGION="${AWS_SES_REGION:-eu-central-1}"
 
 echo "Checking SNS Topic: ${SNS_TOPIC_ARN}"

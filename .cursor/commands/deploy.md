@@ -12,24 +12,24 @@ ssh statex "cd /home/statex/notifications-microservice && git pull"
 ssh statex "cd /home/statex/notifications-microservice && ./scripts/blue-green/deploy-smart.sh notifications-microservice"
 
 # 3. Register domain (if not exists)
-ssh statex "cd /home/statex/nginx-microservice && ./scripts/blue-green/add-domain.sh notifications.statex.cz notifications-microservice 3368 admin@statex.cz"
+ssh statex "cd /home/statex/nginx-microservice && ./scripts/blue-green/add-domain.sh notifications.alfares.cz notifications-microservice 3368 admin@alfares.cz"
 
 # 4. Fix nginx proxy_pass if needed
-ssh statex "sed -i 's|proxy_pass \$backend_api/api/;|proxy_pass \$backend_api;|' /home/statex/nginx-microservice/nginx/conf.d/notifications.statex.cz.conf"
+ssh statex "sed -i 's|proxy_pass \$backend_api/api/;|proxy_pass \$backend_api;|' /home/statex/nginx-microservice/nginx/conf.d/notifications.alfares.cz.conf"
 
 # 5. Copy certificate if add-domain failed
-ssh statex "cd /home/statex/nginx-microservice && mkdir -p certificates/notifications.statex.cz && docker exec nginx-certbot cat /etc/letsencrypt/live/notifications.statex.cz/fullchain.pem > certificates/notifications.statex.cz/fullchain.pem && docker exec nginx-certbot cat /etc/letsencrypt/live/notifications.statex.cz/privkey.pem > certificates/notifications.statex.cz/privkey.pem && chmod 600 certificates/notifications.statex.cz/privkey.pem"
+ssh statex "cd /home/statex/nginx-microservice && mkdir -p certificates/notifications.alfares.cz && docker exec nginx-certbot cat /etc/letsencrypt/live/notifications.alfares.cz/fullchain.pem > certificates/notifications.alfares.cz/fullchain.pem && docker exec nginx-certbot cat /etc/letsencrypt/live/notifications.alfares.cz/privkey.pem > certificates/notifications.alfares.cz/privkey.pem && chmod 600 certificates/notifications.alfares.cz/privkey.pem"
 
 # 6. Reload nginx
 ssh statex "docker exec nginx-microservice nginx -t && docker exec nginx-microservice nginx -s reload"
 
 # 7. Verify deployment
-ssh statex "curl -s https://notifications.statex.cz/health && docker run --rm --network nginx-network alpine/curl:latest curl -s http://notifications-microservice:3368/health"
+ssh statex "curl -s https://notifications.alfares.cz/health && docker run --rm --network nginx-network alpine/curl:latest curl -s http://notifications-microservice:3368/health"
 ```
 
 ## Success Criteria
 
-- Service accessible: `https://notifications.statex.cz/health` returns success
+- Service accessible: `https://notifications.alfares.cz/health` returns success
 - Internal access: `http://notifications-microservice:3368/health` returns success
 - No errors in logs: `docker compose logs logging-service | grep -i error`
 
@@ -37,7 +37,7 @@ ssh statex "curl -s https://notifications.statex.cz/health && docker run --rm --
 
 - Port: 3368
 - Internal URL: `http://notifications-microservice:3368`
-- External URL: `https://notifications.statex.cz`
+- External URL: `https://notifications.alfares.cz`
 - Service registry: `/home/statex/nginx-microservice/service-registry/notifications-microservice.json`
 - Environment: `.env` file in project root (PORT=3368)
 - More details about nginx infratructure: `/home/statex/nginx-microservice/README.md`
@@ -76,17 +76,17 @@ Deploy notifications-microservice to production server using blue-green deployme
 
 ### Step 3: Register Domain
 
-- Command: `ssh statex "cd /home/statex/nginx-microservice && ./scripts/blue-green/add-domain.sh notifications.statex.cz notifications-microservice 3368 admin@statex.cz"`
+- Command: `ssh statex "cd /home/statex/nginx-microservice && ./scripts/blue-green/add-domain.sh notifications.alfares.cz notifications-microservice 3368 admin@alfares.cz"`
 - Purpose: Configure nginx routing and SSL certificate for domain
 
 ### Step 4: Fix Nginx proxy_pass
 
-- Command: `ssh statex "sed -i 's|proxy_pass \$backend_api/api/;|proxy_pass \$backend_api;|' /home/statex/nginx-microservice/nginx/conf.d/notifications.statex.cz.conf"`
+- Command: `ssh statex "sed -i 's|proxy_pass \$backend_api/api/;|proxy_pass \$backend_api;|' /home/statex/nginx-microservice/nginx/conf.d/notifications.alfares.cz.conf"`
 - Purpose: Correct proxy_pass path if it includes incorrect /api/ suffix
 
 ### Step 5: Copy SSL Certificate
 
-- Command: `ssh statex "cd /home/statex/nginx-microservice && mkdir -p certificates/notifications.statex.cz && docker exec nginx-certbot cat /etc/letsencrypt/live/notifications.statex.cz/fullchain.pem > certificates/notifications.statex.cz/fullchain.pem && docker exec nginx-certbot cat /etc/letsencrypt/live/notifications.statex.cz/privkey.pem > certificates/notifications.statex.cz/privkey.pem && chmod 600 certificates/notifications.statex.cz/privkey.pem"`
+- Command: `ssh statex "cd /home/statex/nginx-microservice && mkdir -p certificates/notifications.alfares.cz && docker exec nginx-certbot cat /etc/letsencrypt/live/notifications.alfares.cz/fullchain.pem > certificates/notifications.alfares.cz/fullchain.pem && docker exec nginx-certbot cat /etc/letsencrypt/live/notifications.alfares.cz/privkey.pem > certificates/notifications.alfares.cz/privkey.pem && chmod 600 certificates/notifications.alfares.cz/privkey.pem"`
 - Purpose: Ensure SSL certificates are accessible to nginx
 
 ### Step 6: Reload Nginx
@@ -96,12 +96,12 @@ Deploy notifications-microservice to production server using blue-green deployme
 
 ### Step 7: Verify Deployment
 
-- Command: `ssh statex "curl -s https://notifications.statex.cz/health && docker run --rm --network nginx-network alpine/curl:latest curl -s http://notifications-microservice:3368/health"`
+- Command: `ssh statex "curl -s https://notifications.alfares.cz/health && docker run --rm --network nginx-network alpine/curl:latest curl -s http://notifications-microservice:3368/health"`
 - Purpose: Confirm service is accessible both externally and internally
 
 ## Success Criteria
 
-- ✅ Service accessible: `https://notifications.statex.cz/health` returns success
+- ✅ Service accessible: `https://notifications.alfares.cz/health` returns success
 - ✅ Internal access: `http://notifications-microservice:3368/health` returns success
 - ✅ No errors in logs: Verified - no errors found
 
@@ -122,7 +122,7 @@ Deploy notifications-microservice to production server using blue-green deployme
 **Service Status**:
 
 - Container: `notifications-microservice` - Running and healthy
-- External URL: `https://notifications.statex.cz/health` - ✅ Accessible
+- External URL: `https://notifications.alfares.cz/health` - ✅ Accessible
 - Internal URL: `http://notifications-microservice:3368/health` - ✅ Accessible
 - Port: 3368
 - Network: nginx-network
@@ -131,6 +131,6 @@ Deploy notifications-microservice to production server using blue-green deployme
 
 - Port: 3368
 - Internal URL: `http://notifications-microservice:3368`
-- External URL: `https://notifications.statex.cz`
+- External URL: `https://notifications.alfares.cz`
 - Service registry: `/home/statex/nginx-microservice/service-registry/notifications-microservice.json`
 - Environment: `.env` file in project root (PORT=3368)

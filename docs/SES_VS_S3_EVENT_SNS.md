@@ -31,7 +31,7 @@ Therefore: **the service does not effectively use the SES → SNS payload** for 
    - Destination: an **SNS topic** (can be the same `s3-email-events-new` or a different one).
 
 2. That **SNS topic** (the one used by S3) must have an **HTTPS subscription**:
-   - Endpoint: **`https://notifications.statex.cz/email/inbound/s3`**
+   - Endpoint: **`https://notifications.alfares.cz/email/inbound/s3`**
    - Status: **Confirmed**.
 
 Then:
@@ -43,7 +43,7 @@ The **SES** “Publish to SNS” (action 3) still runs and sends **SES** notific
 ## Quick check
 
 - **S3 Console** → bucket **speakasap-email-forward** → **Properties** → **Event notifications**: confirm there is an event for prefix `forwards/` and destination = your SNS topic (e.g. `s3-email-events-new`).
-- **SNS Console** → topic (e.g. **s3-email-events-new**) → **Subscriptions**: confirm an HTTPS subscription to **`https://notifications.statex.cz/email/inbound/s3`** with status **Confirmed**.
+- **SNS Console** → topic (e.g. **s3-email-events-new**) → **Subscriptions**: confirm an HTTPS subscription to **`https://notifications.alfares.cz/email/inbound/s3`** with status **Confirmed**.
 
 If S3 event notification is missing or points to a topic that has no subscription to `/email/inbound/s3`, inbound emails will be stored in S3 but **not** processed by notifications-microservice (and will not reach the helpdesk).
 

@@ -61,7 +61,7 @@ The `Received: from lisapet@ukr.net by frv63.fwdcdn.com` header suggests the mes
 
      ```bash
      source ~/notifications-microservice/.env
-     curl -s -X POST "https://notifications.statex.cz/email/inbound/s3" \
+     curl -s -X POST "https://notifications.alfares.cz/email/inbound/s3" \
        -H "Authorization: Bearer $SERVICE_TOKEN" \
        -H "Content-Type: application/json" \
        -d '{"bucket":"speakasap-email-forward","key":"forwards/<OBJECT_KEY>"}'

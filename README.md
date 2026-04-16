@@ -204,7 +204,7 @@ POST /email/inbound
 **Setup**:
 
 1. Configure AWS SES to send notifications to an SNS topic
-2. Configure SNS topic to send HTTP(S) POST requests to `https://notifications.statex.cz/email/inbound`
+2. Configure SNS topic to send HTTP(S) POST requests to `https://notifications.alfares.cz/email/inbound`
 3. The service will automatically confirm SNS subscription and process inbound emails
 4. Inbound emails are stored in the `inbound_emails` database table
 
@@ -214,7 +214,7 @@ See `.env.example` for all required environment variables. Key variables:
 
 ```env
 # Service Domain - Used by nginx-microservice for auto-registry (required for correct domain detection)
-DOMAIN=notifications.statex.cz
+DOMAIN=notifications.alfares.cz
 
 # Service Name - Used for logging and service identification
 SERVICE_NAME=notifications-microservice
@@ -226,7 +226,7 @@ CORS_ORIGIN=*
 
 # Auth (admin panel - required for /admin/ login and JWT validation)
 AUTH_SERVICE_URL=http://auth-microservice:3370
-AUTH_SERVICE_PUBLIC_URL=https://auth.statex.cz
+AUTH_SERVICE_PUBLIC_URL=https://auth.alfares.cz
 
 # Database Configuration
 DB_HOST=db-server-postgres
@@ -267,7 +267,7 @@ WHATSAPP_API_URL=https://graph.facebook.com/v18.0
 
 # Auth (admin panel login and JWT validation)
 AUTH_SERVICE_URL=http://auth-microservice:3370
-AUTH_SERVICE_PUBLIC_URL=https://auth.statex.cz
+AUTH_SERVICE_PUBLIC_URL=https://auth.alfares.cz
 
 # Logging Configuration (central logging-microservice; port 3367, same for blue/green)
 LOG_LEVEL=info
@@ -408,7 +408,7 @@ The service will automatically create the `notifications` and `inbound_emails` t
    - Go to AWS SNS Console → Subscriptions
    - Create subscription:
      - Protocol: HTTPS
-     - Endpoint: `https://notifications.statex.cz/email/inbound`
+     - Endpoint: `https://notifications.alfares.cz/email/inbound`
      - Enable raw message delivery: **Yes (recommended)** or No (both formats supported)
      - **Recommended: Yes** - Raw delivery ensures original message is received without any transformation, reducing risk of data loss
 
@@ -473,7 +473,7 @@ For emails larger than 150 KB, AWS SES may not send SNS notifications. To ensure
    - Go to AWS SNS Console → Subscriptions
    - Create subscription:
      - Protocol: HTTPS
-     - Endpoint: `https://notifications.statex.cz/email/inbound/s3`
+     - Endpoint: `https://notifications.alfares.cz/email/inbound/s3`
      - Enable raw message delivery: **Yes** (for S3 events)
 
 4. **Verify Configuration**:
@@ -502,7 +502,7 @@ For emails larger than 150 KB, AWS SES may not send SNS notifications. To ensure
 
 ```typescript
 // Example: Basic Telegram notification
-const response = await fetch('https://notifications.statex.cz/notifications/send', {
+const response = await fetch('https://notifications.alfares.cz/notifications/send', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -521,7 +521,7 @@ console.log(result);
 
 ```typescript
 // Example: Telegram notification with inline keyboard buttons
-const response = await fetch('https://notifications.statex.cz/notifications/send', {
+const response = await fetch('https://notifications.alfares.cz/notifications/send', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -548,7 +548,7 @@ console.log(result);
 
 ```typescript
 // Example: Using per-request bot token (for user-specific credentials)
-const response = await fetch('https://notifications.statex.cz/notifications/send', {
+const response = await fetch('https://notifications.alfares.cz/notifications/send', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -587,7 +587,7 @@ payload = {
 }
 
 response = requests.post(
-    "https://notifications.statex.cz/notifications/send",
+    "https://notifications.alfares.cz/notifications/send",
     json=payload,
     timeout=10
 )
@@ -600,7 +600,7 @@ print(result)
 
 ```typescript
 // Example: Email notification via SendGrid (default) - plain text
-const response = await fetch('https://notifications.statex.cz/notifications/send', {
+const response = await fetch('https://notifications.alfares.cz/notifications/send', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -625,7 +625,7 @@ console.log(result);
 
 ```typescript
 // Example: Email notification with HTML content
-const response = await fetch('https://notifications.statex.cz/notifications/send', {
+const response = await fetch('https://notifications.alfares.cz/notifications/send', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -650,7 +650,7 @@ console.log(result);
 
 ```typescript
 // Example: Email notification via AWS SES
-const response = await fetch('https://notifications.statex.cz/notifications/send', {
+const response = await fetch('https://notifications.alfares.cz/notifications/send', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -675,7 +675,7 @@ console.log(result);
 
 ```typescript
 // Example: Email with auto provider (tries SES first, falls back to SendGrid)
-const response = await fetch('https://notifications.statex.cz/notifications/send', {
+const response = await fetch('https://notifications.alfares.cz/notifications/send', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -709,18 +709,18 @@ console.log(result);
 - All ports are configured in `notifications-microservice/.env`. The values shown are defaults.
 - Port **3368** is the reserved address for this service (do not change unless coordinated with nginx-microservice).
 - All ports are exposed on `127.0.0.1` only (localhost) for security.
-- External access is provided via nginx-microservice reverse proxy at `https://${DOMAIN}` (e.g. `https://notifications.statex.cz`).
+- External access is provided via nginx-microservice reverse proxy at `https://${DOMAIN}` (e.g. `https://notifications.alfares.cz`).
 
 ## Production Deployment
 
 The service is deployed using **nginx-microservice** blue/green deployment:
 
 - **Deploy script**: `./scripts/deploy.sh` calls `nginx-microservice/scripts/blue-green/deploy-smart.sh`.
-- **SSL**: Let's Encrypt (certbot). A temporary self-signed cert is created first so nginx can start; then the deployment requests a real certificate. Set `CERTBOT_EMAIL` in `nginx-microservice/.env` for Let's Encrypt (e.g. `admin@statex.cz`). Certificates are not self-signed in production once certbot runs successfully.
+- **SSL**: Let's Encrypt (certbot). A temporary self-signed cert is created first so nginx can start; then the deployment requests a real certificate. Set `CERTBOT_EMAIL` in `nginx-microservice/.env` for Let's Encrypt (e.g. `admin@alfares.cz`). Certificates are not self-signed in production once certbot runs successfully.
 
 The service is available at:
 
-- **Production URL**: `https://${DOMAIN}` (e.g. `https://notifications.statex.cz`)
+- **Production URL**: `https://${DOMAIN}` (e.g. `https://notifications.alfares.cz`)
 - **Internal URL**: `http://notifications-microservice:${PORT:-3368}` (within Docker network)
 - **Port**: `${PORT:-3368}` (configured in `notifications-microservice/.env`)
 
@@ -755,7 +755,7 @@ The service is available at:
 5. **Verify deployment**:
 
    ```bash
-   curl https://notifications.statex.cz/health
+   curl https://notifications.alfares.cz/health
    ```
 
 ### Production Environment
@@ -764,7 +764,7 @@ The service is available at:
 - **Container Name**: `notifications-microservice` (blue/green: `-blue` / `-green`)
 - **Network**: Connected to `nginx-network` for internal service communication
 - **SSL Certificate**: Let's Encrypt via certbot (see nginx-microservice; temporary self-signed only until certbot succeeds)
-- **Nginx Configuration**: Generated by deploy-smart.sh (e.g. `nginx-microservice/nginx/conf.d/notifications.statex.cz.conf`)
+- **Nginx Configuration**: Generated by deploy-smart.sh (e.g. `nginx-microservice/nginx/conf.d/notifications.alfares.cz.conf`)
 
 ### Testing Admin Panel
 
@@ -779,12 +779,12 @@ The service is available at:
    Or register via API:
 
    ```bash
-   curl -X POST https://auth.statex.cz/auth/register \
+   curl -X POST https://auth.alfares.cz/auth/register \
      -H "Content-Type: application/json" \
      -d '{"email":"admin@example.com","password":"YourSecurePassword","firstName":"Admin","lastName":"User"}'
    ```
 
-2. **Open admin**: `https://notifications.statex.cz/admin/`
+2. **Open admin**: `https://notifications.alfares.cz/admin/`
 
 3. **Sign in** with the same email/password. After login you should see statistics, message history, and service parameters.
 

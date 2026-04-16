@@ -61,7 +61,7 @@ Service fetches email from S3 and processes it
 3. Click **Create subscription**
 4. Configure:
    - **Protocol**: HTTPS
-   - **Endpoint**: `https://notifications.statex.cz/email/inbound/s3`
+   - **Endpoint**: `https://notifications.alfares.cz/email/inbound/s3`
    - **Enable raw message delivery**: **Yes** (important for S3 events)
 5. Click **Create subscription**
 6. AWS will send a confirmation request to your endpoint
@@ -102,7 +102,7 @@ If an email is in S3 but wasn't processed automatically:
 ### Option 1: API Endpoint
 
 ```bash
-curl -X POST https://notifications.statex.cz/email/inbound/s3 \
+curl -X POST https://notifications.alfares.cz/email/inbound/s3 \
   -H "Content-Type: application/json" \
   -d '{
     "bucket": "speakasap-email-forward",
@@ -126,7 +126,7 @@ ts-node scripts/process-s3-email.ts speakasap-email-forward forwards/3o1q7pqbgd4
 1. S3 event notification is configured correctly
 2. Prefix matches exactly (case-sensitive)
 3. SNS subscription is confirmed
-4. Service endpoint is accessible: `https://notifications.statex.cz/email/inbound/s3`
+4. Service endpoint is accessible: `https://notifications.alfares.cz/email/inbound/s3`
 
 **Solution**:
 

@@ -18,7 +18,7 @@ fi
 
 # Defaults: internal Docker URL for backend, public HTTPS for browser
 AUTH_SERVICE_URL="${AUTH_SERVICE_URL:-http://auth-microservice:3370}"
-AUTH_SERVICE_PUBLIC_URL="${AUTH_SERVICE_PUBLIC_URL:-https://auth.statex.cz}"
+AUTH_SERVICE_PUBLIC_URL="${AUTH_SERVICE_PUBLIC_URL:-https://auth.alfares.cz}"
 
 added=0
 

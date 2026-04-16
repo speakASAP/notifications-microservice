@@ -31,7 +31,7 @@ After creating the event notification, verify the SNS subscription:
 
 1. Go to AWS SNS Console → Topics → `s3-email-events-new`
 2. Check subscriptions:
-   - **Endpoint**: `https://notifications.statex.cz/email/inbound/s3`
+   - **Endpoint**: `https://notifications.alfares.cz/email/inbound/s3`
    - **Status**: Should be "Confirmed"
    - **Raw message delivery**: Should be "Yes"
 
@@ -43,7 +43,7 @@ If subscription doesn't exist:
 2. Click **Create subscription**
 3. Configure:
    - **Protocol**: HTTPS
-   - **Endpoint**: `https://notifications.statex.cz/email/inbound/s3`
+   - **Endpoint**: `https://notifications.alfares.cz/email/inbound/s3`
    - **Enable raw message delivery**: **Yes** (important!)
 4. Click **Create subscription**
 5. The service will automatically confirm the subscription
@@ -67,7 +67,7 @@ After setup, test with a large email:
 5. Optional: check for any S3 backlog (unprocessed emails):
 
    ```bash
-   curl -s "https://notifications.statex.cz/email/inbound/s3-unprocessed?maxKeys=500"
+   curl -s "https://notifications.alfares.cz/email/inbound/s3-unprocessed?maxKeys=500"
    ```
 
    If `unprocessed` array is empty after new emails, S3 events are working.

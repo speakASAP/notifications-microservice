@@ -19,4 +19,4 @@ All applications, marketing-microservice, orders-microservice, business-orchestr
 ## SLA
 
 - Port: 3368 (<http://notifications-microservice:3368>)
-- Production: <https://notifications.statex.cz>
+- Production: <https://notifications.alfares.cz>
