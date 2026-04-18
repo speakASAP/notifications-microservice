@@ -8,7 +8,6 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  UpdateDateColumn,
   Index,
 } from 'typeorm';
 
@@ -20,6 +19,7 @@ export class InboundEmail {
   @Column({
     type: 'varchar',
     length: 255,
+    name: 'from_email',
   })
   @Index('idx_inbound_emails_from')
   from: string;
@@ -27,6 +27,7 @@ export class InboundEmail {
   @Column({
     type: 'varchar',
     length: 255,
+    name: 'to_email',
   })
   @Index('idx_inbound_emails_to')
   to: string;
@@ -40,12 +41,14 @@ export class InboundEmail {
 
   @Column({
     type: 'text',
+    name: 'textBody',
   })
   bodyText: string;
 
   @Column({
     type: 'text',
     nullable: true,
+    name: 'htmlBody',
   })
   bodyHtml: string | null;
 

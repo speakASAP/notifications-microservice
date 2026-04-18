@@ -24,7 +24,7 @@ spec:
       containers:
         - name: app
           image: localhost:5000/notifications-microservice:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 3368
               name: http

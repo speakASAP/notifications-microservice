@@ -4,6 +4,11 @@ export class CreateInboundEmailsTable1737763200000
   implements MigrationInterface
 {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    const exists = await queryRunner.hasTable('inbound_emails');
+    if (exists) {
+      return;
+    }
+
     await queryRunner.createTable(
       new Table({
         name: 'inbound_emails',
@@ -13,15 +18,15 @@ export class CreateInboundEmailsTable1737763200000
             type: 'uuid',
             isPrimary: true,
             generationStrategy: 'uuid',
-            default: 'uuid_generate_v4()',
+            default: 'gen_random_uuid()',
           },
           {
-            name: 'from',
+            name: 'from_email',
             type: 'varchar',
             length: '255',
           },
           {
-            name: 'to',
+            name: 'to_email',
             type: 'varchar',
             length: '255',
           },
@@ -32,11 +37,11 @@ export class CreateInboundEmailsTable1737763200000
             isNullable: true,
           },
           {
-            name: 'bodyText',
+            name: 'textBody',
             type: 'text',
           },
           {
-            name: 'bodyHtml',
+            name: 'htmlBody',
             type: 'text',
             isNullable: true,
           },
@@ -76,12 +81,11 @@ export class CreateInboundEmailsTable1737763200000
       true,
     );
 
-    // Create indexes
     await queryRunner.createIndex(
       'inbound_emails',
       new TableIndex({
         name: 'idx_inbound_emails_from',
-        columnNames: ['from'],
+        columnNames: ['from_email'],
       }),
     );
 
@@ -89,7 +93,7 @@ export class CreateInboundEmailsTable1737763200000
       'inbound_emails',
       new TableIndex({
         name: 'idx_inbound_emails_to',
-        columnNames: ['to'],
+        columnNames: ['to_email'],
       }),
     );
 
