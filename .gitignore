@@ -44,3 +44,49 @@ k8s/secret.yaml
 secrets/
 **/client_secret*.json
 **/*.apps.googleusercontent.com.json
+
+# --- baseline: secrets-env-artifacts (synced across repos) ---
+
+*.bak*
+# OS files
+*.bak
+.env
+.venv
+.venv*
+# Security: Never commit keys or certificates
+keys/*
+!keys/README.md
+*.pem
+*.key
+*.crt
+*.cer
+*.pfx
+*.p12
+*private*
+*.rsa
+*.dsa
+*.ec
+*.der
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+# Environments
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+# Local configuration
+local_config.py
+local_settings.py
+# Backup files
+*.bak
+*.backup*
+*.old
+# Compressed files
+*.zip
+*.tar.gz
+*.rar
+*.7z
