@@ -13,7 +13,7 @@ data:
   PORT: "3368"
   CORS_ORIGIN: "*"
   AUTH_SERVICE_URL: "http://auth-microservice.statex-apps.svc.cluster.local:3370"
-  DB_HOST: "host.k3s.internal"
+  DB_HOST: "192.168.88.53"
   DB_PORT: "5432"
   DB_USER: "dbadmin"
   DB_NAME: "notifications"
@@ -39,7 +39,7 @@ data:
   AWS_SES_S3_OBJECT_KEY_PREFIX: "forwards/"
   HELPDESK_WEBHOOK_URL: "https://speakasap.com/helpdesk/api/email/inbound/"
   EMAIL_FORWARDING_RULES: '{"stashok@speakasap.com": "ssfskype@gmail.com"}'
-  PAYMENT_SERVICE_URL: "http://host.k3s.internal:3468"
+  PAYMENT_SERVICE_URL: "http://192.168.88.53:3468"
   PAYMENT_CALLBACK_URL: "https://notifications.alfares.cz/api/webhooks/payment-result"
   PAYMENT_SUCCESS_URL: "https://notifications.alfares.cz/payment-result?status=completed"
   PAYMENT_CANCEL_URL: "https://notifications.alfares.cz/payment-result?status=cancelled"
