@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notifications-microservice-config
+  namespace: statex-apps
+  labels:
+    app: notifications-microservice
+    managed-by: k8s-migration
+data:
+  NODE_ENV: "production"
+  SERVICE_NAME: "notifications-microservice"
+  DOMAIN: "notifications.alfares.cz"
+  PORT: "3368"
+  CORS_ORIGIN: "*"
+  AUTH_SERVICE_URL: "http://auth-microservice.statex-apps.svc.cluster.local:3370"
+  DB_HOST: "host.k3s.internal"
+  DB_PORT: "5432"
+  DB_USER: "dbadmin"
+  DB_NAME: "notifications"
+  DB_SYNC: "false"
+  DB_AUTO_CREATE: "true"
+  SENDGRID_FROM_EMAIL: "noreply@flipflop.alfares.cz"
+  SENDGRID_FROM_NAME: "flipflop.alfares.cz"
+  TELEGRAM_BOT_USERNAME: "StatexNotificationsBot"
+  TELEGRAM_CHAT_ID: "694579866"
+  TELEGRAM_API_URL: "https://api.telegram.org/bot"
+  WHATSAPP_BUSINESS_ACCOUNT_ID: "1513428736736732"
+  WHATSAPP_PHONE_NUMBER_ID: "771296492737010"
+  WHATSAPP_VERIFY_TOKEN: "your_whatsapp_verify_token_here"
+  WHATSAPP_API_URL: "https://graph.facebook.com/v18.0"
+  LOG_LEVEL: "info"
+  LOGGING_SERVICE_URL: "http://logging-microservice.statex-apps.svc.cluster.local:3367"
+  EMAIL_PROVIDER: "auto"
+  AWS_SES_REGION: "eu-central-1"
+  AWS_SES_FROM_EMAIL: "contact@speakasap.com"
+  AWS_SES_FROM_NAME: "SpeakASAP"
+  AWS_SES_SNS_TOPIC_ARN: "arn:aws:sns:eu-central-1:781206275849:inbound-email-speakasap"
+  AWS_SES_S3_BUCKET: "speakasap-email-forward"
+  AWS_SES_S3_OBJECT_KEY_PREFIX: "forwards/"
+  HELPDESK_WEBHOOK_URL: "https://speakasap.com/helpdesk/api/email/inbound/"
+  EMAIL_FORWARDING_RULES: '{"stashok@speakasap.com": "ssfskype@gmail.com"}'
+  PAYMENT_SERVICE_URL: "http://host.k3s.internal:3468"
+  PAYMENT_CALLBACK_URL: "https://notifications.alfares.cz/api/webhooks/payment-result"
+  PAYMENT_SUCCESS_URL: "https://notifications.alfares.cz/payment-result?status=completed"
+  PAYMENT_CANCEL_URL: "https://notifications.alfares.cz/payment-result?status=cancelled"
