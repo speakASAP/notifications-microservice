@@ -2,6 +2,10 @@ import { MigrationInterface, QueryRunner, Table, TableIndex, TableForeignKey } f
 
 export class CreateWebhookDeliveriesTable1738500000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    if (await queryRunner.hasTable('webhook_deliveries')) {
+      return;
+    }
+
     await queryRunner.createTable(
       new Table({
         name: 'webhook_deliveries',
@@ -11,7 +15,7 @@ export class CreateWebhookDeliveriesTable1738500000000 implements MigrationInter
             type: 'uuid',
             isPrimary: true,
             generationStrategy: 'uuid',
-            default: 'uuid_generate_v4()',
+            default: 'gen_random_uuid()',
           },
           {
             name: 'inbound_email_id',

@@ -7,6 +7,10 @@ export class AddDeliveryTimeoutToWebhookSubscriptions1739200000000
   implements MigrationInterface
 {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    const table = await queryRunner.getTable('webhook_subscriptions');
+    if (!table || table.findColumnByName('delivery_timeout_ms')) {
+      return;
+    }
     await queryRunner.addColumn(
       'webhook_subscriptions',
       new TableColumn({

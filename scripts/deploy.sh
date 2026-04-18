@@ -58,7 +58,7 @@ kubectl set image deployment/${SERVICE_NAME} \
   -n "${NAMESPACE}"
 kubectl rollout status deployment/${SERVICE_NAME} \
   -n "${NAMESPACE}" \
-  --timeout=120s
+  --timeout=180s
 echo -e "${GREEN}✅ Rollout complete${NC}"
 
 # ── Phase 5: Health check ────────────────────────────────────

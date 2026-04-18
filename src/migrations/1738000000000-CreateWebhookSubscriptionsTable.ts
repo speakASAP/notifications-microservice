@@ -4,6 +4,10 @@ export class CreateWebhookSubscriptionsTable1738000000000
   implements MigrationInterface
 {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    if (await queryRunner.hasTable('webhook_subscriptions')) {
+      return;
+    }
+
     await queryRunner.createTable(
       new Table({
         name: 'webhook_subscriptions',
@@ -13,7 +17,7 @@ export class CreateWebhookSubscriptionsTable1738000000000
             type: 'uuid',
             isPrimary: true,
             generationStrategy: 'uuid',
-            default: 'uuid_generate_v4()',
+            default: 'gen_random_uuid()',
           },
           {
             name: 'serviceName',
@@ -21,7 +25,7 @@ export class CreateWebhookSubscriptionsTable1738000000000
             length: '255',
           },
           {
-            name: 'webhookUrl',
+            name: 'webhook_url',
             type: 'varchar',
             length: '500',
           },
@@ -48,42 +52,47 @@ export class CreateWebhookSubscriptionsTable1738000000000
             default: 0,
           },
           {
-            name: 'maxRetries',
+            name: 'max_retries',
             type: 'int',
             default: 3,
           },
           {
-            name: 'lastDeliveryAt',
+            name: 'delivery_timeout_ms',
+            type: 'int',
+            default: 120000,
+          },
+          {
+            name: 'last_delivery_at',
             type: 'timestamp',
             isNullable: true,
           },
           {
-            name: 'lastErrorAt',
+            name: 'last_error_at',
             type: 'timestamp',
             isNullable: true,
           },
           {
-            name: 'lastError',
+            name: 'last_error',
             type: 'text',
             isNullable: true,
           },
           {
-            name: 'totalDeliveries',
+            name: 'total_deliveries',
             type: 'int',
             default: 0,
           },
           {
-            name: 'totalFailures',
+            name: 'total_failures',
             type: 'int',
             default: 0,
           },
           {
-            name: 'createdAt',
+            name: 'created_at',
             type: 'timestamp',
             default: 'CURRENT_TIMESTAMP',
           },
           {
-            name: 'updatedAt',
+            name: 'updated_at',
             type: 'timestamp',
             default: 'CURRENT_TIMESTAMP',
           },
