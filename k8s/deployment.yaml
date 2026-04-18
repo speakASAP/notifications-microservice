@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notifications-microservice
+  namespace: statex-apps
+  labels:
+    app: notifications-microservice
+    managed-by: k8s-migration
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notifications-microservice
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: notifications-microservice
+    spec:
+      containers:
+        - name: app
+          image: localhost:5000/notifications-microservice:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3368
+              name: http
+          envFrom:
+            - configMapRef:
+                name: notifications-microservice-config
+            - secretRef:
+                name: notifications-microservice-secret
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3368
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 3
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3368
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

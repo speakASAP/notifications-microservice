@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: notifications-microservice
+  namespace: statex-apps
+  labels:
+    app: notifications-microservice
+    managed-by: k8s-migration
+spec:
+  type: ClusterIP
+  selector:
+    app: notifications-microservice
+  ports:
+    - protocol: TCP
+      port: 3368
+      targetPort: 3368
+      name: http
