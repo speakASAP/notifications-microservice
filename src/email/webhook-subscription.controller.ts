@@ -86,4 +86,14 @@ export class WebhookSubscriptionController {
   async suspend(@Param('id') id: string) {
     return this.subscriptionService.suspend(id);
   }
+
+  /**
+   * Deactivate duplicate active subscriptions with same serviceName + webhookUrl.
+   * Keeps the oldest active row in each group.
+   * POST /webhooks/subscriptions/remediate-duplicates
+   */
+  @Post('remediate-duplicates')
+  async remediateDuplicates() {
+    return this.subscriptionService.remediateDuplicateSubscriptions();
+  }
 }

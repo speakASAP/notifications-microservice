@@ -14,6 +14,7 @@ import { InboundEmail } from './entities/inbound-email.entity';
 import { WebhookDeliveryService } from './webhook-delivery.service';
 import { EmailService } from './email.service';
 import * as iconv from 'iconv-lite';
+import { createHash } from 'crypto';
 
 export interface SNSMessage {
   Type: string;
@@ -97,6 +98,7 @@ function normalizeMessageId(id: string | undefined): string {
 
 @Injectable()
 export class InboundEmailService {
+  private readonly recentInboundFingerprints = new Map<string, { timestamp: number; inboundEmailId?: string }>();
   private s3Client: S3Client;
   private defaultS3Bucket: string | undefined;
   private defaultS3Prefix: string | undefined;
@@ -1311,6 +1313,14 @@ export class InboundEmailService {
     const date = dateMatch ? dateMatch[1].trim() : new Date().toISOString();
 
     this.logger.log(`[S3_PROCESS] Parsed headers - from: ${from}, to: ${to}, subject: ${subject || 'N/A'}, messageId: ${messageId}`, 'InboundEmailService');
+    const normalizedFrom = this.normalizeEmailOnly(from).toLowerCase();
+    if (this.isBlockedSenderDomain(normalizedFrom)) {
+      this.logger.warn(
+        `[S3_PROCESS] Dropping inbound email from blocked sender domain: from=${normalizedFrom}, to=${to}, subject=${subject || 'N/A'}, messageId=${messageId}, objectKey=${objectKey}`,
+        'InboundEmailService',
+      );
+      return { id: `blocked-${Date.now()}`, attachmentsCount: 0 };
+    }
 
     // Check if email already exists (by messageId or objectKey only).
     // Do NOT use from+to+subject+date: two different emails can match and get merged, causing
@@ -1368,9 +1378,24 @@ export class InboundEmailService {
     // Parse email content using existing method (but we already have the content)
     // We need to manually parse since parseEmailContent expects content or S3 fetch
     const emailParts = this.parseEmailParts(fullContent);
+    const burstFingerprint = this.buildInboundBurstFingerprint(
+      normalizedFrom,
+      to,
+      emailParts.subject || subject || '',
+      emailParts.bodyText || '',
+      emailParts.bodyHtml || '',
+    );
+    const duplicateRecord = this.getRecentFingerprintRecord(burstFingerprint);
+    if (duplicateRecord) {
+      this.logger.warn(
+        `[S3_PROCESS] Duplicate burst suppressed: from=${normalizedFrom}, to=${to}, messageId=${messageId}, objectKey=${objectKey}, existingInboundEmailId=${duplicateRecord.inboundEmailId || 'n/a'}`,
+        'InboundEmailService',
+      );
+      return { id: duplicateRecord.inboundEmailId || `duplicate-${Date.now()}`, attachmentsCount: 0 };
+    }
 
     const inboundEmail = new InboundEmail();
-    inboundEmail.from = from;
+    inboundEmail.from = normalizedFrom;
     inboundEmail.to = to;
     inboundEmail.subject = emailParts.subject || subject;
     inboundEmail.bodyText = emailParts.bodyText || '';
@@ -1385,6 +1410,7 @@ export class InboundEmailService {
 
     // Store new email first (always persist raw), then send webhook so helpdesk can create ticket or add to existing thread.
     await this.storeInboundEmail(inboundEmail);
+    this.rememberFingerprint(burstFingerprint, inboundEmail.id);
     this.logger.log(`[S3_PROCESS] ✅ Stored new email with ID: ${inboundEmail.id}`, 'InboundEmailService');
 
     await this.processInboundEmail(inboundEmail);
@@ -1715,6 +1741,72 @@ export class InboundEmailService {
       bucket,
       prefix,
     };
+  }
+
+  private getBlockedSenderDomains(): string[] {
+    const configured = (process.env.INBOUND_BLOCKED_EMAIL_DOMAINS || '')
+      .split(/[,\s]+/)
+      .map((value) => value.trim().toLowerCase())
+      .filter((value) => !!value);
+    const defaults = ['email.tst', 'example.com'];
+    return Array.from(new Set<string>([...defaults, ...configured]));
+  }
+
+  private isBlockedSenderDomain(email: string): boolean {
+    const atIndex = email.lastIndexOf('@');
+    if (atIndex === -1) {
+      return false;
+    }
+    const senderDomain = email.slice(atIndex + 1).toLowerCase();
+    return this.getBlockedSenderDomains().includes(senderDomain);
+  }
+
+  private getDuplicateWindowMs(): number {
+    const windowSeconds = parseInt(process.env.INBOUND_DUPLICATE_WINDOW_SECONDS || '120', 10);
+    if (Number.isNaN(windowSeconds) || windowSeconds < 1) {
+      return 120000;
+    }
+    return windowSeconds * 1000;
+  }
+
+  private buildInboundBurstFingerprint(
+    from: string,
+    to: string,
+    subject: string,
+    bodyText: string,
+    bodyHtml: string,
+  ): string {
+    const normalize = (value: string): string => (value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const bodySource = bodyText || bodyHtml || '';
+    const bodySample = normalize(bodySource).slice(0, 4000);
+    const fingerprintInput = [normalize(from), normalize(to), normalize(subject), bodySample].join('|');
+    return createHash('sha256').update(fingerprintInput).digest('hex');
+  }
+
+  private getRecentFingerprintRecord(fingerprint: string): { timestamp: number; inboundEmailId?: string } | null {
+    const now = Date.now();
+    const duplicateWindowMs = this.getDuplicateWindowMs();
+    for (const [key, entry] of this.recentInboundFingerprints.entries()) {
+      if (now - entry.timestamp > duplicateWindowMs) {
+        this.recentInboundFingerprints.delete(key);
+      }
+    }
+    const record = this.recentInboundFingerprints.get(fingerprint);
+    if (!record) {
+      return null;
+    }
+    if (now - record.timestamp > duplicateWindowMs) {
+      this.recentInboundFingerprints.delete(fingerprint);
+      return null;
+    }
+    return record;
+  }
+
+  private rememberFingerprint(fingerprint: string, inboundEmailId?: string): void {
+    this.recentInboundFingerprints.set(fingerprint, {
+      timestamp: Date.now(),
+      inboundEmailId,
+    });
   }
 
 }
