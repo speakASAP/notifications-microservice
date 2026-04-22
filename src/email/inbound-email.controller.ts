@@ -4,7 +4,7 @@
  * POST /email/inbound is legacy endpoint (returns 200 OK, no processing).
  */
 
-import { Controller, Post, Get, Headers, HttpCode, HttpStatus, Req, Query, Param, Body } from '@nestjs/common';
+import { Controller, Post, Get, Headers, HttpCode, HttpStatus, Req, Query, Param, Body, HttpException } from '@nestjs/common';
 import { Request } from 'express';
 import { Public } from '../auth/roles.decorator';
 import { InboundEmailService, InboundEmailSummary } from './inbound-email.service';
@@ -34,6 +34,8 @@ interface DeliveryConfirmationBody {
 
 @Controller('email')
 export class InboundEmailController {
+  private readonly inboundRateLimitState = new Map<string, { count: number; windowStartMs: number }>();
+
   constructor(
     private inboundEmailService: InboundEmailService,
     private webhookDeliveryService: WebhookDeliveryService,
@@ -52,6 +54,7 @@ export class InboundEmailController {
     @Req() req: Request,
     @Headers() headers: Record<string, string | string[] | undefined>,
   ): Promise<{ status: string; message?: string }> {
+    this.assertInboundRateLimit(req, '/email/inbound');
     // S3-only mode: SES notifications are not processed
     // Return 200 OK to prevent SNS retries and extra billing
     this.logger.log(
@@ -325,6 +328,7 @@ export class InboundEmailController {
     @Req() req: Request,
     @Headers() headers: Record<string, string | string[] | undefined>,
   ): Promise<{ success: boolean; message: string; id?: string; attachments?: number }> {
+    this.assertInboundRateLimit(req, '/email/inbound/s3');
     try {
       // Log immediately to confirm controller is called
       this.logger.log(`[CONTROLLER] ===== S3 EMAIL WEBHOOK REQUEST START =====`, 'InboundEmailController');
@@ -472,6 +476,39 @@ export class InboundEmailController {
       if (allowlist.includes(lower)) out[lower] = v;
     }
     return out;
+  }
+
+  private assertInboundRateLimit(req: Request, route: string): void {
+    const windowSeconds = parseInt(process.env.INBOUND_RATE_LIMIT_WINDOW_SECONDS || '60', 10);
+    const maxRequests = parseInt(process.env.INBOUND_RATE_LIMIT_MAX_REQUESTS || '120', 10);
+    const effectiveWindowSeconds = Number.isNaN(windowSeconds) || windowSeconds < 1 ? 60 : windowSeconds;
+    const effectiveMaxRequests = Number.isNaN(maxRequests) || maxRequests < 1 ? 120 : maxRequests;
+
+    const forwardedFor = req.headers['x-forwarded-for'];
+    const ipFromHeader = Array.isArray(forwardedFor) ? forwardedFor[0] : (forwardedFor || '').toString();
+    const clientIp = (ipFromHeader.split(',')[0] || req.ip || 'unknown').trim();
+    const now = Date.now();
+    const windowMs = effectiveWindowSeconds * 1000;
+    const key = `${route}:${clientIp}`;
+    const state = this.inboundRateLimitState.get(key);
+
+    if (!state || now - state.windowStartMs >= windowMs) {
+      this.inboundRateLimitState.set(key, { count: 1, windowStartMs: now });
+      return;
+    }
+
+    state.count += 1;
+    this.inboundRateLimitState.set(key, state);
+
+    if (state.count <= effectiveMaxRequests) {
+      return;
+    }
+
+    this.logger.warn(
+      `[CONTROLLER] Inbound rate limit exceeded: route=${route}, clientIp=${clientIp}, count=${state.count}, windowSeconds=${effectiveWindowSeconds}, limit=${effectiveMaxRequests}`,
+      'InboundEmailController',
+    );
+    throw new HttpException('Inbound rate limit exceeded', HttpStatus.TOO_MANY_REQUESTS);
   }
 
 
