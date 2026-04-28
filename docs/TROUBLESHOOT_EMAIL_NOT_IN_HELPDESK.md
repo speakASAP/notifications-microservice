@@ -4,6 +4,8 @@ When an inbound email (e.g. to <contact@speakasap.com> or <stashok@speakasap.com
 
 **Pipeline:** SES → (Lambda) → S3 → **S3 event** → SNS → **notifications-microservice** `/email/inbound/s3` → store + **webhook** → **speakasap-portal** helpdesk → ticket.
 
+> Infrastructure: see [`INFRA.md`](../INFRA.md) for namespace, Vault paths, and kubectl commands.
+
 **Quick trace (specific email):** Run on statex to see where it stuck (DB? helpdesk delivery? status?):
 
 ```bash
@@ -39,24 +41,25 @@ If emails reach S3 but not the notifications-microservice DB, confirm AWS and pr
   - **Status:** **Confirmed** (if Pending, confirm via the link SNS sent by email)
 - If the subscription is missing or not Confirmed, SNS will not POST to the service when S3 events arrive.
 
-### 0.3 Prod .env (statex)
+### 0.3 K8s ConfigMap and Vault secrets
 
-Required for S3 → notifications flow and scripts:
+Required env vars for inbound S3 and helpdesk flow: `PORT`, `JWT_SECRET`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `AWS_SES_S3_BUCKET`, `AWS_SES_S3_OBJECT_KEY_PREFIX`, `LOGGING_SERVICE_URL`.
 
-- **Check keys and empty values:** `ssh statex 'cat ~/notifications-microservice/.env'` — do not paste secrets; verify required keys exist and are non-empty.
-- **Required for inbound S3 and helpdesk:** `PORT`, `SERVICE_TOKEN`, `JWT_SECRET`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `AWS_SES_S3_BUCKET` (e.g. `speakasap-email-forward`), `AWS_SES_S3_OBJECT_KEY_PREFIX` (e.g. `forwards/`), `LOGGING_SERVICE_URL`. Optional but recommended: `AWS_SES_REGION`, `S3_CATCHUP_DISABLED` (set to `true` to stop backlog processing), `AUTH_SERVICE_URL` / `AUTH_SERVICE_PUBLIC_URL` (admin panel).
-- **speakasap-portal:** Must have `NOTIFICATION_SERVICE_AUTH_TOKEN` equal to `SERVICE_TOKEN` in notifications-microservice `.env` for API calls and delivery-confirmation.
-
+Check ConfigMap values:
 ```bash
-# List .env keys only (values masked) — run on statex or locally with ssh
-ssh statex 'grep -E "^[A-Za-z_][A-Za-z0-9_]*=" ~/notifications-microservice/.env | sed "s/=.*/=***/"'
-# Check for empty values (keys that are set but empty)
-ssh statex 'grep -E "^[A-Za-z_][A-Za-z0-9_]*=" ~/notifications-microservice/.env | while IFS= read -r line; do key="${line%%=*}"; val="${line#*=}"; [ -z "$val" ] && echo "EMPTY: $key"; done'
+kubectl get configmap notifications-microservice-config -n statex-apps -o yaml
 ```
+
+Check secrets exist (values are in Vault at `secret/prod/notifications-microservice`):
+```bash
+kubectl get secret notifications-microservice-secrets -n statex-apps -o jsonpath='{.data}' | jq 'keys'
+```
+
+**speakasap-portal:** Must have `NOTIFICATION_SERVICE_AUTH_TOKEN` equal to the service's `JWT_SECRET` (from Vault) for API calls and delivery-confirmation.
 
 ### 0.4 Scripts for troubleshooting
 
-Run from project root on statex: `ssh statex` then `cd ~/notifications-microservice`. All scripts read `.env` for DB, PORT, and SERVICE_TOKEN as needed.
+Run from project root on the production pod or via kubectl exec. Scripts use env vars already present in the pod.
 
 | Script | Purpose | Example (prod) |
 |--------|---------|----------------|
@@ -78,34 +81,25 @@ See also `scripts/README.md` for full list (process-all-undelivered.ts, find-s3-
 
 **Connect:** `ssh statex`
 
-**Note:** All notification API endpoints (e.g. `GET /email/inbound`, `GET /webhooks/subscriptions`, `GET /email/inbound/undelivered`) require auth. Use `Authorization: Bearer $SERVICE_TOKEN` where `SERVICE_TOKEN` is from `notifications-microservice/.env` (must match speakasap-portal `NOTIFICATION_SERVICE_AUTH_TOKEN`).
+**Note:** All notification API endpoints require auth. Use `Authorization: Bearer $SERVICE_TOKEN` where `SERVICE_TOKEN` = `JWT_SECRET` from Vault (`secret/prod/notifications-microservice`). Must match speakasap-portal `NOTIFICATION_SERVICE_AUTH_TOKEN`.
 
 ### 1.1 Is the email in the database?
 
 ```bash
-cd ~/notifications-microservice
-# If you have psql to the notifications DB (adjust DB name/host if needed)
-docker exec -it $(docker ps -q -f name=notifications-microservice | head -1) sh -c '
-  node -e "
-    const { Client } = require(\"pg\");
-    const c = new Client({
-      host: process.env.DB_HOST || \"db-server-postgres\",
-      port: process.env.DB_PORT || 5432,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME || \"notifications\"
-    });
-    c.connect().then(() =>
-      c.query(\"SELECT id, \\\"from\\\", \\\"to\\\", subject, status, \\\"receivedAt\\\" FROM inbound_emails ORDER BY \\\"receivedAt\\\" DESC LIMIT 20\")
-    ).then(r => { console.log(JSON.stringify(r.rows, null, 2)); return c.end(); }).catch(e => { console.error(e); process.exit(1); });
-  "
-'
+kubectl exec -n statex-apps deploy/notifications-microservice -- node -e "
+  const { Client } = require('pg');
+  const c = new Client({ host: process.env.DB_HOST, port: process.env.DB_PORT, user: process.env.DB_USER, password: process.env.DB_PASSWORD, database: process.env.DB_NAME });
+  c.connect().then(() => c.query(\"SELECT id, \\\"from\\\", \\\"to\\\", subject, status, \\\"receivedAt\\\" FROM inbound_emails ORDER BY \\\"receivedAt\\\" DESC LIMIT 20\"))
+   .then(r => { console.log(JSON.stringify(r.rows, null, 2)); return c.end(); }).catch(e => { console.error(e); process.exit(1); });
+"
 ```
 
-Or query via API (from statex; use SERVICE_TOKEN from `.env`):
+Or query via API (from statex; use SERVICE_TOKEN from Vault):
 
 ```bash
-source ~/notifications-microservice/.env
+# SERVICE_TOKEN = JWT_SECRET from Vault secret 'notifications-microservice-secrets'
+# Retrieve with: kubectl get secret notifications-microservice-secrets -n statex-apps -o jsonpath='{.data.JWT_SECRET}' | base64 -d
+SERVICE_TOKEN=$(kubectl get secret notifications-microservice-secrets -n statex-apps -o jsonpath='{.data.JWT_SECRET}' | base64 -d)
 curl -s -H "Authorization: Bearer $SERVICE_TOKEN" \
   'https://notifications.alfares.cz/email/inbound?limit=20&toFilter=@speakasap.com' | jq '.data[] | {id, from, to, subject, status, receivedAt}'
 # Pending emails (e.g. bounces): add &status=pending
@@ -125,7 +119,9 @@ If the email **is** in the list, note its `id` and continue.
 From the same DB or API, check webhook deliveries for that inbound email. Replace `INBOUND_EMAIL_ID` with the `id` from 1.1:
 
 ```bash
-source ~/notifications-microservice/.env
+# SERVICE_TOKEN = JWT_SECRET from Vault secret 'notifications-microservice-secrets'
+# Retrieve with: kubectl get secret notifications-microservice-secrets -n statex-apps -o jsonpath='{.data.JWT_SECRET}' | base64 -d
+SERVICE_TOKEN=$(kubectl get secret notifications-microservice-secrets -n statex-apps -o jsonpath='{.data.JWT_SECRET}' | base64 -d)
 curl -s -H "Authorization: Bearer $SERVICE_TOKEN" \
   'https://notifications.alfares.cz/email/inbound/undelivered?limit=50' | jq .
 ```
@@ -141,14 +137,13 @@ WHERE wd.inbound_email_id = 'INBOUND_EMAIL_ID';
 
 **Look for:** A row with `status = 'sent'` or `'delivered'` for helpdesk. If there is **no** row for helpdesk:
 
-- Subscription filter may not match: helpdesk subscription should have `filters.to = ["*@speakasap.com"]`. Check: `source ~/notifications-microservice/.env && curl -s -H "Authorization: Bearer $SERVICE_TOKEN" https://notifications.alfares.cz/webhooks/subscriptions | jq '.[] | select(.serviceName=="helpdesk") | {id, serviceName, webhookUrl, filters, status, lastDeliveryAt}'`. If `lastDeliveryAt` is old (e.g. days ago), no successful webhook delivery since then—check central logs and helpdesk health.
+- Subscription filter may not match: helpdesk subscription should have `filters.to = ["*@speakasap.com"]`. Check: `SERVICE_TOKEN=$(kubectl get secret notifications-microservice-secrets -n statex-apps -o jsonpath='{.data.JWT_SECRET}' | base64 -d) && curl -s -H "Authorization: Bearer $SERVICE_TOKEN" https://notifications.alfares.cz/webhooks/subscriptions | jq '.[] | select(.serviceName=="helpdesk") | {id, serviceName, webhookUrl, filters, status, lastDeliveryAt}'`. If `lastDeliveryAt` is old (e.g. days ago), no successful webhook delivery since then—check central logs and helpdesk health.
 - Health check may be failing (service logs).
 
 ### 1.3 Notifications-microservice logs
 
 ```bash
-# On statex, follow container logs (adjust container name if needed)
-docker logs -f --tail 500 $(docker ps -q -f name=notifications-microservice | head -1) 2>&1 | grep -E 'inbound|WEBHOOK_DELIVERY|8o7nele9c5j7rbdrcutg7hon7ne7ossan51d9qg1|stashok|lisapet|Сташок'
+kubectl logs -n statex-apps deploy/notifications-microservice --tail=500 -f 2>&1 | grep -E 'inbound|WEBHOOK_DELIVERY|8o7nele9c5j7rbdrcutg7hon7ne7ossan51d9qg1|stashok|lisapet|Сташок'
 ```
 
 Or check **central logging** (e.g. <https://logging.alfares.cz>) for service `notifications-microservice` and keywords: `WEBHOOK_DELIVERY`, `DELIVER TO SUBSCRIPTIONS`, `Filter check result`, `Successfully delivered`, `Exception caught`. (Detailed delivery logs are often sent only to the logging microservice, not container stdout.)
@@ -195,7 +190,9 @@ grep -E 'process_inbound_email_async|Error|Exception|lisapet|stashok' /var/log/c
 Ensure the helpdesk subscription in notifications-microservice points to the URL that speakasap-portal actually serves:
 
 ```bash
-source ~/notifications-microservice/.env
+# SERVICE_TOKEN = JWT_SECRET from Vault secret 'notifications-microservice-secrets'
+# Retrieve with: kubectl get secret notifications-microservice-secrets -n statex-apps -o jsonpath='{.data.JWT_SECRET}' | base64 -d
+SERVICE_TOKEN=$(kubectl get secret notifications-microservice-secrets -n statex-apps -o jsonpath='{.data.JWT_SECRET}' | base64 -d)
 curl -s -H "Authorization: Bearer $SERVICE_TOKEN" 'https://notifications.alfares.cz/webhooks/subscriptions' | jq '.[] | select(.serviceName=="helpdesk") | {webhookUrl, status, filters}'
 ```
 
@@ -258,10 +255,12 @@ If the email **is not** in `inbound_emails`, the break is before or at notificat
 
 After pulling the fix, redeploy the notifications-microservice so new S3 events are processed correctly.
 
-**Manual reprocess** (if the email is in S3 but was skipped): From statex, with `SERVICE_TOKEN` from `notifications-microservice/.env`:
+**Manual reprocess** (if the email is in S3 but was skipped): With `SERVICE_TOKEN` from Vault:
 
 ```bash
-source ~/notifications-microservice/.env
+# SERVICE_TOKEN = JWT_SECRET from Vault secret 'notifications-microservice-secrets'
+# Retrieve with: kubectl get secret notifications-microservice-secrets -n statex-apps -o jsonpath='{.data.JWT_SECRET}' | base64 -d
+SERVICE_TOKEN=$(kubectl get secret notifications-microservice-secrets -n statex-apps -o jsonpath='{.data.JWT_SECRET}' | base64 -d)
 curl -s -X POST "https://notifications.alfares.cz/email/inbound/s3" \
   -H "Authorization: Bearer $SERVICE_TOKEN" \
   -H "Content-Type: application/json" \
@@ -280,18 +279,18 @@ Use the S3 object key (e.g. SES messageId like `ddicgd5evteehpiq0n0as99htk6ap1q3
 
 **Fix:**
 
-1. **Disable the scheduler** (stops all catchup from old S3 objects): On prod, add to `notifications-microservice/.env`:
+1. **Disable the scheduler** (stops all catchup from old S3 objects): Update `k8s/configmap.yaml`, add `S3_CATCHUP_DISABLED: "true"`, then:
 
    ```bash
-   S3_CATCHUP_DISABLED=true
+   kubectl apply -f k8s/configmap.yaml && kubectl rollout restart deploy/notifications-microservice -n statex-apps
    ```
 
-   Restart the service. New emails will still be processed when SNS sends events to `POST /email/inbound/s3`.
+   New emails will still be processed when SNS sends events to `POST /email/inbound/s3`.
 
-2. **Only process recent S3 objects** (e.g. last 24 hours): Add to `.env`:
+2. **Only process recent S3 objects** (e.g. last 24 hours): Add `S3_CATCHUP_ONLY_LAST_HOURS: "24"` to `k8s/configmap.yaml`, then:
 
    ```bash
-   S3_CATCHUP_ONLY_LAST_HOURS=24
+   kubectl apply -f k8s/configmap.yaml && kubectl rollout restart deploy/notifications-microservice -n statex-apps
    ```
 
    The scheduler will only consider objects with `LastModified` in the last 24 hours; old backlog is ignored.
@@ -308,15 +307,14 @@ Check logs for `[S3_CATCHUP]` to confirm the scheduler is running and how many k
 
 1. **Optional:** Ensure S3 catchup is enabled so old S3 objects are considered. If you previously set `S3_CATCHUP_DISABLED=true`, remove it or set to `false` for the drain. Do **not** set `S3_CATCHUP_ONLY_LAST_HOURS` during the drain (or the scheduler would skip old keys).
 
-2. **Run the drain script on prod** (uses localhost to avoid proxy timeout):
+2. **Run the drain script on prod:**
 
-   cd ~/notifications-microservice
-   ./scripts/drain-all-undelivered.sh
-
+   ```bash
+   kubectl exec -n statex-apps deploy/notifications-microservice -- ./scripts/drain-all-undelivered.sh
    ```
 
    This loops `POST /email/inbound/process-undelivered` with `dbLimit=50` and `s3MaxKeys=50` until no more DB undelivered and no more unprocessed S3 keys. Each successful webhook (2xx) is marked delivered automatically.
 
-3. **After the drain finishes:** Set `S3_CATCHUP_DISABLED=true` in `.env` and restart the service so only real-time SNS events are processed from now on (no more backlog). Or set `S3_CATCHUP_ONLY_LAST_HOURS=24` to only process S3 objects from the last 24 hours.
+3. **After the drain finishes:** Add `S3_CATCHUP_DISABLED: "true"` to `k8s/configmap.yaml` and apply + rollout restart so only real-time SNS events are processed from now on (no more backlog). Or add `S3_CATCHUP_ONLY_LAST_HOURS: "24"` to only process S3 objects from the last 24 hours.
 
 4. You can then close or delete tickets in the helpdesk as needed; the notifications DB will show every email as delivered.

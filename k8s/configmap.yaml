@@ -13,7 +13,7 @@ data:
   PORT: "3368"
   CORS_ORIGIN: "*"
   AUTH_SERVICE_URL: "http://auth-microservice.statex-apps.svc.cluster.local:3370"
-  DB_HOST: "192.168.88.53"
+  DB_HOST: "db-server-postgres"
   DB_PORT: "5432"
   DB_USER: "dbadmin"
   DB_NAME: "notifications"

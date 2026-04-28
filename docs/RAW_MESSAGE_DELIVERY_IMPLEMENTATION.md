@@ -1,8 +1,18 @@
-# Raw Message Delivery Implementation
+# Raw Message Delivery
 
-## Summary
+## Background
 
-The codebase has been updated to support **raw message delivery** for AWS SES notifications. This ensures we receive the original message directly from AWS without any transformations, reducing the risk of data loss.
+AWS SNS can deliver messages in two formats:
+- **Wrapped** (default): SES notification is JSON-encoded inside SNS's `Message` field
+- **Raw**: SES notification delivered directly, no SNS envelope
+
+Detection: controller reads the `x-amz-sns-rawdelivery` header. Both formats route to the same `handleSESNotification()` method — no configuration needed on the service side.
+
+To enable raw delivery, set "Enable raw message delivery" = Yes on the SNS subscription (recommended for S3 event topics, optional for SES notification topics).
+
+## Implementation Summary
+
+The codebase supports **raw message delivery** for AWS SES notifications to avoid data loss from SNS transformations.
 
 ## Changes Made
 

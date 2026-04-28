@@ -53,24 +53,48 @@ If subscription doesn't exist:
 After setup, test with a large email:
 
 1. Send email with attachment (>150 KB) to `contact@speakasap.com` or `stashok@speakasap.com`
-2. Check service logs (use the running container: blue or green):
+2. Check service logs:
 
    ```bash
-   docker logs notifications-microservice-green --since '5 minutes ago' | grep -E 'S3_PROCESS|s3|bucket'
-   # or: notifications-microservice-blue
-
+   kubectl logs -n statex-apps deploy/notifications-microservice --since=5m | grep -E 'S3_PROCESS|s3|bucket'
    ```
 
 3. Check database for the email
-
 4. Verify it appears in helpdesk
-5. Optional: check for any S3 backlog (unprocessed emails):
+5. Optional: check for any S3 backlog:
 
    ```bash
    curl -s "https://notifications.alfares.cz/email/inbound/s3-unprocessed?maxKeys=500"
    ```
 
-   If `unprocessed` array is empty after new emails, S3 events are working.
+## Manual Processing
+
+If an email is in S3 but wasn't processed automatically:
+
+```bash
+# Via API
+curl -X POST https://notifications.alfares.cz/email/inbound/s3 \
+  -H "Content-Type: application/json" \
+  -d '{"bucket": "speakasap-email-forward", "key": "forwards/<object-key>"}'
+
+# Via script
+ts-node scripts/process-s3-email.ts speakasap-email-forward forwards/<object-key>
+```
+
+## Troubleshooting
+
+**S3 events not triggering:**
+- Verify S3 event notification prefix matches exactly (`forwards/`, case-sensitive)
+- Check SNS subscription status is Confirmed
+- Verify service endpoint reachable: `https://notifications.alfares.cz/email/inbound/s3`
+
+**Service receives event but fails:**
+```bash
+kubectl logs -n statex-apps deploy/notifications-microservice | grep -A 20 'S3_PROCESS'
+```
+Common causes: S3 bucket read permissions, invalid email format in S3, network issues.
+
+**Duplicate processing:** Service deduplicates by messageId and S3 object key — duplicates are skipped automatically.
 
 ## How It Works
 

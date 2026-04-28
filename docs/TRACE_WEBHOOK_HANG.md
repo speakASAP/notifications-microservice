@@ -20,7 +20,7 @@ When a test email is sent but no helpdesk ticket appears, follow this to find wh
 
 ## 1. Notifications (statex)
 
-**Where:** Container logs of `notifications-microservice` (e.g. `docker compose -f docker-compose.blue.yml logs -f notification-service`, or your log aggregator).
+**Where:** Container logs of `notifications-microservice`:
 
 **Grep in order (for the time you sent the test email):**
 
@@ -82,7 +82,7 @@ When a test email is sent but no helpdesk ticket appears, follow this to find wh
 **Statex – last 200 lines of notification-service logs, then grep for webhook delivery:**
 
 ```bash
-ssh statex 'docker compose -f ~/notifications-microservice/docker-compose.blue.yml logs --tail=200 notification-service 2>&1' | grep -E 'CONTROLLER|PROCESS|WEBHOOK_DELIVERY'
+kubectl logs -n statex-apps deploy/notifications-microservice --tail=200 | grep -E 'CONTROLLER|PROCESS|WEBHOOK_DELIVERY'
 ```
 
 **Speakasap – recent webhook and async task lines:**

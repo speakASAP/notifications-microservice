@@ -121,7 +121,7 @@ The service constructs S3 object keys using this logic:
 **Check logs**:
 
 ```bash
-docker logs notifications-microservice-blue | grep -E 'PARSE.*S3|Fetching email from S3'
+kubectl logs -n statex-apps deploy/notifications-microservice | grep -E 'PARSE.*S3|Fetching email from S3'
 ```
 
 **Possible causes**:

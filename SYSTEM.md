@@ -13,7 +13,7 @@ NestJS. Multi-channel delivery: Email (SendGrid/AWS SES), Telegram Bot, WhatsApp
 | Dependency | URL |
 |-----------|-----|
 | database-server | db-server-postgres:5432 |
-| logging-microservice | logging-microservice:3367 |
+| logging-microservice | http://logging-microservice.statex-apps.svc.cluster.local:3367 |
 
 ## Current State
 <!-- AI-maintained -->
