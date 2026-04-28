@@ -12,27 +12,21 @@
 **Codebase (aligned with other services):**
 
 - `.env.example`: Documented correct URL; `LOGGING_SERVICE_PORT` optional (default 3367).
-- `docker-compose.blue.yml` / `docker-compose.green.yml`: Default `LOGGING_SERVICE_URL` is `http://logging-microservice:${LOGGING_SERVICE_PORT:-3367}` (same as auth-microservice, payments-microservice).
+**Production (Kubernetes):** `LOGGING_SERVICE_URL` is set in `k8s/configmap.yaml` to `http://logging-microservice.statex-apps.svc.cluster.local:3367`.
 
-**Production .env change (do on server after backup):**
-
-**Issue:** The hostname `logging-microservice` doesn't resolve on the Docker network. Use the **public URL** (same as auth-microservice, payments-microservice in production):
-
-1. Backup: `cp .env .env.bak.$(date +%Y%m%d_%H%M%S)`
-2. Set the public URL (works from containers, same for blue/green):
+**Issue:** If logs are missing, verify the value in ConfigMap and that the logging-microservice pod is running:
 
 ```bash
-LOGGING_SERVICE_URL=https://logging.alfares.cz
+kubectl get configmap notifications-microservice-config -n statex-apps -o jsonpath='{.data.LOGGING_SERVICE_URL}'
+kubectl get pod -n statex-apps -l app=logging-microservice
 ```
 
-1. Restart notifications-microservice (blue/green) so the new env is picked up:
+If the URL was wrong, update `k8s/configmap.yaml` and apply:
+```bash
+kubectl apply -f k8s/configmap.yaml && kubectl rollout restart deploy/notifications-microservice -n statex-apps
+```
 
-   ```bash
-   docker compose -f docker-compose.blue.yml up -d --force-recreate
-   # or docker-compose.green.yml if green is active
-   ```
-
-2. Confirm: open <https://logging.alfares.cz/admin/>, query service `notifications-microservice`; logs should appear after the next requests.
+Confirm: open <https://logging.alfares.cz/admin/>, query service `notifications-microservice`; logs should appear after the next requests.
 
 ---
 

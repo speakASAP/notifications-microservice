@@ -6,20 +6,15 @@ This directory contains utility scripts for the notifications-microservice.
 
 ### Deployment
 
-- **`deploy.sh`** - Production deployment script; calls `nginx-microservice/scripts/blue-green/deploy-smart.sh`. Migrations run at app startup (no separate step). SSL via Let's Encrypt (certbot).
-- **`update-env-auth-vars.sh`** - Add `AUTH_SERVICE_URL` and `AUTH_SERVICE_PUBLIC_URL` to `.env` if missing (for admin panel). Run on prod: `ssh statex "cd notifications-microservice && ./scripts/update-env-auth-vars.sh"`.
+- **`deploy.sh`** - Production deployment script: builds image, pushes to local registry, `kubectl set image`, waits for rollout. See [`docs/DEPLOYMENT.md`](../docs/DEPLOYMENT.md).
 
-**Restart / rebuild after `git pull`** (service name is `notification-service`; container is `notifications-microservice-blue`):
+**Rebuild and deploy after `git pull`:**
 
 ```bash
-cd ~/notifications-microservice
-# Rebuild and recreate (picks up new code)
-docker compose -f docker-compose.blue.yml up -d --build notification-service
-# Or only restart (no rebuild; same image)
-docker compose -f docker-compose.blue.yml restart notification-service
+./scripts/deploy.sh
+# Rollout status
+kubectl rollout status deploy/notifications-microservice -n statex-apps
 ```
-
-Use `up -d --build` after a pull; `restart` alone does not rebuild the image.
 
 ### Email Diagnostics
 
@@ -67,7 +62,7 @@ Use `up -d --build` after a pull; `restart` alone does not rebuild the image.
 To test the admin panel (`/admin/`):
 
 1. Create a test user in auth-microservice: `cd ../auth-microservice && ./scripts/create-test-user.sh` (uses TEST_EMAIL and TEST_PASSWORD from auth-microservice `.env`).
-2. Ensure notifications-microservice `.env` has `AUTH_SERVICE_URL` and `AUTH_SERVICE_PUBLIC_URL` (run `./scripts/update-env-auth-vars.sh` if needed).
+2. Ensure `AUTH_SERVICE_URL` and `AUTH_SERVICE_PUBLIC_URL` are set in `k8s/configmap.yaml`.
 3. Open `https://${DOMAIN}/admin/` and sign in with the test user. You should see statistics, message history, and service parameters.
 
 ## Documentation
