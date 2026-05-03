@@ -79,7 +79,7 @@ See also `scripts/README.md` for full list (process-all-undelivered.ts, find-s3-
 
 ## 1. On statex (notifications-microservice): did the email reach the service?
 
-**Connect:** `ssh statex`
+**Connect:** `ssh alfares`
 
 **Note:** All notification API endpoints require auth. Use `Authorization: Bearer $SERVICE_TOKEN` where `SERVICE_TOKEN` = `JWT_SECRET` from Vault (`secret/prod/notifications-microservice`). Must match speakasap-portal `NOTIFICATION_SERVICE_AUTH_TOKEN`.
 

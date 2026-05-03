@@ -2,7 +2,7 @@
 
 # Find S3 emails that were NOT processed by notifications-microservice
 # Compares S3 bucket contents with inbound_emails table (by rawData.receipt.action.objectKey)
-# Use on prod: ssh statex "cd ~/notifications-microservice && ./scripts/find-s3-unprocessed-emails.sh"
+# Use on prod: ssh alfares "cd ~/notifications-microservice && ./scripts/find-s3-unprocessed-emails.sh"
 
 set -e
 

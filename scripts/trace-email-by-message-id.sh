@@ -2,7 +2,7 @@
 # Trace a single email by Message-Id (or fragment) and optionally check webhook delivery.
 # Usage: ./scripts/trace-email-by-message-id.sh [message_id_fragment]
 # Example: ./scripts/trace-email-by-message-id.sh 1772299527.0493579000.d2juj2p5
-# Run on statex: ssh statex 'cd ~/notifications-microservice && ./scripts/trace-email-by-message-id.sh 1772299527'
+# Run on statex: ssh alfares 'cd ~/notifications-microservice && ./scripts/trace-email-by-message-id.sh 1772299527'
 
 set -e
 

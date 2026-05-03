@@ -1,7 +1,7 @@
 #!/bin/bash
 # Update helpdesk webhook subscription filters.to to *@speakasap.com so all @speakasap.com
 # inbound emails (including contact@speakasap.com) are delivered to Helpdesk.
-# Run on prod: ssh statex 'cd ~/notifications-microservice && ./scripts/update-helpdesk-subscription-filter.sh'
+# Run on prod: ssh alfares 'cd ~/notifications-microservice && ./scripts/update-helpdesk-subscription-filter.sh'
 
 set -e
 

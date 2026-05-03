@@ -19,7 +19,7 @@ NC='\033[0m' # No Color
 # Check if we're on production server
 if [ -z "$SSH_CONNECTION" ] && [ "$(hostname)" != "statex" ]; then
     echo -e "${YELLOW}⚠ This script should be run on production server${NC}"
-    echo "  → Run: ssh statex 'cd ~/notifications-microservice && ./scripts/check-last-email-from-aws.sh'"
+    echo "  → Run: ssh alfares 'cd ~/notifications-microservice && ./scripts/check-last-email-from-aws.sh'"
     echo ""
 fi
 

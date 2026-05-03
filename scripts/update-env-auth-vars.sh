@@ -1,6 +1,6 @@
 #!/bin/bash
 # Add or ensure AUTH_SERVICE_URL and AUTH_SERVICE_PUBLIC_URL in .env (for admin panel).
-# Run on prod: ssh statex "cd notifications-microservice && ./scripts/update-env-auth-vars.sh"
+# Run on prod: ssh alfares "cd notifications-microservice && ./scripts/update-env-auth-vars.sh"
 # Or locally: ./scripts/update-env-auth-vars.sh
 
 set -e

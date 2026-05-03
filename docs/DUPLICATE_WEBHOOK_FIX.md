@@ -67,7 +67,7 @@ Two additional causes of duplicate tickets were identified:
 
 2. **Delivery confirmation not received**  
    After the helpdesk creates a ticket it must call `POST /email/inbound/delivery-confirmation` so notifications-microservice marks the webhook_delivery as `delivered`. If this fails (timeout, wrong NOTIFICATION_SERVICE_URL, or Celery task crash before `finally`), the email stays “undelivered”. Then `GET /email/inbound` (used by poll_new_emails) still returns it → the same email is queued again every poll cycle → duplicate processing and, when listOnly returned a synthetic `messageId: inbound-{id}`, the poll idempotency check did not match webhook-created tickets → duplicate tickets.  
-   **Action:** Ensure NOTIFICATION_SERVICE_URL from speakasap-portal reaches notifications-microservice; check helpdesk/Celery logs for “Failed to confirm delivery”. List undelivered: `./scripts/check-undelivered-to-helpdesk.sh` (on prod: `ssh statex 'cd ~/notifications-microservice && ./scripts/check-undelivered-to-helpdesk.sh'`).
+   **Action:** Ensure NOTIFICATION_SERVICE_URL from speakasap-portal reaches notifications-microservice; check helpdesk/Celery logs for “Failed to confirm delivery”. List undelivered: `./scripts/check-undelivered-to-helpdesk.sh` (on prod: `ssh alfares 'cd ~/notifications-microservice && ./scripts/check-undelivered-to-helpdesk.sh'`).
 
 ### listOnly messageId fix (notifications-microservice)
 
