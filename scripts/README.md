@@ -26,12 +26,12 @@ kubectl rollout status deploy/notifications-microservice -n statex-apps
 - **`drain-all-undelivered.sh`** - Loop process-undelivered until every email is in DB and delivered to helpdesk (all old S3 + DB backlog). Uses `PORT` from `.env` for localhost URL (same as other apps). Before draining set `S3_CATCHUP_DISABLED=true` and restart. Run on prod: `cd ~/notifications-microservice && ./scripts/drain-all-undelivered.sh` (optional: `DB_BATCH=100 S3_BATCH=100` or `NOTIFICATIONS_BASE_URL=...`).
 - **`process-all-undelivered.ts`** - Process all undelivered emails from DB (redeliver to helpdesk) and from S3 (fetch, store, webhook). Use after redeploy.
   - Usage: `npx ts-node scripts/process-all-undelivered.ts [dbLimit] [s3MaxKeys]` (defaults: 5, 5)
-  - On prod: `ssh statex 'cd ~/notifications-microservice && npx ts-node scripts/process-all-undelivered.ts'`
+  - On prod: `ssh alfares 'cd ~/notifications-microservice && npx ts-node scripts/process-all-undelivered.ts'`
 - **`process-s3-email.ts`** - Manually process an email from S3 bucket
   - Usage: `ts-node scripts/process-s3-email.ts <bucket-name> <object-key>`
 - **`find-s3-unprocessed-emails.sh`** - Find S3 objects that were never processed by notifications-microservice (compare S3 bucket with `inbound_emails` by `rawData.receipt.action.objectKey`). Use to trace emails with attachments that stayed in S3.
   - Usage: `./scripts/find-s3-unprocessed-emails.sh` (requires AWS CLI, psql, .env)
-  - On prod: `ssh statex "cd ~/notifications-microservice && ./scripts/find-s3-unprocessed-emails.sh"`
+  - On prod: `ssh alfares "cd ~/notifications-microservice && ./scripts/find-s3-unprocessed-emails.sh"`
 - **`reparse-email.ts`** - Re-parse an existing email from database
   - Usage: `ts-node scripts/reparse-email.ts <email-id>`
 - **`trace-email-with-attachments.sh`** - Trace why an email (e.g. with attachments) did not reach helpdesk: DB, S3, logs, S3 event config.
@@ -40,16 +40,16 @@ kubectl rollout status deploy/notifications-microservice -n statex-apps
 - **`count-undelivered-emails.sh`** - Count inbound emails in DB not yet delivered to helpdesk (no quoting issues). Run on prod: `cd ~/notifications-microservice && ./scripts/count-undelivered-emails.sh`
 - **`check-undelivered-to-helpdesk.sh`** - List inbound emails sent to helpdesk webhook but not yet confirmed delivered (helpdesk calls delivery-confirmation when ticket/comment is created).
   - Usage: `./scripts/check-undelivered-to-helpdesk.sh [limit]`
-  - On prod: `ssh statex 'cd ~/notifications-microservice && ./scripts/check-undelivered-to-helpdesk.sh'`
+  - On prod: `ssh alfares 'cd ~/notifications-microservice && ./scripts/check-undelivered-to-helpdesk.sh'`
 - **`trace-email-helpdesk.sh`** - Trace where a specific email is stuck (not in DB / in DB but no helpdesk delivery / delivery status). Uses Message-Id or from+to (last 7 days).
   - Usage: `./scripts/trace-email-helpdesk.sh "<message-id>"` or `./scripts/trace-email-helpdesk.sh "" "from@example.com" "to@example.com"`
   - On prod: `cd ~/notifications-microservice && ./scripts/trace-email-helpdesk.sh "1772359319.0556817000.g9aprhbf@frv63.fwdcdn.com"`
 - **`update-helpdesk-subscription-filter.sh`** - Set helpdesk webhook subscription `filters.to` to `["*@speakasap.com"]` so all inbound emails to any @speakasap.com address (including contact@, stashok@) are delivered to Helpdesk. See `docs/EMAIL_DELIVERY_POLICY.md`.
   - Usage: `./scripts/update-helpdesk-subscription-filter.sh`
-  - On prod: `ssh statex 'cd ~/notifications-microservice && ./scripts/update-helpdesk-subscription-filter.sh'`
+  - On prod: `ssh alfares 'cd ~/notifications-microservice && ./scripts/update-helpdesk-subscription-filter.sh'`
 - **`trace-webhook-flow.sh`** - Print recent logs for the inbound-email → webhook delivery flow to find where it hangs when a ticket does not appear. See also `docs/TRACE_WEBHOOK_HANG.md`.
   - Usage: `./scripts/trace-webhook-flow.sh` or `LINES=500 ./scripts/trace-webhook-flow.sh`
-  - On prod: `ssh statex 'cd ~/notifications-microservice && ./scripts/trace-webhook-flow.sh'`
+  - On prod: `ssh alfares 'cd ~/notifications-microservice && ./scripts/trace-webhook-flow.sh'`
 
 ### S3 Event Notifications
 

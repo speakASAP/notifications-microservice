@@ -1,7 +1,7 @@
 #!/bin/bash
 # Check inbound emails that were sent to helpdesk webhook but not yet confirmed delivered.
 # Delivery is confirmed when helpdesk creates a ticket/comment and calls delivery-confirmation.
-# Run on prod: ssh statex 'cd ~/notifications-microservice && ./scripts/check-undelivered-to-helpdesk.sh'
+# Run on prod: ssh alfares 'cd ~/notifications-microservice && ./scripts/check-undelivered-to-helpdesk.sh'
 
 set -e
 

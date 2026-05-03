@@ -53,7 +53,7 @@ Returns webhook deliveries that were **sent** to the helpdesk but not yet **conf
 
 ## Script
 
-- **`scripts/check-undelivered-to-helpdesk.sh`** – Lists undelivered (sent but not confirmed) to helpdesk via API or direct DB query. Run on prod: `ssh statex 'cd ~/notifications-microservice && ./scripts/check-undelivered-to-helpdesk.sh'`
+- **`scripts/check-undelivered-to-helpdesk.sh`** – Lists undelivered (sent but not confirmed) to helpdesk via API or direct DB query. Run on prod: `ssh alfares 'cd ~/notifications-microservice && ./scripts/check-undelivered-to-helpdesk.sh'`
 
 ## Helpdesk (speakasap-portal)
 

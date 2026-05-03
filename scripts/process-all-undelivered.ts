@@ -1,6 +1,6 @@
 /**
  * Process all undelivered emails: from DB (redeliver to helpdesk) and from S3 (fetch, store, webhook).
- * Use after redeploy to catch up. Run on prod: ssh statex 'cd ~/notifications-microservice && npx ts-node scripts/process-all-undelivered.ts'
+ * Use after redeploy to catch up. Run on prod: ssh alfares 'cd ~/notifications-microservice && npx ts-node scripts/process-all-undelivered.ts'
  *
  * Usage: npx ts-node scripts/process-all-undelivered.ts [dbLimit] [s3MaxKeys]
  * Defaults: dbLimit=5, s3MaxKeys=5

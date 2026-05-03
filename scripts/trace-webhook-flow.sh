@@ -1,6 +1,6 @@
 #!/bin/bash
 # Print recent log lines for the inbound-email → webhook delivery flow to find where it hangs.
-# Run on statex: ssh statex 'cd ~/notifications-microservice && ./scripts/trace-webhook-flow.sh'
+# Run on statex: ssh alfares 'cd ~/notifications-microservice && ./scripts/trace-webhook-flow.sh'
 # Optional: LINES=500 ./scripts/trace-webhook-flow.sh
 
 set -e
