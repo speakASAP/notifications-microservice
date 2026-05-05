@@ -1,6 +1,6 @@
 # Notifications Microservice
 
-Multi-channel notification delivery service for the Statex ecosystem. Sends email (SendGrid and AWS SES), Telegram, and WhatsApp notifications on behalf of orders-microservice, marketing-microservice, business-orchestrator, and all client applications. Built on NestJS, port 3368, domain https://notifications.alfares.cz.
+Multi-channel notification delivery service for the Statex ecosystem. Sends email (AWS SES active path), Telegram, and WhatsApp notifications on behalf of orders-microservice, marketing-microservice, business-orchestrator, and all client applications. Built on NestJS, port 3368, domain https://notifications.alfares.cz.
 
 ## API Endpoints
 
@@ -45,6 +45,10 @@ See `INFRA.md` for deployment architecture, environment variables, and Kubernete
 - New table: `channel_registry` (migration `1746445200000-CreateChannelRegistryTable`).
 - Backward compatibility: `/notifications/send` keeps legacy behavior when `channelKey` is omitted.
 - For migration from env defaults, bootstrap a default active channel row that mirrors current `AWS_SES_*` or `SENDGRID_*` sender keys (keys only in docs, values from env/Vault).
+- Runtime policy for marketing callers:
+  - pass `channelKey` when campaign-level channel routing is explicit;
+  - include `purpose` (for example `marketing`) so notifications can enforce channel policy;
+  - fallback remains the legacy default sender path when `channelKey` is not provided.
 
 ## Docs Index
 
