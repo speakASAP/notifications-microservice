@@ -1,5 +1,6 @@
 import { DataSource } from 'typeorm';
 import { Notification } from './notifications/entities/notification.entity';
+import { ChannelRegistry } from './notifications/entities/channel-registry.entity';
 import { InboundEmail } from './email/entities/inbound-email.entity';
 import { WebhookSubscription } from './email/entities/webhook-subscription.entity';
 import { WebhookDelivery } from './email/entities/webhook-delivery.entity';
@@ -15,7 +16,7 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USER || 'dbadmin',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'notifications',
-  entities: [Notification, InboundEmail, WebhookSubscription, WebhookDelivery],
+  entities: [Notification, ChannelRegistry, InboundEmail, WebhookSubscription, WebhookDelivery],
   // At runtime (dist): __dirname is dist/src → dist/src/migrations/*.js. CLI (ts-node): __dirname is src → src/migrations/*.ts
   migrations: [__dirname + '/migrations/*.' + (process.env.NODE_ENV === 'production' ? 'js' : 'ts')],
   synchronize: false,

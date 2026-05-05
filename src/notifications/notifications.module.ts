@@ -17,14 +17,22 @@ import { S3UnprocessedCatchupScheduler } from '../email/s3-unprocessed-catchup.s
 import { TelegramService } from '../telegram/telegram.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { Notification } from './entities/notification.entity';
+import { ChannelRegistry } from './entities/channel-registry.entity';
 import { InboundEmail } from '../email/entities/inbound-email.entity';
 import { WebhookSubscription } from '../email/entities/webhook-subscription.entity';
 import { WebhookDelivery } from '../email/entities/webhook-delivery.entity';
+import { ChannelRegistryService } from './channel-registry.service';
 
 @Module({
   imports: [
     HttpModule,
-    TypeOrmModule.forFeature([Notification, InboundEmail, WebhookSubscription, WebhookDelivery]),
+    TypeOrmModule.forFeature([
+      Notification,
+      ChannelRegistry,
+      InboundEmail,
+      WebhookSubscription,
+      WebhookDelivery,
+    ]),
   ],
   controllers: [
     NotificationsController,
@@ -40,7 +48,13 @@ import { WebhookDelivery } from '../email/entities/webhook-delivery.entity';
     S3UnprocessedCatchupScheduler,
     TelegramService,
     WhatsAppService,
+    ChannelRegistryService,
   ],
-  exports: [NotificationsService, WebhookSubscriptionService, InboundEmailService],
+  exports: [
+    NotificationsService,
+    WebhookSubscriptionService,
+    InboundEmailService,
+    ChannelRegistryService,
+  ],
 })
 export class NotificationsModule {}

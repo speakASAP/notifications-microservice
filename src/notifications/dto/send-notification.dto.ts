@@ -9,6 +9,7 @@ import {
   IsOptional,
   IsObject,
   IsArray,
+  IsIn,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -111,7 +112,8 @@ export class InlineKeyboardButton {
 
 export class SendNotificationDto {
   @IsEnum(NotificationChannel)
-  channel: NotificationChannel;
+  @IsOptional()
+  channel?: NotificationChannel;
 
   @IsEnum(NotificationType)
   type: NotificationType;
@@ -170,4 +172,26 @@ export class SendNotificationDto {
   @IsString()
   @IsOptional()
   service?: string;
+
+  // Sync A extension fields (all additive for backward compatibility)
+  @IsString()
+  @IsOptional()
+  channelKey?: string;
+
+  @IsString()
+  @IsOptional()
+  @IsIn(['marketing', 'transactional', 'system'])
+  purpose?: 'marketing' | 'transactional' | 'system';
+
+  @IsString()
+  @IsOptional()
+  fromEmail?: string;
+
+  @IsString()
+  @IsOptional()
+  fromName?: string;
+
+  @IsString()
+  @IsOptional()
+  replyToEmail?: string;
 }

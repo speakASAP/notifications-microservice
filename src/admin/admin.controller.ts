@@ -5,6 +5,8 @@
 
 import {
   Controller,
+  Patch,
+  Body,
   Get,
   Query,
   Param,
@@ -16,15 +18,49 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { InboundEmailService } from '../email/inbound-email.service';
 import { ApiResponseUtil } from '../../shared/utils/api-response.util';
 import { LoggerService } from '../../shared/logger/logger.service';
+import { ChannelRegistryService } from '../notifications/channel-registry.service';
 
 @Controller('admin')
 export class AdminController {
   constructor(
     private readonly notificationsService: NotificationsService,
     private readonly inboundEmailService: InboundEmailService,
+    private readonly channelRegistryService: ChannelRegistryService,
     @Inject(LoggerService)
     private readonly logger: LoggerService,
   ) {}
+
+  @Get('channels')
+  async getChannels() {
+    const channels = await this.channelRegistryService.listChannels();
+    return ApiResponseUtil.success(channels);
+  }
+
+  @Get('channels/:channelKey')
+  async getChannel(@Param('channelKey') channelKey: string) {
+    const channels = await this.channelRegistryService.listChannels();
+    const channel = channels.find((item) => item.channelKey === channelKey);
+    if (!channel) {
+      throw new HttpException(
+        ApiResponseUtil.error('NOT_FOUND', `Channel key not found: ${channelKey}`),
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return ApiResponseUtil.success(channel);
+  }
+
+  @Patch('channels/:channelKey')
+  async updateChannel(
+    @Param('channelKey') channelKey: string,
+    @Body() payload: Record<string, unknown>,
+  ) {
+    const updated = await this.channelRegistryService.updateChannel(
+      channelKey,
+      payload,
+      'admin-api',
+    );
+    return ApiResponseUtil.success(updated);
+  }
 
   @Get('stats')
   async getStats() {

@@ -208,6 +208,69 @@
           <div id="params-content" class="loading">Loading…</div>
           <ul id="params-list" class="params-list hidden"></ul>
         </section>
+        <section class="card">
+          <h2>Channel registry</h2>
+          <div id="channels-content" class="loading">Loading…</div>
+          <table id="channels-table" class="hidden">
+            <thead>
+              <tr>
+                <th>Key</th>
+                <th>Type</th>
+                <th>Provider</th>
+                <th>Active</th>
+                <th>Purposes</th>
+                <th>Applications</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody id="channels-tbody"></tbody>
+          </table>
+          <div id="channel-edit-wrap" class="hidden" style="margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px;">
+            <h3 style="margin-bottom: 12px; font-size: 1rem;">Edit channel</h3>
+            <div style="display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+              <div class="form-group">
+                <label for="edit-channel-key">Channel key</label>
+                <input id="edit-channel-key" type="text" disabled>
+              </div>
+              <div class="form-group">
+                <label for="edit-channel-active">Active</label>
+                <select id="edit-channel-active" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 0.95rem;">
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="edit-channel-fallback">Fallback channel key</label>
+                <input id="edit-channel-fallback" type="text" placeholder="optional">
+              </div>
+              <div class="form-group">
+                <label for="edit-channel-from-email">From email</label>
+                <input id="edit-channel-from-email" type="text" placeholder="optional">
+              </div>
+              <div class="form-group">
+                <label for="edit-channel-from-name">From name</label>
+                <input id="edit-channel-from-name" type="text" placeholder="optional">
+              </div>
+              <div class="form-group">
+                <label for="edit-channel-reply-to">Reply-to email</label>
+                <input id="edit-channel-reply-to" type="text" placeholder="optional">
+              </div>
+              <div class="form-group">
+                <label for="edit-channel-purposes">Purposes (comma separated)</label>
+                <input id="edit-channel-purposes" type="text" placeholder="marketing,transactional,system">
+              </div>
+              <div class="form-group">
+                <label for="edit-channel-apps">Applications (comma separated)</label>
+                <input id="edit-channel-apps" type="text" placeholder="marketing-microservice">
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 6px;">
+              <button id="save-channel-btn" type="button" class="btn btn-primary">Save channel</button>
+              <button id="cancel-channel-btn" type="button" class="btn btn-secondary">Cancel</button>
+            </div>
+            <div id="channels-error" class="error-msg hidden" style="margin-top: 8px;"></div>
+          </div>
+        </section>
       </div>
     </div>
   </main>
@@ -226,6 +289,8 @@
       const REFRESH_KEY = 'notifications_admin_refresh';
       let authServicePublicUrl = '';
       let currentHistoryFilter = null;
+      let channelsCache = [];
+      let selectedChannelKey = null;
 
       function getOrigin() {
         return window.location.origin;
@@ -308,6 +373,7 @@
         loadStats();
         loadHistory(false);
         loadParams();
+        loadChannels();
       }
 
       async function login(email, password) {
@@ -557,6 +623,12 @@
       document.getElementById('load-more-btn').onclick = function() {
         loadHistory(true);
       };
+      document.getElementById('save-channel-btn').onclick = function () {
+        saveChannelUpdate();
+      };
+      document.getElementById('cancel-channel-btn').onclick = function () {
+        hideChannelEditor();
+      };
 
       async function loadParams() {
         const content = document.getElementById('params-content');
@@ -576,6 +648,115 @@
           show(list);
         } catch (e) {
           content.textContent = 'Error: ' + (e.message || 'Could not load params');
+        }
+      }
+
+      function toCsv(list) {
+        if (!Array.isArray(list)) return '';
+        return list.join(',');
+      }
+
+      function fromCsv(value) {
+        return String(value || '')
+          .split(',')
+          .map(function (item) { return item.trim(); })
+          .filter(function (item) { return item.length > 0; });
+      }
+
+      function hideChannelEditor() {
+        selectedChannelKey = null;
+        hide(document.getElementById('channel-edit-wrap'));
+        hide(document.getElementById('channels-error'));
+      }
+
+      function showChannelEditor(channel) {
+        selectedChannelKey = channel.channelKey;
+        document.getElementById('edit-channel-key').value = channel.channelKey || '';
+        document.getElementById('edit-channel-active').value = String(!!channel.isActive);
+        document.getElementById('edit-channel-fallback').value = channel.fallbackChannelKey || '';
+        document.getElementById('edit-channel-from-email').value = channel.fromEmail || '';
+        document.getElementById('edit-channel-from-name').value = channel.fromName || '';
+        document.getElementById('edit-channel-reply-to').value = channel.replyToEmail || '';
+        document.getElementById('edit-channel-purposes').value = toCsv(channel.purposesAllowed);
+        document.getElementById('edit-channel-apps').value = toCsv(channel.applicationsAllowed);
+        hide(document.getElementById('channels-error'));
+        show(document.getElementById('channel-edit-wrap'));
+      }
+
+      async function loadChannels() {
+        const content = document.getElementById('channels-content');
+        const table = document.getElementById('channels-table');
+        const tbody = document.getElementById('channels-tbody');
+        try {
+          const r = await api('/admin/channels');
+          if (r.status === 401) { showLogin(); return; }
+          const json = await parseJsonResponse(r, content, 'Could not load channels');
+          if (!json) return;
+          if (!json.success) {
+            content.textContent = json.error?.message || 'Failed to load channels';
+            return;
+          }
+          channelsCache = Array.isArray(json.data) ? json.data : [];
+          tbody.innerHTML = channelsCache.map(function (c) {
+            const updated = c.updatedAt ? new Date(c.updatedAt).toLocaleString() : '-';
+            return '<tr data-channel-key="' + (c.channelKey || '') + '">' +
+              '<td>' + (c.channelKey || '-') + '</td>' +
+              '<td>' + (c.type || '-') + '</td>' +
+              '<td>' + (c.provider || '-') + '</td>' +
+              '<td>' + (c.isActive ? 'true' : 'false') + '</td>' +
+              '<td>' + (Array.isArray(c.purposesAllowed) ? c.purposesAllowed.join(', ') : '-') + '</td>' +
+              '<td>' + (Array.isArray(c.applicationsAllowed) ? c.applicationsAllowed.join(', ') : '-') + '</td>' +
+              '<td>' + updated + '</td>' +
+              '</tr>';
+          }).join('');
+          content.textContent = '';
+          show(table);
+          Array.from(tbody.querySelectorAll('tr')).forEach(function (tr) {
+            tr.onclick = function () {
+              const key = tr.getAttribute('data-channel-key');
+              const channel = channelsCache.find(function (item) { return item.channelKey === key; });
+              if (channel) showChannelEditor(channel);
+            };
+          });
+        } catch (e) {
+          content.textContent = 'Error: ' + (e.message || 'Could not load channels');
+        }
+      }
+
+      async function saveChannelUpdate() {
+        if (!selectedChannelKey) return;
+        const errorEl = document.getElementById('channels-error');
+        try {
+          hide(errorEl);
+          const payload = {
+            isActive: document.getElementById('edit-channel-active').value === 'true',
+            fallbackChannelKey: document.getElementById('edit-channel-fallback').value.trim() || null,
+            fromEmail: document.getElementById('edit-channel-from-email').value.trim() || null,
+            fromName: document.getElementById('edit-channel-from-name').value.trim() || null,
+            replyToEmail: document.getElementById('edit-channel-reply-to').value.trim() || null,
+            purposesAllowed: fromCsv(document.getElementById('edit-channel-purposes').value),
+            applicationsAllowed: fromCsv(document.getElementById('edit-channel-apps').value),
+          };
+          const r = await api('/admin/channels/' + encodeURIComponent(selectedChannelKey), {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+          });
+          if (r.status === 401) { showLogin(); return; }
+          const json = await parseJsonResponse(r, errorEl, 'Could not save channel');
+          if (!json) {
+            show(errorEl);
+            return;
+          }
+          if (!json.success) {
+            errorEl.textContent = json.error?.message || 'Failed to save channel';
+            show(errorEl);
+            return;
+          }
+          hideChannelEditor();
+          await loadChannels();
+        } catch (e) {
+          errorEl.textContent = 'Error: ' + (e.message || 'Could not save channel');
+          show(errorEl);
         }
       }
 

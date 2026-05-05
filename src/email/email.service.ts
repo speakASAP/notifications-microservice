@@ -18,6 +18,9 @@ export interface EmailOptions {
   emailProvider?: 'sendgrid' | 'ses' | 'auto'; // Per-request provider selection
   contentType?: EmailContentType; // Content type: 'text/html' or 'text/plain' (default: auto-detect)
   rawMessage?: string | Buffer; // When provided, send raw MIME via SES without modifications
+  fromEmail?: string;
+  fromName?: string;
+  replyToEmail?: string;
 }
 
 export interface EmailSendResult {
@@ -185,7 +188,8 @@ export class EmailService {
       );
 
       const command = new SendEmailCommand({
-        Source: `${this.fromName} <${this.fromEmail}>`,
+        Source: `${options.fromName || this.fromName} <${options.fromEmail || this.fromEmail}>`,
+        ReplyToAddresses: options.replyToEmail ? [options.replyToEmail] : undefined,
         Destination: {
           ToAddresses: [options.to],
         },
@@ -242,9 +246,10 @@ export class EmailService {
       const msg = {
         to: options.to,
         from: {
-          email: this.fromEmail,
-          name: this.fromName,
+          email: options.fromEmail || this.fromEmail,
+          name: options.fromName || this.fromName,
         },
+        replyTo: options.replyToEmail,
         subject: options.subject,
         text: textBody,
         html: htmlBody,

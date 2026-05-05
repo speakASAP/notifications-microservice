@@ -14,6 +14,8 @@ Multi-channel notification delivery service for the Statex ecosystem. Sends emai
 | GET | /admin/stats | Admin statistics (JWT) |
 | GET | /admin/history | Admin history (JWT) |
 | GET | /admin/params | Admin params (JWT) |
+| GET | /admin/channels | Channel registry list (JWT) |
+| GET | /admin/channels/:channelKey | Channel registry detail (JWT) |
 | POST | /email/inbound | AWS SES SNS webhook |
 | POST | /email/inbound/s3 | S3 event SNS webhook |
 | POST/GET/PUT/DELETE | /api/webhooks/subscriptions | Webhook subscriptions CRUD |
@@ -37,6 +39,12 @@ Multi-channel notification delivery service for the Statex ecosystem. Sends emai
 ## Configuration
 
 See `INFRA.md` for deployment architecture, environment variables, and Kubernetes setup. Live config values are in `k8s/configmap.yaml`. Secrets are stored in Vault at `secret/prod/notifications-microservice`.
+
+## Channel Registry Migration Notes
+
+- New table: `channel_registry` (migration `1746445200000-CreateChannelRegistryTable`).
+- Backward compatibility: `/notifications/send` keeps legacy behavior when `channelKey` is omitted.
+- For migration from env defaults, bootstrap a default active channel row that mirrors current `AWS_SES_*` or `SENDGRID_*` sender keys (keys only in docs, values from env/Vault).
 
 ## Docs Index
 

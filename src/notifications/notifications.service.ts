@@ -12,6 +12,7 @@ import { TelegramService } from '../telegram/telegram.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { Notification, NotificationStatus } from './entities/notification.entity';
 import { LoggerService } from '../../shared/logger/logger.service';
+import { ChannelRegistryService } from './channel-registry.service';
 
 export interface NotificationSendResult {
   id: string;
@@ -54,6 +55,7 @@ export class NotificationsService {
     private emailService: EmailService,
     private telegramService: TelegramService,
     private whatsappService: WhatsAppService,
+    private channelRegistryService: ChannelRegistryService,
     @Inject(LoggerService)
     private logger: LoggerService,
   ) {}
@@ -61,10 +63,14 @@ export class NotificationsService {
   async send(sendNotificationDto: SendNotificationDto): Promise<NotificationSendResult> {
     const startTime = Date.now();
     const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const { channel, recipient, message, subject, templateData, type } = sendNotificationDto;
+    const policyStart = Date.now();
+    const resolvedPolicy = await this.channelRegistryService.resolveSendPolicy(sendNotificationDto);
+    const resolvedDto = resolvedPolicy.dto;
+    const { channel, recipient, message, subject, templateData, type } = resolvedDto;
+    const policyDuration = Date.now() - policyStart;
 
     this.logger.log(
-      `[NotificationsService] send() - Request ID: ${requestId} - Starting notification send - channel=${channel}, recipient=${recipient}, subject=${subject}, type=${type}, service=${sendNotificationDto.service || 'none'}, messageLength=${message?.length || 0}`,
+      `[NotificationsService] send() timestamp=${new Date().toISOString()} duration_ms=${policyDuration} outcome=policy_resolved decisionReason=${resolvedPolicy.decisionReason} requestId=${requestId} channel=${channel} recipient=${recipient} subject=${subject} type=${type} service=${resolvedDto.service || 'none'} messageLength=${message?.length || 0}`,
       'NotificationsService',
     );
 
@@ -122,8 +128,8 @@ export class NotificationsService {
       message,
       templateData: templateData || null,
       status: NotificationStatus.PENDING,
-      provider: channel === NotificationChannel.EMAIL ? (sendNotificationDto.emailProvider || null) : null,
-      service: sendNotificationDto.service || null,
+      provider: channel === NotificationChannel.EMAIL ? (resolvedDto.emailProvider || null) : null,
+      service: resolvedDto.service || null,
     });
 
     await this.notificationRepository.save(notification);
@@ -141,7 +147,7 @@ export class NotificationsService {
       switch (channel) {
         case NotificationChannel.EMAIL: {
           this.logger.log(
-            `[NotificationsService] send() - Request ID: ${requestId} - Calling emailService.send() - notificationId=${notification.id}, emailProvider=${sendNotificationDto.emailProvider || 'auto'}, contentType=${sendNotificationDto.contentType || 'auto'}`,
+            `[NotificationsService] send() - Request ID: ${requestId} - Calling emailService.send() - notificationId=${notification.id}, emailProvider=${resolvedDto.emailProvider || 'auto'}, contentType=${resolvedDto.contentType || 'auto'}`,
             'NotificationsService',
           );
           result = await this.emailService.send({
@@ -149,8 +155,11 @@ export class NotificationsService {
             subject: subject || this.getDefaultSubject(type),
             message,
             templateData,
-            emailProvider: sendNotificationDto.emailProvider, // Pass provider selection
-            contentType: sendNotificationDto.contentType, // Pass content type
+            emailProvider: resolvedDto.emailProvider, // Pass provider selection
+            contentType: resolvedDto.contentType, // Pass content type
+            fromEmail: resolvedDto.fromEmail,
+            fromName: resolvedDto.fromName,
+            replyToEmail: resolvedDto.replyToEmail,
           });
           const emailSendDuration = Date.now() - sendStart;
           this.logger.log(
@@ -162,14 +171,14 @@ export class NotificationsService {
 
         case NotificationChannel.TELEGRAM: {
           // Use chatId if provided, otherwise use recipient
-          const chatId = sendNotificationDto.chatId || recipient;
+          const chatId = resolvedDto.chatId || recipient;
           result = await this.telegramService.send({
             chatId,
             message,
             templateData,
-            botToken: sendNotificationDto.botToken,
-            inlineKeyboard: sendNotificationDto.inlineKeyboard,
-            parseMode: sendNotificationDto.parseMode,
+            botToken: resolvedDto.botToken,
+            inlineKeyboard: resolvedDto.inlineKeyboard,
+            parseMode: resolvedDto.parseMode,
           });
           break;
         }
@@ -192,8 +201,8 @@ export class NotificationsService {
       notification.messageId = result.messageId || null;
       notification.error = null;
       // Update provider if it was determined during sending (for email channel)
-      if (channel === NotificationChannel.EMAIL && sendNotificationDto.emailProvider) {
-        notification.provider = sendNotificationDto.emailProvider;
+      if (channel === NotificationChannel.EMAIL && resolvedDto.emailProvider) {
+        notification.provider = resolvedDto.emailProvider;
       }
       await this.notificationRepository.save(notification);
       const updateDuration = Date.now() - updateStart;
