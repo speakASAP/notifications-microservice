@@ -6,6 +6,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { Request } from 'express';
 import { InboundEmailController } from './inbound-email.controller';
 import { InboundEmailService } from './inbound-email.service';
+import { WebhookDeliveryService } from './webhook-delivery.service';
 import { LoggerService } from '../../shared/logger/logger.service';
 
 describe('InboundEmailController', () => {
@@ -14,12 +15,20 @@ describe('InboundEmailController', () => {
     handleSNSNotification: jest.Mock;
     findInboundEmails: jest.Mock;
   };
+  let webhookDeliveryService: {
+    confirmDelivery: jest.Mock;
+    confirmDeliveryByInboundEmailIdOnly: jest.Mock;
+  };
   let logger: { log: jest.Mock; error: jest.Mock; warn: jest.Mock };
 
   beforeEach(async () => {
     inboundEmailService = {
       handleSNSNotification: jest.fn(),
       findInboundEmails: jest.fn().mockResolvedValue([]),
+    };
+    webhookDeliveryService = {
+      confirmDelivery: jest.fn(),
+      confirmDeliveryByInboundEmailIdOnly: jest.fn(),
     };
     logger = {
       log: jest.fn(),
@@ -30,6 +39,7 @@ describe('InboundEmailController', () => {
       controllers: [InboundEmailController],
       providers: [
         { provide: InboundEmailService, useValue: inboundEmailService },
+        { provide: WebhookDeliveryService, useValue: webhookDeliveryService },
         { provide: LoggerService, useValue: logger },
       ],
     }).compile();
@@ -39,22 +49,28 @@ describe('InboundEmailController', () => {
 
   describe('handleInbound', () => {
     it('returns error when req.body is missing', async () => {
-      const req = { method: 'POST', url: '/email/inbound', body: undefined } as unknown as Request;
+      const req = { method: 'POST', url: '/email/inbound', body: undefined, headers: {} } as unknown as Request;
       const headers: Record<string, string | string[] | undefined> = {};
 
       const result = await controller.handleInbound(req, headers);
 
-      expect(result).toEqual({ status: 'error', message: 'Request body is missing' });
+      expect(result).toEqual({
+        status: 'ignored',
+        message: 'S3-only mode: SES notifications not processed. Use /email/inbound/s3 for S3 events.',
+      });
       expect(inboundEmailService.handleSNSNotification).not.toHaveBeenCalled();
     });
 
     it('returns error when req.body is null', async () => {
-      const req = { method: 'POST', url: '/email/inbound', body: null } as unknown as Request;
+      const req = { method: 'POST', url: '/email/inbound', body: null, headers: {} } as unknown as Request;
       const headers: Record<string, string | string[] | undefined> = {};
 
       const result = await controller.handleInbound(req, headers);
 
-      expect(result).toEqual({ status: 'error', message: 'Request body is missing' });
+      expect(result).toEqual({
+        status: 'ignored',
+        message: 'S3-only mode: SES notifications not processed. Use /email/inbound/s3 for S3 events.',
+      });
       expect(inboundEmailService.handleSNSNotification).not.toHaveBeenCalled();
     });
   });

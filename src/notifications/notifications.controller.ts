@@ -23,7 +23,7 @@ export class NotificationsController {
     const userAgent = req.headers?.['user-agent'] || 'unknown';
 
     this.logger.log(
-      `[NotificationsController] POST /notifications/send - Request ID: ${requestId} - Incoming request - channel=${sendNotificationDto.channel}, recipient=${sendNotificationDto.recipient}, subject=${sendNotificationDto.subject || 'none'}, type=${sendNotificationDto.type}, service=${sendNotificationDto.service || 'none'}, clientIp=${clientIp}, userAgent=${userAgent}, messageLength=${sendNotificationDto.message?.length || 0}`,
+      `[NotificationsController] POST /notifications/send timestamp=${new Date().toISOString()} duration_ms=0 requestId=${requestId} channel=${sendNotificationDto.channel || 'auto'} channelKey=${sendNotificationDto.channelKey || 'none'} purpose=${sendNotificationDto.purpose || 'none'} recipient=${sendNotificationDto.recipient} subject=${sendNotificationDto.subject || 'none'} type=${sendNotificationDto.type} service=${sendNotificationDto.service || 'none'} clientIp=${clientIp} userAgent=${userAgent} messageLength=${sendNotificationDto.message?.length || 0}`,
       'NotificationsController',
     );
 
