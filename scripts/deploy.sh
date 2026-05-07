@@ -16,8 +16,10 @@ NC='\033[0m'
 SERVICE_NAME="notifications-microservice"
 NAMESPACE="statex-apps"
 REGISTRY="localhost:5000"
-IMAGE_TAG="${1:-latest}"
+DEFAULT_TAG="$(cd \"$PROJECT_ROOT\" && git rev-parse --short HEAD 2>/dev/null || echo \"build-$(date -u +%Y%m%d%H%M%S)\")"
+IMAGE_TAG="${1:-$DEFAULT_TAG}"
 IMAGE="${REGISTRY}/${SERVICE_NAME}:${IMAGE_TAG}"
+IMAGE_LATEST="${REGISTRY}/${SERVICE_NAME}:latest"
 
 # ═══════════════════════════════════════════════════════════
 #  notifications-microservice - Kubernetes Deployment
@@ -43,12 +45,13 @@ fi
 
 # ── Phase 2: Build Docker image ──────────────────────────────
 echo -e "${YELLOW}[2/5] Building image: ${IMAGE}...${NC}"
-docker build -t "$IMAGE" "$PROJECT_ROOT"
+docker build -t "$IMAGE" -t "$IMAGE_LATEST" "$PROJECT_ROOT"
 echo -e "${GREEN}✅ Image built${NC}"
 
 # ── Phase 3: Push to local registry ──────────────────────────
 echo -e "${YELLOW}[3/5] Pushing to registry...${NC}"
 docker push "$IMAGE"
+docker push "$IMAGE_LATEST"
 echo -e "${GREEN}✅ Image pushed: ${IMAGE}${NC}"
 
 # ── Phase 4: Update K8s deployment ──────────────────────────
