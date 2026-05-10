@@ -16,10 +16,12 @@ NC='\033[0m'
 SERVICE_NAME="notifications-microservice"
 NAMESPACE="statex-apps"
 REGISTRY="localhost:5000"
-DEFAULT_TAG="$(cd \"$PROJECT_ROOT\" && git rev-parse --short HEAD 2>/dev/null || echo \"build-$(date -u +%Y%m%d%H%M%S)\")"
+DEFAULT_TAG=$(cd "$PROJECT_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo "build-$(date -u +%Y%m%d%H%M%S)")
 IMAGE_TAG="${1:-$DEFAULT_TAG}"
 IMAGE="${REGISTRY}/${SERVICE_NAME}:${IMAGE_TAG}"
 IMAGE_LATEST="${REGISTRY}/${SERVICE_NAME}:latest"
+# Slim Node image has no wget/curl; health probe uses Node's fetch.
+HEALTH_CHECK_PORT="${HEALTH_CHECK_PORT:-3368}"
 
 # ═══════════════════════════════════════════════════════════
 #  notifications-microservice - Kubernetes Deployment
@@ -27,8 +29,7 @@ IMAGE_LATEST="${REGISTRY}/${SERVICE_NAME}:latest"
 
 echo -e "${BLUE}"
 echo "╔════════════════════════════════════════════════════════╗"
-echo "║  ${SERVICE_NAME}"
-echo "║  Kubernetes Deployment"
+echo "║   Notifications Microservice - Kubernetes Deployment   ║"
 echo "╚════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
@@ -75,19 +76,20 @@ if [ -z "$POD" ]; then
   exit 1
 fi
 
-kubectl exec -n "${NAMESPACE}" "$POD" -- \
-  wget -qO- http://localhost:3368/health || {
-  echo -e "${RED}⚠️  Health check failed (service may still be starting)${NC}"
-}
+if ! kubectl exec -n "${NAMESPACE}" "$POD" -- node -e \
+  "fetch('http://127.0.0.1:${HEALTH_CHECK_PORT}/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then
+  echo -e "${RED}❌ Health check failed (HTTP GET /health inside pod)${NC}"
+  exit 1
+fi
+echo -e "${GREEN}✅ Health OK${NC}"
 echo -e ""
 
 # ── Done ─────────────────────────────────────────────────────
 echo -e "${GREEN}"
 echo "╔════════════════════════════════════════════════════════╗"
-echo "║            ✅ Deployment successful!                   ║"
-echo "║  Service:  ${SERVICE_NAME}"
-echo "║  Image:    ${IMAGE}"
-echo "║  Namespace: ${NAMESPACE}"
-echo "║  Pods:     $(kubectl get pods -n ${NAMESPACE} -l app=${SERVICE_NAME} --no-headers | wc -l) running"
+echo "║  ✅ Notifications Microservice Deployment successful!  ║"
 echo "╚════════════════════════════════════════════════════════╝"
+echo "Image:    ${IMAGE}"
+echo "Namespace: ${NAMESPACE}"
+echo "Pods:     $(kubectl get pods -n ${NAMESPACE} -l app=${SERVICE_NAME} --no-headers | wc -l) running"
 echo -e "${NC}"
