@@ -58,7 +58,7 @@ echo -e "${GREEN}✅ Image pushed: ${IMAGE}${NC}"
 # ── Phase 4: Update K8s deployment ──────────────────────────
 echo -e "${YELLOW}[4/5] Updating K8s deployment...${NC}"
 kubectl set image deployment/${SERVICE_NAME} \
-  app="${IMAGE}" \
+  app="${IMAGE_LATEST}" \
   -n "${NAMESPACE}"
 kubectl rollout status deployment/${SERVICE_NAME} \
   -n "${NAMESPACE}" \
