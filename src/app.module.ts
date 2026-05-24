@@ -8,6 +8,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AdminModule } from './admin/admin.module';
+import { TelegramBotModule } from './telegram-bot/telegram-bot.module';
 import { ConfigModule as ApiConfigModule } from './config/config.module';
 import { HealthController } from './health/health.controller';
 import { InfoController } from './info/info.controller';
@@ -28,6 +29,7 @@ import { JwtRolesGuard } from './auth/jwt-roles.guard';
     LoggerModule,
     NotificationsModule,
     AdminModule,
+    TelegramBotModule,
     ApiConfigModule,
   ],
   controllers: [HealthController, InfoController],
