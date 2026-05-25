@@ -111,12 +111,14 @@ export class TelegramService {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const errorStack = error instanceof Error ? error.stack : undefined;
+      const tgResponse = (error as any)?.response?.data;
+      const tgDetail = tgResponse ? ` TG_RESPONSE: ${JSON.stringify(tgResponse)}` : '';
       this.logger.error(
-        `Telegram sending failed to ${options.chatId}: ${errorMessage}`,
+        `Telegram sending failed to ${options.chatId}: ${errorMessage}${tgDetail}`,
         errorStack,
         'TelegramService',
       );
-      throw new Error(`Telegram sending failed: ${errorMessage}`);
+      throw new Error(`Telegram sending failed: ${errorMessage}${tgDetail}`);
     }
   }
 }

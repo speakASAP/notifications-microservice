@@ -41,22 +41,43 @@ export class TelegramBotService {
     query: NonNullable<TelegramUpdate['callback_query']>,
   ): Promise<void> {
     const data = query.data || '';
+    let alertText = 'Done.';
 
-    if (data.startsWith('esc:acknowledge:')) {
-      const escalationId = data.slice('esc:acknowledge:'.length);
-      await this.orchestrator.acknowledgeEscalation(escalationId);
-      await this.reply(chatId, `Escalation acknowledged.`);
-      return;
+    try {
+      if (data.startsWith('esc:acknowledge:')) {
+        const escalationId = data.slice('esc:acknowledge:'.length);
+        await this.orchestrator.acknowledgeEscalation(escalationId);
+        alertText = 'Acknowledged.';
+      } else if (data.startsWith('esc:resolve:')) {
+        const escalationId = data.slice('esc:resolve:'.length);
+        await this.orchestrator.resolveEscalation(escalationId);
+        alertText = 'Resolved.';
+      } else {
+        this.logger.warn(`Unknown callback_query data: ${data}`);
+        alertText = 'Unknown action.';
+      }
+    } catch (err) {
+      this.logger.error('Callback action failed', err instanceof Error ? err.message : String(err));
+      alertText = 'Action failed. Please try again.';
     }
 
-    if (data.startsWith('esc:resolve:')) {
-      const escalationId = data.slice('esc:resolve:'.length);
-      await this.orchestrator.resolveEscalation(escalationId);
-      await this.reply(chatId, `Escalation resolved.`);
-      return;
-    }
+    // Always answer the callback query to dismiss Telegram's loading spinner
+    await this.answerCallbackQuery(query.id, alertText);
+  }
 
-    this.logger.warn(`Unknown callback_query data: ${data}`);
+  private async answerCallbackQuery(queryId: string, text?: string): Promise<void> {
+    const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
+    const apiUrl = process.env.TELEGRAM_API_URL || 'https://api.telegram.org/bot';
+    if (!botToken) return;
+    try {
+      await axios.post(`${apiUrl}${botToken}/answerCallbackQuery`, {
+        callback_query_id: queryId,
+        text,
+        show_alert: false,
+      });
+    } catch (err) {
+      this.logger.warn('answerCallbackQuery failed: ' + (err instanceof Error ? err.message : String(err)));
+    }
   }
 
   private async handleMessage(chatId: number, text: string): Promise<void> {
