@@ -10,9 +10,7 @@ import {
   IsObject,
   IsArray,
   IsIn,
-  ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 
 export enum NotificationChannel {
   EMAIL = 'email',
@@ -153,8 +151,6 @@ export class SendNotificationDto {
   parseMode?: TelegramParseMode; // Optional parse mode (default: HTML)
 
   @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => Array)
   @IsOptional()
   inlineKeyboard?: InlineKeyboardButton[][]; // Optional inline keyboard
 
