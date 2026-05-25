@@ -9,6 +9,7 @@ export class TelegramBotService {
   private readonly logger = new Logger(TelegramBotService.name);
   private readonly allowedChatId: string;
   private readonly aiUrl: string;
+  private readonly aiToken: string;
 
   constructor(
     private readonly telegram: TelegramService,
@@ -16,6 +17,7 @@ export class TelegramBotService {
   ) {
     this.allowedChatId = process.env.TELEGRAM_CHAT_ID || '';
     this.aiUrl = process.env.AI_SERVICE_URL || 'http://ai-microservice:3380';
+    this.aiToken = process.env.AI_SERVICE_TOKEN || '';
   }
 
   isAuthorized(chatId: number | string): boolean {
@@ -48,17 +50,24 @@ export class TelegramBotService {
         const escalationId = data.slice('esc:acknowledge:'.length);
         await this.orchestrator.acknowledgeEscalation(escalationId);
         alertText = 'Acknowledged.';
+        await this.reply(chatId, `Escalation acknowledged.`);
       } else if (data.startsWith('esc:resolve:')) {
         const escalationId = data.slice('esc:resolve:'.length);
         await this.orchestrator.resolveEscalation(escalationId);
         alertText = 'Resolved.';
+        await this.reply(chatId, `Escalation resolved.`);
       } else {
         this.logger.warn(`Unknown callback_query data: ${data}`);
         alertText = 'Unknown action.';
       }
     } catch (err) {
-      this.logger.error('Callback action failed', err instanceof Error ? err.message : String(err));
-      alertText = 'Action failed. Please try again.';
+      const status = (err as any)?.response?.status;
+      if (status === 404) {
+        alertText = 'Escalation not found (may already be resolved).';
+      } else {
+        this.logger.error('Callback action failed', err instanceof Error ? err.message : String(err));
+        alertText = 'Action failed. Please try again.';
+      }
     }
 
     // Always answer the callback query to dismiss Telegram's loading spinner
@@ -137,30 +146,42 @@ export class TelegramBotService {
     text: string,
     projects: OrchestratorProject[],
   ): Promise<{ projectId: string; projectSlug: string; title: string; description?: string } | null> {
-    const projectList = projects.map((p) => `${p.slug} (name: "${p.name}")`).join(', ');
-    const prompt = `You are a task router. Given a user instruction and a list of projects, extract the target project and task title.
+    // With only one project, skip AI routing and use it directly
+    if (projects.length === 1) {
+      const project = projects[0];
+      const title = text.length <= 80 ? text : text.slice(0, 77) + '...';
+      return { projectId: project.id, projectSlug: project.slug, title, description: undefined };
+    }
 
-Projects: ${projectList}
+    // Build list showing both slug and name so AI can reference either
+    const projectList = projects.map((p) => `slug="${p.slug}" name="${p.name}"`).join('; ');
+    const prompt = `You are a task router. Given a user instruction and a list of projects, extract the target project slug and task title.
+
+Projects (use the exact slug value): ${projectList}
 
 User instruction: "${text}"
 
-Respond with ONLY valid JSON in this exact format (no markdown, no explanation):
-{"project_slug":"<slug from list>","title":"<short task title>","description":"<optional longer description or empty string>"}
+Respond with ONLY valid JSON (no markdown, no explanation):
+{"project_slug":"<exact slug from list>","title":"<short task title>","description":"<optional detail or empty string>"}
 
 If you cannot determine the project, respond: {"project_slug":null,"title":null,"description":null}`;
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (this.aiToken) headers['Authorization'] = `Bearer ${this.aiToken}`;
       const { data } = await axios.post(
         `${this.aiUrl}/ai/complete`,
         { model_tier: 'free', user_prompt: prompt },
-        { timeout: 15000 },
+        { timeout: 15000, headers },
       );
       const raw: string = typeof data === 'string' ? data : (data.content ?? data.response ?? JSON.stringify(data));
       const match = raw.match(/\{[\s\S]*\}/);
       if (!match) return null;
       const parsed = JSON.parse(match[0]) as { project_slug: string | null; title: string | null; description?: string };
-      if (!parsed.project_slug || !parsed.title) return null;
-      const project = projects.find((p) => p.slug === parsed.project_slug);
+      if (!parsed.title) return null;
+      // Match by slug, or fall back to name match if AI returned the name instead of slug
+      const project = projects.find((p) => p.slug === parsed.project_slug)
+        ?? projects.find((p) => p.name === parsed.project_slug);
       if (!project) return null;
       return {
         projectId: project.id,
