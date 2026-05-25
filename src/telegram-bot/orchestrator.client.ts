@@ -39,12 +39,12 @@ export class OrchestratorClient {
   }
 
   async findProjects(): Promise<OrchestratorProject[]> {
-    const { data } = await this.http.get<OrchestratorProject[]>('/projects');
-    return data;
+    const { data } = await this.http.get<OrchestratorProject[]>('/api/projects');
+    return Array.isArray(data) ? data : [];
   }
 
   async createGoal(projectId: string, title: string, description?: string): Promise<OrchestratorGoal> {
-    const { data } = await this.http.post<OrchestratorGoal>(`/projects/${projectId}/goals`, {
+    const { data } = await this.http.post<OrchestratorGoal>(`/api/projects/${projectId}/goals`, {
       title,
       description,
       priority: 3,
@@ -53,16 +53,16 @@ export class OrchestratorClient {
   }
 
   async acknowledgeEscalation(id: string): Promise<void> {
-    await this.http.post(`/escalations/${id}/acknowledge`);
+    await this.http.post(`/api/escalations/${id}/acknowledge`);
   }
 
   async resolveEscalation(id: string, note?: string): Promise<void> {
-    await this.http.post(`/escalations/${id}/resolve`, { note });
+    await this.http.post(`/api/escalations/${id}/resolve`, { note });
   }
 
   async getRecentTasks(): Promise<OrchestratorTask[]> {
     try {
-      const { data } = await this.http.get<OrchestratorTask[]>('/dashboard/tasks');
+      const { data } = await this.http.get<OrchestratorTask[]>('/api/dashboard/tasks');
       return Array.isArray(data) ? data.slice(0, 10) : [];
     } catch {
       this.logger.warn('Failed to fetch recent tasks from orchestrator');
