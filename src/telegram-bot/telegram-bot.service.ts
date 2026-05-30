@@ -10,6 +10,8 @@ export class TelegramBotService {
   private readonly allowedChatId: string;
   private readonly aiUrl: string;
   private readonly aiToken: string;
+  private readonly pendingResolve = new Map<number, { escalationId: string; expiresAt: number }>();
+  private readonly RESOLVE_NOTE_TIMEOUT_MS = 60_000;
 
   constructor(
     private readonly telegram: TelegramService,
@@ -53,9 +55,12 @@ export class TelegramBotService {
         await this.reply(chatId, `Escalation acknowledged.`);
       } else if (data.startsWith('esc:resolve:')) {
         const escalationId = data.slice('esc:resolve:'.length);
-        await this.orchestrator.resolveEscalation(escalationId);
-        alertText = 'Resolved.';
-        await this.reply(chatId, `Escalation resolved.`);
+        this.pendingResolve.set(chatId, {
+          escalationId,
+          expiresAt: Date.now() + this.RESOLVE_NOTE_TIMEOUT_MS,
+        });
+        alertText = 'Add a note below, or send /skip';
+        await this.reply(chatId, `Resolving escalation <code>${escalationId}</code>.\n\nReply with a note for the AI (or send <code>/skip</code> to resolve without a note):`);
       } else {
         this.logger.warn(`Unknown callback_query data: ${data}`);
         alertText = 'Unknown action.';
@@ -90,6 +95,29 @@ export class TelegramBotService {
   }
 
   private async handleMessage(chatId: number, text: string): Promise<void> {
+    const now = Date.now();
+    for (const [id, entry] of this.pendingResolve) {
+      if (now > entry.expiresAt) this.pendingResolve.delete(id);
+    }
+    const pending = this.pendingResolve.get(chatId);
+    if (pending) {
+      this.pendingResolve.delete(chatId);
+      if (Date.now() > pending.expiresAt) {
+        await this.reply(chatId, 'Resolve timed out. Please click the Resolve button again.');
+        return;
+      }
+      const note = text === '/skip' ? undefined : text;
+      try {
+        await this.orchestrator.resolveEscalation(pending.escalationId, note);
+        await this.reply(chatId, `Escalation resolved.${note ? `\n<i>Note saved: ${note}</i>` : ''}`);
+      } catch (err) {
+        const status = (err as any)?.response?.status;
+        const msg = status === 404 ? 'Escalation not found.' : 'Resolve failed. Please try again.';
+        await this.reply(chatId, msg);
+      }
+      return;
+    }
+
     if (text.startsWith('/status')) {
       await this.handleStatus(chatId);
       return;
