@@ -14,7 +14,9 @@ export class TelegramBotController {
   @Post('webhook')
   async handleWebhook(@Body() update: TelegramUpdate, @Res() res: Response): Promise<void> {
     const chatId =
-      update.message?.chat?.id ?? update.callback_query?.from?.id;
+      update.message?.chat?.id
+      ?? update.callback_query?.message?.chat?.id
+      ?? update.callback_query?.from?.id;
 
     if (chatId !== undefined && !this.botService.isAuthorized(chatId)) {
       this.logger.warn(`Rejected Telegram update from unauthorized chat_id: ${chatId}`);
