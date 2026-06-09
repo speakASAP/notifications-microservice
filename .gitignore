@@ -90,3 +90,6 @@ local_settings.py
 *.tar.gz
 *.rar
 *.7z
+
+# Claude Code local settings (may contain tokens)
+.claude/settings.local.json
