@@ -29,7 +29,7 @@ export class OrchestratorClient {
   private readonly logger = new Logger(OrchestratorClient.name);
 
   constructor() {
-    const baseURL = process.env.ORCHESTRATOR_URL || 'http://business-orchestrator:3390';
+    const baseURL = process.env.ORCHESTRATOR_URL || 'http://runlayer:3390';
     const token = process.env.ORCHESTRATOR_SERVICE_TOKEN || '';
     this.http = axios.create({
       baseURL,

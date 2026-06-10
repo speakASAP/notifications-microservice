@@ -1,6 +1,6 @@
 # Notifications Microservice
 
-Multi-channel notification delivery service for the Statex ecosystem. Sends email (AWS SES active path), Telegram, and WhatsApp notifications on behalf of orders-microservice, marketing-microservice, business-orchestrator, and all client applications. Built on NestJS, port 3368, domain https://notifications.alfares.cz.
+Multi-channel notification delivery service for the Statex ecosystem. Sends email (AWS SES active path), Telegram, and WhatsApp notifications on behalf of orders-microservice, marketing-microservice, runlayer, and all client applications. Built on NestJS, port 3368, domain https://notifications.alfares.cz.
 
 ## API Endpoints
 
