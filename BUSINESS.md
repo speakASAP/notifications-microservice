@@ -14,7 +14,7 @@ Multi-channel notification delivery (email, Telegram, WhatsApp) for all Statex s
 
 ## Consumers
 
-All applications, marketing-microservice, orders-microservice, business-orchestrator.
+All applications, marketing-microservice, orders-microservice, runlayer.
 
 ## SLA
 

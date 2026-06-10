@@ -43,5 +43,5 @@ data:
   PAYMENT_CALLBACK_URL: "https://notifications.alfares.cz/api/webhooks/payment-result"
   PAYMENT_SUCCESS_URL: "https://notifications.alfares.cz/payment-result?status=completed"
   PAYMENT_CANCEL_URL: "https://notifications.alfares.cz/payment-result?status=cancelled"
-  ORCHESTRATOR_URL: "http://business-orchestrator.statex-apps.svc.cluster.local:3390"
+  ORCHESTRATOR_URL: "http://runlayer.statex-apps.svc.cluster.local:3390"
   AI_SERVICE_URL: "http://ai-microservice.statex-apps.svc.cluster.local:3380"
