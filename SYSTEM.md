@@ -4,8 +4,10 @@
 
 NestJS. Multi-channel delivery: Email (SendGrid/AWS SES), Telegram Bot, WhatsApp.
 
-- Endpoints: `POST /notify`, `GET /templates`, `POST /templates`
-- Template engine: Handlebars
+- Send endpoint: `POST /notifications/send`
+- Admin endpoints: `GET /admin/stats`, `GET /admin/history`, `GET/PATCH /admin/channels/:channelKey`
+- Webhook subscription endpoints: `/webhooks/subscriptions`
+- Templates: inline message bodies with optional `templateData` replacement; no persisted `/templates` API exists yet
 - Notification history stored in DB
 
 ## Integrations
@@ -21,4 +23,4 @@ Stage: production
 
 ## Known Issues
 <!-- AI-maintained -->
-- None
+- Persisted template management is not implemented; central templates remain future product work until a template model/controller is added.
