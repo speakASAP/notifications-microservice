@@ -3,7 +3,7 @@
  * Main service for sending notifications via multiple channels
  */
 
-import { Injectable, Inject } from '@nestjs/common';
+import { BadRequestException, Injectable, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThanOrEqual, In } from 'typeorm';
 import { SendNotificationDto, NotificationChannel } from './dto/send-notification.dto';
@@ -406,6 +406,57 @@ export class NotificationsService {
     return await this.notificationRepository.findOne({
       where: { id },
     });
+  }
+
+  async updateNotificationById(
+    id: string,
+    payload: {
+      subject?: unknown;
+      message?: unknown;
+      templateData?: unknown;
+      status?: unknown;
+    },
+  ): Promise<Notification> {
+    const notification = await this.notificationRepository.findOne({
+      where: { id },
+    });
+
+    if (!notification) {
+      throw new Error(`Notification with id ${id} not found`);
+    }
+
+    if (payload.subject !== undefined) {
+      notification.subject =
+        typeof payload.subject === 'string' && payload.subject.trim()
+          ? payload.subject
+          : null;
+    }
+
+    if (payload.message !== undefined) {
+      if (typeof payload.message !== 'string' || payload.message.trim().length === 0) {
+        throw new BadRequestException('message must be a non-empty string');
+      }
+      notification.message = payload.message;
+    }
+
+    if (payload.templateData !== undefined) {
+      if (
+        payload.templateData !== null &&
+        (typeof payload.templateData !== 'object' || Array.isArray(payload.templateData))
+      ) {
+        throw new BadRequestException('templateData must be an object or null');
+      }
+      notification.templateData = payload.templateData as Record<string, unknown> | null;
+    }
+
+    if (payload.status !== undefined) {
+      if (!Object.values(NotificationStatus).includes(payload.status as NotificationStatus)) {
+        throw new BadRequestException('status must be pending, sent, or failed');
+      }
+      notification.status = payload.status as NotificationStatus;
+    }
+
+    return this.notificationRepository.save(notification);
   }
 
   private getDefaultSubject(type: string): string {

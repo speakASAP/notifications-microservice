@@ -4,7 +4,7 @@
  * Legacy SES notification parsing (parseEmailContent) kept for backward compatibility (reparseEmailFromRawData).
  */
 
-import { Injectable, Inject } from '@nestjs/common';
+import { BadRequestException, Injectable, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
@@ -1482,6 +1482,62 @@ export class InboundEmailService {
       messageId: email.rawData?.mail?.messageId || `inbound-${email.id}`,
       status: email.status,
     };
+  }
+
+  async updateInboundEmailById(
+    id: string,
+    payload: {
+      subject?: unknown;
+      bodyText?: unknown;
+      bodyHtml?: unknown;
+      status?: unknown;
+    },
+  ): Promise<InboundEmailSummary> {
+    const email = await this.inboundEmailRepository.findOne({
+      where: { id },
+    });
+
+    if (!email) {
+      throw new BadRequestException(`Inbound email with id ${id} not found`);
+    }
+
+    if (payload.subject !== undefined) {
+      email.subject =
+        typeof payload.subject === 'string' && payload.subject.trim()
+          ? payload.subject
+          : null;
+    }
+
+    if (payload.bodyText !== undefined) {
+      if (typeof payload.bodyText !== 'string') {
+        throw new BadRequestException('bodyText must be a string');
+      }
+      email.bodyText = payload.bodyText;
+    }
+
+    if (payload.bodyHtml !== undefined) {
+      if (payload.bodyHtml !== null && typeof payload.bodyHtml !== 'string') {
+        throw new BadRequestException('bodyHtml must be a string or null');
+      }
+      email.bodyHtml = payload.bodyHtml ? String(payload.bodyHtml) : null;
+    }
+
+    if (payload.status !== undefined) {
+      if (
+        typeof payload.status !== 'string' ||
+        !['pending', 'processed', 'failed'].includes(payload.status)
+      ) {
+        throw new BadRequestException('status must be pending, processed, or failed');
+      }
+      email.status = payload.status;
+    }
+
+    await this.inboundEmailRepository.save(email);
+    const updated = await this.getInboundEmailById(id);
+    if (!updated) {
+      throw new BadRequestException(`Inbound email with id ${id} not found after update`);
+    }
+    return updated;
   }
 
   /**
