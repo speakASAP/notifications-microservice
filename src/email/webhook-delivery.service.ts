@@ -149,7 +149,12 @@ export class WebhookDeliveryService {
       const errorMsg = `Health check failed for ${subscription.serviceName}, skipping delivery`;
       console.warn(`[WEBHOOK_DELIVERY] ⚠️ ${errorMsg}`);
       this.logger.warn(`[WEBHOOK_DELIVERY] ⚠️ ${errorMsg}`, 'WebhookDeliveryService');
-      // Don't count as failure - health check is optional
+      await this.recordWebhookDeliveryFailure({
+        inboundEmail,
+        subscription,
+        errorMessage: errorMsg,
+        httpStatus: null,
+      });
       return;
     }
 
@@ -280,7 +285,60 @@ export class WebhookDeliveryService {
       );
 
       await this.subscriptionRepository.save(subscription);
+      await this.recordWebhookDeliveryFailure({
+        inboundEmail,
+        subscription,
+        errorMessage,
+        httpStatus: this.extractHttpStatus(error),
+      });
     }
+  }
+
+  private async recordWebhookDeliveryFailure(params: {
+    inboundEmail: InboundEmail;
+    subscription: WebhookSubscription;
+    errorMessage: string;
+    httpStatus: number | null;
+  }): Promise<void> {
+    const { inboundEmail, subscription, errorMessage, httpStatus } = params;
+    try {
+      const delivery = this.webhookDeliveryRepository.create({
+        inboundEmailId: inboundEmail.id,
+        subscriptionId: subscription.id,
+        status: 'failed' as WebhookDeliveryStatus,
+        deliveredAt: null,
+        httpStatus,
+        error: errorMessage,
+      });
+      await this.webhookDeliveryRepository.save(delivery);
+      this.logger.warn(
+        `[WEBHOOK_DELIVERY] Recorded failed webhook_delivery id=${delivery.id} for inbound_email=${inboundEmail.id} subscription=${subscription.serviceName} httpStatus=${httpStatus ?? 'n/a'} error=${errorMessage}`,
+        'WebhookDeliveryService',
+      );
+    } catch (recordError: unknown) {
+      const recordErrorMessage =
+        recordError instanceof Error ? recordError.message : 'Unknown error';
+      this.logger.error(
+        `[WEBHOOK_DELIVERY] Failed to record webhook delivery failure for inbound_email=${inboundEmail.id} subscription=${subscription.serviceName}: ${recordErrorMessage}`,
+        recordError instanceof Error ? recordError.stack : undefined,
+        'WebhookDeliveryService',
+      );
+    }
+  }
+
+  private extractHttpStatus(error: unknown): number | null {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'response' in error &&
+      error.response &&
+      typeof error.response === 'object' &&
+      'status' in error.response &&
+      typeof error.response.status === 'number'
+    ) {
+      return error.response.status;
+    }
+    return null;
   }
 
   /**

@@ -106,7 +106,59 @@ export class ChannelRegistryService {
     if (!existing) {
       throw new NotFoundException(`Channel key not found: ${channelKey}`);
     }
-    Object.assign(existing, payload, { updatedBy });
+
+    const allowedFields = new Set([
+      'domain',
+      'fromEmail',
+      'fromName',
+      'replyToEmail',
+      'purposesAllowed',
+      'applicationsAllowed',
+      'isActive',
+      'fallbackChannelKey',
+    ]);
+    const rejectedFields = Object.keys(payload).filter((field) => !allowedFields.has(field));
+    if (rejectedFields.length > 0) {
+      throw new BadRequestException(`Unsupported channel update fields: ${rejectedFields.join(', ')}`);
+    }
+
+    const next: Partial<ChannelRegistry> = {};
+    if (payload.domain !== undefined) next.domain = this.optionalString(payload.domain, 'domain');
+    if (payload.fromEmail !== undefined) next.fromEmail = this.optionalString(payload.fromEmail, 'fromEmail');
+    if (payload.fromName !== undefined) next.fromName = this.optionalString(payload.fromName, 'fromName');
+    if (payload.replyToEmail !== undefined) next.replyToEmail = this.optionalString(payload.replyToEmail, 'replyToEmail');
+    if (payload.fallbackChannelKey !== undefined) {
+      next.fallbackChannelKey = this.optionalString(payload.fallbackChannelKey, 'fallbackChannelKey');
+    }
+    if (payload.isActive !== undefined) {
+      if (typeof payload.isActive !== 'boolean') {
+        throw new BadRequestException('isActive must be a boolean');
+      }
+      next.isActive = payload.isActive;
+    }
+    if (payload.purposesAllowed !== undefined) {
+      next.purposesAllowed = this.stringArray(payload.purposesAllowed, 'purposesAllowed');
+    }
+    if (payload.applicationsAllowed !== undefined) {
+      next.applicationsAllowed = this.stringArray(payload.applicationsAllowed, 'applicationsAllowed');
+    }
+
+    Object.assign(existing, next, { updatedBy });
     return this.channelRegistryRepository.save(existing);
+  }
+
+  private optionalString(value: unknown, field: string): string | null {
+    if (value === null || value === '') return null;
+    if (typeof value !== 'string') {
+      throw new BadRequestException(`${field} must be a string or null`);
+    }
+    return value.trim() || null;
+  }
+
+  private stringArray(value: unknown, field: string): string[] {
+    if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
+      throw new BadRequestException(`${field} must be an array of strings`);
+    }
+    return value.map((item) => item.trim()).filter(Boolean);
   }
 }

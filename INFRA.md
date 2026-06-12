@@ -18,12 +18,24 @@ Key ConfigMap values (full list: `k8s/configmap.yaml`):
 ## Vault Secrets
 
 Path: `secret/prod/notifications-microservice`  
-Synced via ExternalSecret (refresh: 5m) to K8s Secret `notifications-microservice-secrets`.
+Synced via ExternalSecret (refresh: 5m) to K8s Secret `notifications-microservice-secret`.
 
-Keys: `AWS_SES_ACCESS_KEY_ID`, `AWS_SES_SECRET_ACCESS_KEY`, `DB_PASSWORD`, `JWT_SECRET`,
+Keys: `AWS_SES_ACCESS_KEY_ID`, `AWS_SES_SECRET_ACCESS_KEY`, `DB_PASSWORD`, `JWT_SECRET` (sourced from auth),
 `SENDGRID_API_KEY`, `TELEGRAM_BOT_TOKEN`, `WHATSAPP_ACCESS_TOKEN`,
-`PAYMENT_API_KEY`, `PAYMENT_APPLICATION_ID`, `PAYMENT_WEBHOOK_API_KEY`
+`PAYMENT_API_KEY`, `PAYMENT_APPLICATION_ID`, `PAYMENT_WEBHOOK_API_KEY`,
+`SERVICE_TOKEN`, `ORCHESTRATOR_SERVICE_TOKEN`, `AI_SERVICE_TOKEN`
 
 ## Resource Limits
 
 CPU: 50m req / 500m limit | Memory: 128Mi req / 512Mi limit
+
+
+## Operations Readiness
+
+Run the non-destructive smoke before and after approved deployments:
+
+```bash
+./scripts/smoke-readiness.sh
+```
+
+The script checks public health/config, protected read-only dashboard endpoints through `SERVICE_TOKEN`, rollout status, in-pod health, JWT secret alignment with auth when readable, and expected secret key presence without printing secret values. See `docs/DEPLOYMENT.md` for deploy, rollback, and secret rotation procedures.

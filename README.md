@@ -18,10 +18,15 @@ Multi-channel notification delivery service for the Statex ecosystem. Sends emai
 | GET | /admin/channels/:channelKey | Channel registry detail (JWT) |
 | POST | /email/inbound | AWS SES SNS webhook |
 | POST | /email/inbound/s3 | S3 event SNS webhook |
-| POST/GET/PUT/DELETE | /api/webhooks/subscriptions | Webhook subscriptions CRUD |
-| POST | /api/webhooks/subscriptions/:id/activate | Activate subscription |
-| POST | /api/webhooks/subscriptions/:id/suspend | Suspend subscription |
-| POST | /api/webhooks/payment-result | Payment callback |
+| POST/GET/PUT/DELETE | /webhooks/subscriptions | Webhook subscriptions CRUD |
+| POST | /webhooks/subscriptions/:id/activate | Activate subscription |
+| POST | /webhooks/subscriptions/:id/suspend | Suspend subscription |
+| POST | /webhooks/payment-result | Payment callback |
+
+
+## Template Behavior
+
+Current send behavior does not include persisted template management. Callers send an inline `message` body and may include `templateData`; channel senders perform simple `{{key}}` replacement against that data where supported. There is no implemented `/templates` controller, template table, or Handlebars-backed template catalog in this service yet. Central template management remains a future product design item until a backend model and admin workflow are added.
 
 ## Inbound Email Flow
 

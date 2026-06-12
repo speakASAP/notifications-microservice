@@ -610,6 +610,20 @@
       min-height: 48px;
     }
 
+    .policy-summary {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+      margin-bottom: 12px;
+      color: #334256;
+      font-size: 12px;
+    }
+
+    .policy-summary strong { color: var(--text); }
+
     .empty {
       padding: 18px;
       color: var(--muted);
@@ -726,7 +740,7 @@
         </div>
         <div class="top-cell">
           <strong>Docs Status</strong>
-          <span id="docs-status">Intent docs loaded</span>
+          <span id="docs-status">Inline templates documented</span>
         </div>
         <div class="top-cell">
           <strong>Environment</strong>
@@ -906,7 +920,7 @@
                         <label>Template data JSON</label>
                         <textarea id="msg-template"></textarea>
                       </div>
-                      <p class="muted" style="margin-top:8px">Templates are currently inline message bodies with variable substitution. No persisted template table exists yet.</p>
+                      <p class="muted" style="margin-top:8px">Current behavior uses inline message bodies plus templateData substitution. There is no persisted template catalog or template CRUD API yet.</p>
                     </div>
                     <div id="metadata-tab" class="field-full hidden">
                       <div id="msg-metadata" class="settings-list"></div>
@@ -964,7 +978,7 @@
               <div class="panel-head">
                 <div>
                   <h2>Channel Registry</h2>
-                  <p class="sub">Edit routing policy, sender identity, allowed purposes, and fallback.</p>
+                  <p class="sub">Edit active routing policy, sender identity, allow lists, and recorded fallback key.</p>
                 </div>
                 <button class="btn" data-action="refresh">Refresh</button>
               </div>
@@ -988,7 +1002,13 @@
                 <div class="empty">No channel selected.</div>
               </div>
               <div id="channel-editor" class="panel-body hidden">
+                <div id="channel-policy-summary" class="policy-summary"></div>
                 <div class="form-row"><label>Channel key</label><input id="edit-channel-key" readonly></div>
+                <div class="inspector-grid">
+                  <div class="form-row"><label>Type</label><input id="edit-channel-type" readonly></div>
+                  <div class="form-row"><label>Provider</label><input id="edit-channel-provider" readonly></div>
+                </div>
+                <div class="form-row"><label>Domain</label><input id="edit-channel-domain"></div>
                 <div class="inspector-grid">
                   <div class="form-row"><label>Active</label><select id="edit-channel-active"><option value="true">Active</option><option value="false">Inactive</option></select></div>
                   <div class="form-row"><label>Fallback</label><input id="edit-channel-fallback"></div>
@@ -998,6 +1018,7 @@
                 <div class="form-row"><label>Reply-to email</label><input id="edit-channel-reply-to"></div>
                 <div class="form-row"><label>Purposes allowed</label><input id="edit-channel-purposes" placeholder="marketing, transactional, system"></div>
                 <div class="form-row"><label>Applications allowed</label><input id="edit-channel-apps" placeholder="runlayer, orders-microservice"></div>
+                <p class="muted" style="margin-top:8px">Empty allow lists mean any service or purpose can use this channel key. Fallback is recorded for operators; send policy currently rejects inactive or disallowed keys instead of auto-routing.</p>
                 <div id="channel-error" class="error hidden"></div>
                 <div class="footer-actions">
                   <button id="save-channel-btn" class="btn btn-primary">Save channel</button>
@@ -1679,12 +1700,33 @@
         show(noticeEl);
       }
 
+      function describeAllowList(values, emptyText) {
+        return Array.isArray(values) && values.length ? values.join(', ') : emptyText;
+      }
+
+      function renderChannelPolicySummary(channel) {
+        var activeText = channel.isActive ? 'Active for sends using this channelKey.' : 'Inactive; send requests using this channelKey are rejected.';
+        var purposeText = describeAllowList(channel.purposesAllowed, 'Any purpose');
+        var appText = describeAllowList(channel.applicationsAllowed, 'Any service');
+        var fallbackText = channel.fallbackChannelKey || 'None recorded';
+        byId('channel-policy-summary').innerHTML = [
+          '<div><strong>Policy:</strong> ' + escapeHtml(activeText) + '</div>',
+          '<div><strong>Allowed purposes:</strong> ' + escapeHtml(purposeText) + '</div>',
+          '<div><strong>Allowed services:</strong> ' + escapeHtml(appText) + '</div>',
+          '<div><strong>Fallback key:</strong> ' + escapeHtml(fallbackText) + '</div>'
+        ].join('');
+      }
+
       function selectChannel(channel) {
         state.selectedChannel = channel;
         hide(byId('channel-editor-empty'));
         show(byId('channel-editor'));
         byId('channel-editor-subtitle').textContent = channel.channelKey || 'Selected channel';
+        renderChannelPolicySummary(channel);
         byId('edit-channel-key').value = channel.channelKey || '';
+        byId('edit-channel-type').value = channel.type || '';
+        byId('edit-channel-provider').value = channel.provider || '';
+        byId('edit-channel-domain').value = channel.domain || '';
         byId('edit-channel-active').value = String(!!channel.isActive);
         byId('edit-channel-fallback').value = channel.fallbackChannelKey || '';
         byId('edit-channel-from-email').value = channel.fromEmail || '';
@@ -1701,6 +1743,7 @@
         hide(errorEl);
         var payload = {
           isActive: byId('edit-channel-active').value === 'true',
+          domain: byId('edit-channel-domain').value.trim() || null,
           fallbackChannelKey: byId('edit-channel-fallback').value.trim() || null,
           fromEmail: byId('edit-channel-from-email').value.trim() || null,
           fromName: byId('edit-channel-from-name').value.trim() || null,
