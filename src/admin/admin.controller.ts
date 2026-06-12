@@ -323,6 +323,67 @@ export class AdminController {
     }
   }
 
+  @Patch('message/:id')
+  async updateMessageDetails(
+    @Param('id') id: string,
+    @Query('type') type: string | undefined,
+    @Body() payload: Record<string, unknown>,
+  ) {
+    try {
+      if (type === 'inbound') {
+        const updated = await this.inboundEmailService.updateInboundEmailById(id, {
+          subject: payload.subject,
+          bodyText: payload.bodyText,
+          bodyHtml: payload.bodyHtml,
+          status: payload.status,
+        });
+        return ApiResponseUtil.success({
+          id: updated.id,
+          channel: 'email',
+          service: 'inbound',
+          recipient: updated.to,
+          from: updated.from,
+          subject: updated.subject,
+          message: updated.bodyHtml || updated.bodyText,
+          bodyHtml: updated.bodyHtml,
+          bodyText: updated.bodyText,
+          attachments: updated.attachments || [],
+          status: updated.status,
+          createdAt: updated.receivedAt,
+          direction: 'inbound',
+        });
+      }
+
+      const updated = await this.notificationsService.updateNotificationById(id, {
+        subject: payload.subject,
+        message: payload.message,
+        templateData: payload.templateData,
+        status: payload.status,
+      });
+      return ApiResponseUtil.success({
+        id: updated.id,
+        status: updated.status,
+        channel: updated.channel,
+        recipient: updated.recipient,
+        error: updated.error,
+        messageId: updated.messageId,
+        createdAt: updated.createdAt,
+        updatedAt: updated.updatedAt,
+        subject: updated.subject,
+        message: updated.message,
+        templateData: updated.templateData,
+        service: updated.service,
+        direction: 'outbound',
+      });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      throw new HttpException(
+        ApiResponseUtil.error('MESSAGE_UPDATE_FAILED', msg),
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
   @Get('params')
   getServiceParams() {
     // Non-secret service parameters for admin dashboard

@@ -3,777 +3,1833 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin – Notifications Service</title>
+  <title>Notifications Admin</title>
   <style>
     :root {
-      --bg: #0f0f12;
-      --surface: #18181c;
-      --border: #2a2a2e;
-      --text: #e4e4e7;
-      --muted: #71717a;
-      --accent: #3b82f6;
-      --accent-hover: #2563eb;
-      --error: #ef4444;
-      --success: #22c55e;
-      --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --panel-soft: #fbfcfe;
+      --line: #dfe6ee;
+      --line-strong: #c6d2df;
+      --text: #172231;
+      --muted: #667589;
+      --muted-2: #8a97a8;
+      --teal: #008f8b;
+      --teal-soft: #e6f6f4;
+      --green: #11a66a;
+      --green-soft: #e8f8ef;
+      --gold: #c98a05;
+      --gold-soft: #fff6dc;
+      --red: #d9384e;
+      --red-soft: #fdecef;
+      --blue: #286dd9;
+      --blue-soft: #edf4ff;
+      --shadow: 0 14px 32px rgba(23, 34, 49, 0.08);
+      --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
-    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
-    header {
-      padding: 16px 0;
-      border-bottom: 1px solid var(--border);
-    }
-    header .container { display: flex; justify-content: space-between; align-items: center; }
-    .logo { font-weight: 700; color: var(--text); text-decoration: none; }
-    .btn {
-      display: inline-block;
-      padding: 8px 16px;
-      border-radius: 8px;
-      font-weight: 500;
-      cursor: pointer;
-      border: none;
-      font-size: 0.9rem;
-      text-decoration: none;
-    }
-    .btn-primary { background: var(--accent); color: #fff; }
-    .btn-primary:hover { background: var(--accent-hover); }
-    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
-    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
-    main { padding: 32px 0 48px; }
-    h1 { font-size: 1.5rem; margin-bottom: 24px; }
-    h2 { font-size: 1.15rem; margin-bottom: 12px; color: var(--muted); }
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 24px;
-      margin-bottom: 24px;
-    }
-    .login-form { max-width: 360px; }
-    .form-group { margin-bottom: 16px; }
-    .form-group label { display: block; margin-bottom: 6px; font-size: 0.9rem; color: var(--muted); }
-    .form-group input {
-      width: 100%;
-      padding: 10px 12px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
       background: var(--bg);
       color: var(--text);
-      font-size: 0.95rem;
+      font-family: var(--font);
+      font-size: 14px;
+      letter-spacing: 0;
     }
-    .form-group input:focus { outline: none; border-color: var(--accent); }
-    .error-msg { color: var(--error); font-size: 0.9rem; margin-top: 8px; }
-    .stats-grid {
+
+    button, input, select, textarea {
+      font: inherit;
+      letter-spacing: 0;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    a {
+      color: var(--teal);
+      text-decoration: none;
+    }
+
+    .hidden { display: none !important; }
+
+    .login-shell {
+      min-height: 100vh;
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
+      place-items: center;
+      padding: 32px;
+      background:
+        linear-gradient(135deg, rgba(0, 143, 139, 0.12), transparent 38%),
+        linear-gradient(315deg, rgba(40, 109, 217, 0.10), transparent 42%),
+        var(--bg);
     }
-    .stat { background: var(--bg); border-radius: 8px; padding: 16px; text-align: center; }
-    .stat .value { font-size: 1.5rem; font-weight: 700; }
-    .stat .label { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+
+    .login-card {
+      width: min(420px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 28px;
+    }
+
+    .brand-lockup {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--teal);
+      color: #fff;
+      font-weight: 800;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 { font-size: 24px; line-height: 1.2; }
+    h2 { font-size: 16px; line-height: 1.25; }
+    h3 { font-size: 13px; line-height: 1.3; }
+
+    .muted { color: var(--muted); }
+
+    .form-row {
+      display: grid;
+      gap: 7px;
+      margin-top: 16px;
+    }
+
+    label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--text);
+      padding: 9px 10px;
+      min-height: 38px;
+      outline: none;
+    }
+
+    textarea {
+      min-height: 126px;
+      resize: vertical;
+      line-height: 1.45;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 3px rgba(0, 143, 139, 0.14);
+    }
+
+    .btn {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--text);
+      min-height: 36px;
+      padding: 8px 12px;
+      font-weight: 750;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    .btn:hover { border-color: var(--line-strong); background: var(--panel-soft); }
+    .btn-primary { background: var(--teal); border-color: var(--teal); color: #fff; }
+    .btn-primary:hover { background: #007a77; border-color: #007a77; }
+    .btn-danger { color: var(--red); border-color: #f4bdc6; background: var(--red-soft); }
+    .btn-ghost { border-color: transparent; background: transparent; color: var(--muted); }
+    .btn-icon { width: 36px; padding: 0; }
+
+    .error, .notice {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 7px;
+      font-size: 13px;
+    }
+
+    .error { color: var(--red); background: var(--red-soft); border: 1px solid #f6bdc6; }
+    .notice { color: #176250; background: var(--green-soft); border: 1px solid #bfe8d2; }
+
+    .app-shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 236px minmax(0, 1fr);
+    }
+
+    .sidebar {
+      background: #fff;
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      position: sticky;
+      top: 0;
+    }
+
+    .sidebar-top {
+      padding: 22px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .sidebar .brand-lockup { margin-bottom: 0; }
+    .sidebar .brand-mark { width: 42px; height: 42px; }
+
+    .nav {
+      padding: 14px 10px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .nav button {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: #46556a;
+      text-align: left;
+      border-radius: 7px;
+      padding: 11px 12px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      font-weight: 750;
+    }
+
+    .nav button:hover,
+    .nav button.active {
+      color: var(--teal);
+      background: var(--teal-soft);
+    }
+
+    .side-status {
+      margin-top: auto;
+      padding: 18px;
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .main {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      background: rgba(255, 255, 255, 0.94);
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) auto auto auto;
+      align-items: stretch;
+      min-height: 74px;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      backdrop-filter: blur(14px);
+    }
+
+    .intent-strip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 13px 18px;
+      overflow: auto;
+      border-right: 1px solid var(--line);
+    }
+
+    .intent-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .goal-pill {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: #2b394c;
+      border-radius: 7px;
+      padding: 7px 10px;
+      font-size: 12px;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .top-cell {
+      display: grid;
+      gap: 3px;
+      align-content: center;
+      padding: 12px 18px;
+      border-right: 1px solid var(--line);
+      min-width: 148px;
+    }
+
+    .top-cell strong { font-size: 13px; }
+    .top-cell span { color: var(--muted); font-size: 12px; }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 18px;
+    }
+
+    .search {
+      width: 220px;
+    }
+
+    .workspace {
+      padding: 18px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      min-width: 0;
+    }
+
+    .panel-head {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .panel-head .sub {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .panel-body { padding: 14px; }
+
+    .flow-map {
+      min-height: 246px;
+      display: grid;
+      grid-template-columns: 1fr 72px 1fr 72px 1fr 72px 1fr;
+      align-items: center;
+      gap: 0;
+    }
+
+    .flow-node {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+      min-height: 174px;
+      padding: 14px;
+      display: grid;
+      gap: 9px;
+      align-content: start;
+    }
+
+    .flow-node.core {
+      border-color: var(--teal);
+      box-shadow: inset 0 0 0 1px rgba(0, 143, 139, 0.22);
+    }
+
+    .flow-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-weight: 850;
+      font-size: 12px;
+    }
+
+    .flow-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: #3c4c61;
+      font-size: 12px;
+      min-height: 20px;
+    }
+
+    .flow-row b { font-size: 12px; color: var(--text); }
+    .flow-arrow {
+      height: 2px;
+      background: #9aabbc;
+      position: relative;
+      margin: 0 12px;
+    }
+
+    .flow-arrow::after {
+      content: "";
+      position: absolute;
+      right: -2px;
+      top: -4px;
+      width: 0;
+      height: 0;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-left: 7px solid #9aabbc;
+    }
+
+    .mini-chart {
+      display: flex;
+      gap: 4px;
+      align-items: end;
+      height: 32px;
+      margin-top: 4px;
+    }
+
+    .mini-chart span {
+      flex: 1;
+      min-width: 5px;
+      border-radius: 3px 3px 0 0;
+      background: var(--teal);
+      opacity: 0.78;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: var(--panel-soft);
+      display: grid;
+      gap: 6px;
+      min-height: 82px;
+    }
+
+    .metric strong { font-size: 22px; line-height: 1.1; }
+    .metric span { color: var(--muted); font-size: 12px; }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr) 390px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .channel-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .channel-item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 11px;
+      background: #fff;
+      display: grid;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .channel-item.active {
+      border-color: var(--teal);
+      box-shadow: inset 3px 0 0 var(--teal);
+    }
+
+    .channel-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-weight: 850;
+      font-size: 12px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      display: inline-block;
+      background: var(--green);
+    }
+
+    .status-dot.warn { background: var(--gold); }
+    .status-dot.down { background: var(--red); }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 800;
+      background: var(--green-soft);
+      color: #08724a;
+    }
+
+    .status-badge.warn { background: var(--gold-soft); color: #8b5d00; }
+    .status-badge.down { background: var(--red-soft); color: var(--red); }
+    .status-badge.info { background: var(--blue-soft); color: var(--blue); }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .table-wrap {
+      overflow: auto;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.9rem;
+      min-width: 760px;
+      font-size: 12px;
     }
-    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
-    th { color: var(--muted); font-weight: 500; }
-    .params-list { list-style: none; }
-    .params-list li { padding: 6px 0; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 16px; }
-    .params-list li:last-child { border-bottom: none; }
-    .params-list .key { color: var(--muted); }
-    .hidden { display: none; }
-    .loading { color: var(--muted); }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    tr { cursor: pointer; }
-    tr:hover { background: var(--bg); }
-    .modal {
-      display: none;
-      position: fixed;
+
+    th, td {
+      text-align: left;
+      padding: 10px 9px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 850;
+      background: var(--panel-soft);
+      position: sticky;
       top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.7);
-      z-index: 1000;
-      align-items: center;
-      justify-content: center;
+      z-index: 1;
     }
-    .modal.show { display: flex; }
-    .modal-content {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 24px;
-      max-width: 800px;
-      max-height: 90vh;
-      overflow-y: auto;
-      width: 90%;
+
+    tbody tr { cursor: pointer; }
+    tbody tr:hover, tbody tr.selected { background: var(--teal-soft); }
+
+    .subject-cell {
+      white-space: normal;
+      min-width: 220px;
+      max-width: 320px;
     }
-    .modal-header {
+
+    .inspector {
+      position: sticky;
+      top: 92px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 6px;
+      border-bottom: 1px solid var(--line);
+      padding: 0 14px;
+    }
+
+    .tabs button {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      padding: 11px 4px 10px;
+      font-size: 12px;
+      font-weight: 850;
+      border-bottom: 2px solid transparent;
+    }
+
+    .tabs button.active {
+      color: var(--teal);
+      border-bottom-color: var(--teal);
+    }
+
+    .inspector-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .field-full { grid-column: 1 / -1; }
+
+    .section-page {
+      display: none;
+      gap: 16px;
+    }
+
+    .section-page.active {
+      display: grid;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 380px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .settings-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .setting-row {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: var(--panel-soft);
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid var(--border);
+      gap: 12px;
+      min-height: 48px;
     }
-    .modal-body {
-      margin-bottom: 16px;
-    }
-    .modal-body pre {
-      background: var(--bg);
-      padding: 12px;
+
+    .empty {
+      padding: 18px;
+      color: var(--muted);
+      text-align: center;
+      border: 1px dashed var(--line-strong);
       border-radius: 8px;
-      overflow-x: auto;
-      white-space: pre-wrap;
-      word-wrap: break-word;
+      background: var(--panel-soft);
     }
-    .close-btn {
-      background: none;
-      border: none;
-      color: var(--text);
-      font-size: 1.5rem;
-      cursor: pointer;
-      padding: 0;
-      width: 32px;
-      height: 32px;
+
+    .footer-actions {
       display: flex;
+      gap: 8px;
       align-items: center;
-      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 12px;
     }
-    .close-btn:hover { color: var(--accent); }
+
+    @media (max-width: 1180px) {
+      .app-shell { grid-template-columns: 76px minmax(0, 1fr); }
+      .sidebar-top h1, .sidebar-top .muted, .nav span, .side-status { display: none; }
+      .sidebar-top { padding: 16px; }
+      .nav button { justify-content: center; padding: 12px; }
+      .topbar { grid-template-columns: 1fr; position: static; }
+      .top-cell, .intent-strip, .top-actions { border-right: 0; border-bottom: 1px solid var(--line); }
+      .hero-grid, .content-grid, .two-col { grid-template-columns: 1fr; }
+      .inspector { position: static; }
+    }
+
+    @media (max-width: 760px) {
+      .app-shell { grid-template-columns: 1fr; }
+      .sidebar { position: static; min-height: auto; }
+      .nav { grid-template-columns: repeat(3, 1fr); }
+      .main { min-width: 0; }
+      .workspace { padding: 12px; }
+      .flow-map { grid-template-columns: 1fr; gap: 10px; }
+      .flow-arrow { width: 2px; height: 28px; margin: 0 auto; }
+      .flow-arrow::after {
+        right: -4px;
+        top: auto;
+        bottom: -2px;
+        border-left: 5px solid transparent;
+        border-right: 5px solid transparent;
+        border-top: 7px solid #9aabbc;
+        border-bottom: 0;
+      }
+      .metrics-grid, .settings-list, .inspector-grid { grid-template-columns: 1fr; }
+      .search { width: 100%; }
+    }
   </style>
 </head>
 <body>
-  <header>
-    <div class="container">
-      <a href="/" class="logo">Notifications Admin</a>
-      <div id="header-actions"></div>
-    </div>
-  </header>
-  <main>
-    <div class="container">
-      <div id="login-view" class="login-form card">
-        <h1>Sign in</h1>
-        <p style="color: var(--muted); margin-bottom: 20px;">Use your auth-microservice account.</p>
-        <form id="login-form">
-          <div class="form-group">
-            <label for="email">Email</label>
-            <input type="email" id="email" name="email" required autocomplete="email">
-          </div>
-          <div class="form-group">
-            <label for="password">Password</label>
-            <input type="password" id="password" name="password" required autocomplete="current-password">
-          </div>
-          <div id="login-error" class="error-msg hidden"></div>
+  <div id="login-view" class="login-shell">
+    <section class="login-card">
+      <div class="brand-lockup">
+        <div class="brand-mark">N</div>
+        <div>
+          <h1>Notifications</h1>
+          <p class="muted">Statex/RunLayer admin console</p>
+        </div>
+      </div>
+      <p class="muted">Sign in with an admin account from auth-microservice.</p>
+      <form id="login-form">
+        <div class="form-row">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="email" required>
+        </div>
+        <div class="form-row">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required>
+        </div>
+        <div id="login-error" class="error hidden"></div>
+        <div class="footer-actions">
           <button type="submit" class="btn btn-primary">Sign in</button>
-        </form>
-      </div>
-      <div id="dashboard-view" class="hidden">
-        <h1>Dashboard</h1>
-        <section class="card">
-          <h2>Statistics</h2>
-          <div id="stats-content" class="loading">Loading…</div>
-          <div id="stats-grid" class="stats-grid hidden"></div>
-        </section>
-        <section class="card">
-          <h2>Message history</h2>
-          <p style="color: var(--muted); font-size: 0.9rem; margin-bottom: 12px;">Sent = outbound notifications. Received = inbound emails (AWS SES receive rule; if none, configure SES inbound or no mail has been received yet).</p>
-          <div id="history-content" class="loading">Loading…</div>
-          <table id="history-table" class="hidden">
-            <thead>
-              <tr>
-                <th>Direction</th>
-                <th>Channel</th>
-                <th>Service</th>
-                <th>Subject</th>
-                <th>Recipient</th>
-                <th>Status</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody id="history-tbody"></tbody>
-          </table>
-          <div id="history-pagination" style="margin-top: 12px; display: flex; gap: 8px; align-items: center;">
-            <button id="load-more-btn" class="btn btn-secondary hidden">Load More</button>
-            <span id="history-info"></span>
-          </div>
-        </section>
-        <section class="card">
-          <h2>Service parameters</h2>
-          <div id="params-content" class="loading">Loading…</div>
-          <ul id="params-list" class="params-list hidden"></ul>
-        </section>
-        <section class="card">
-          <h2>Channel registry</h2>
-          <div id="channels-content" class="loading">Loading…</div>
-          <table id="channels-table" class="hidden">
-            <thead>
-              <tr>
-                <th>Key</th>
-                <th>Type</th>
-                <th>Provider</th>
-                <th>Active</th>
-                <th>Purposes</th>
-                <th>Applications</th>
-                <th>Updated</th>
-              </tr>
-            </thead>
-            <tbody id="channels-tbody"></tbody>
-          </table>
-          <div id="channel-edit-wrap" class="hidden" style="margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px;">
-            <h3 style="margin-bottom: 12px; font-size: 1rem;">Edit channel</h3>
-            <div style="display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
-              <div class="form-group">
-                <label for="edit-channel-key">Channel key</label>
-                <input id="edit-channel-key" type="text" disabled>
-              </div>
-              <div class="form-group">
-                <label for="edit-channel-active">Active</label>
-                <select id="edit-channel-active" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 0.95rem;">
-                  <option value="true">true</option>
-                  <option value="false">false</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="edit-channel-fallback">Fallback channel key</label>
-                <input id="edit-channel-fallback" type="text" placeholder="optional">
-              </div>
-              <div class="form-group">
-                <label for="edit-channel-from-email">From email</label>
-                <input id="edit-channel-from-email" type="text" placeholder="optional">
-              </div>
-              <div class="form-group">
-                <label for="edit-channel-from-name">From name</label>
-                <input id="edit-channel-from-name" type="text" placeholder="optional">
-              </div>
-              <div class="form-group">
-                <label for="edit-channel-reply-to">Reply-to email</label>
-                <input id="edit-channel-reply-to" type="text" placeholder="optional">
-              </div>
-              <div class="form-group">
-                <label for="edit-channel-purposes">Purposes (comma separated)</label>
-                <input id="edit-channel-purposes" type="text" placeholder="marketing,transactional,system">
-              </div>
-              <div class="form-group">
-                <label for="edit-channel-apps">Applications (comma separated)</label>
-                <input id="edit-channel-apps" type="text" placeholder="marketing-microservice">
-              </div>
-            </div>
-            <div style="display: flex; gap: 8px; margin-top: 6px;">
-              <button id="save-channel-btn" type="button" class="btn btn-primary">Save channel</button>
-              <button id="cancel-channel-btn" type="button" class="btn btn-secondary">Cancel</button>
-            </div>
-            <div id="channels-error" class="error-msg hidden" style="margin-top: 8px;"></div>
-          </div>
-        </section>
-      </div>
-    </div>
-  </main>
-  <div id="message-modal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 id="modal-title">Message Details</h2>
-        <button class="close-btn" id="close-modal">&times;</button>
-      </div>
-      <div class="modal-body" id="modal-body"></div>
-    </div>
+          <a href="/" class="btn">Landing</a>
+        </div>
+      </form>
+    </section>
   </div>
+
+  <div id="dashboard-view" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="brand-lockup">
+          <div class="brand-mark">N</div>
+          <div>
+            <h1>Notifications</h1>
+            <p class="muted">Statex/RunLayer</p>
+          </div>
+        </div>
+      </div>
+      <nav class="nav" aria-label="Admin navigation">
+        <button class="active" data-section="overview">□ <span>Overview</span></button>
+        <button data-section="channels">◇ <span>Channels</span></button>
+        <button data-section="messages">✉ <span>Messages</span></button>
+        <button data-section="inbound">↓ <span>Inbound</span></button>
+        <button data-section="webhooks">⌁ <span>Webhooks</span></button>
+        <button data-section="settings">⚙ <span>Settings</span></button>
+      </nav>
+      <div class="side-status">
+        <strong>Ecosystem</strong>
+        <span>40 microservices</span>
+        <span><i class="status-dot"></i> Admin console live</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="intent-strip">
+          <span class="intent-label">Intent / Goals</span>
+          <span class="goal-pill"><i class="status-dot"></i> Preserve delivery reliability</span>
+          <span class="goal-pill"><i class="status-dot warn"></i> Reduce failed deliveries</span>
+          <span class="goal-pill"><i class="status-dot"></i> Monitor channel health</span>
+          <span class="goal-pill"><i class="status-dot"></i> Validate message edits</span>
+        </div>
+        <div class="top-cell">
+          <strong>Docs Status</strong>
+          <span id="docs-status">Intent docs loaded</span>
+        </div>
+        <div class="top-cell">
+          <strong>Environment</strong>
+          <span id="environment-label">Production</span>
+        </div>
+        <div class="top-actions">
+          <input id="global-search" class="search" type="search" placeholder="Search messages">
+          <button id="refresh-btn" class="btn btn-icon" title="Refresh">↻</button>
+          <button id="logout-btn" class="btn">Sign out</button>
+        </div>
+      </header>
+
+      <div class="workspace">
+        <section id="section-overview" class="section-page active">
+          <div class="hero-grid">
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Ecosystem Flow</h2>
+                  <p class="sub">Event sources route through notifications into channels and recipients.</p>
+                </div>
+                <span id="live-badge" class="status-badge">Live</span>
+              </div>
+              <div class="panel-body">
+                <div class="flow-map">
+                  <div class="flow-node">
+                    <div class="flow-title"><span>Event Sources</span><b>40</b></div>
+                    <div class="flow-row"><span>RunLayer</span><b>goals</b></div>
+                    <div class="flow-row"><span>Orders</span><b>checkout</b></div>
+                    <div class="flow-row"><span>Marketing</span><b>campaigns</b></div>
+                    <div class="flow-row"><span>Helpdesk</span><b>support</b></div>
+                    <div class="flow-row"><span>Other services</span><b>events</b></div>
+                  </div>
+                  <div class="flow-arrow"></div>
+                  <div class="flow-node core">
+                    <div class="flow-title"><span>Notifications Microservice</span><b id="core-rate">--</b></div>
+                    <div class="flow-row"><span>Outbound records</span><b id="flow-total">--</b></div>
+                    <div class="flow-row"><span>Inbound emails</span><b id="flow-inbound">--</b></div>
+                    <div class="flow-row"><span>Failed</span><b id="flow-failed">--</b></div>
+                    <div class="mini-chart"><span style="height:45%"></span><span style="height:55%"></span><span style="height:42%"></span><span style="height:70%"></span><span style="height:52%"></span><span style="height:62%"></span><span style="height:48%"></span></div>
+                  </div>
+                  <div class="flow-arrow"></div>
+                  <div class="flow-node">
+                    <div class="flow-title"><span>Channels</span><b id="flow-channels">--</b></div>
+                    <div class="flow-row"><span>Email / SES</span><b id="flow-email">--</b></div>
+                    <div class="flow-row"><span>Telegram</span><b id="flow-telegram">--</b></div>
+                    <div class="flow-row"><span>WhatsApp</span><b id="flow-whatsapp">--</b></div>
+                    <div class="flow-row"><span>Webhooks</span><b id="flow-webhooks">--</b></div>
+                    <div class="flow-row"><span>Inbound email</span><b id="flow-inbound-rate">--</b></div>
+                  </div>
+                  <div class="flow-arrow"></div>
+                  <div class="flow-node">
+                    <div class="flow-title"><span>Recipients</span><b>live</b></div>
+                    <div class="flow-row"><span>Users</span><b>auth</b></div>
+                    <div class="flow-row"><span>Customers</span><b>sales</b></div>
+                    <div class="flow-row"><span>Admins</span><b>ops</b></div>
+                    <div class="flow-row"><span>Integrations</span><b>webhook</b></div>
+                    <div class="flow-row"><span>Systems</span><b>internal</b></div>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>System Summary</h2>
+                  <p class="sub">Last loaded from production APIs.</p>
+                </div>
+                <button class="btn btn-icon" data-action="refresh">↻</button>
+              </div>
+              <div class="panel-body">
+                <div id="metrics-grid" class="metrics-grid"></div>
+              </div>
+            </article>
+          </div>
+
+          <div class="content-grid">
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Channel Health</h2>
+                  <p class="sub">Registry, configured providers, and traffic.</p>
+                </div>
+                <button class="btn" data-section-jump="channels">View all</button>
+              </div>
+              <div id="channel-list" class="panel-body channel-list"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Outbound Send History</h2>
+                  <p class="sub">Outbound and inbound records merged by time.</p>
+                </div>
+                <div class="toolbar">
+                  <select id="history-channel-filter">
+                    <option value="">All channels</option>
+                    <option value="email">Email</option>
+                    <option value="telegram">Telegram</option>
+                    <option value="whatsapp">WhatsApp</option>
+                  </select>
+                  <select id="history-status-filter">
+                    <option value="">All statuses</option>
+                    <option value="sent">Sent</option>
+                    <option value="failed">Failed</option>
+                    <option value="pending">Pending</option>
+                    <option value="processed">Processed</option>
+                  </select>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Direction</th>
+                      <th>Channel</th>
+                      <th>Service</th>
+                      <th class="subject-cell">Subject / Event</th>
+                      <th>Recipient</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="history-tbody"></tbody>
+                </table>
+              </div>
+              <div class="panel-body footer-actions">
+                <button id="load-more-btn" class="btn">Load more</button>
+                <span id="history-info" class="muted"></span>
+              </div>
+            </article>
+
+            <article class="panel inspector">
+              <div class="panel-head">
+                <div>
+                  <h2>Message Inspector</h2>
+                  <p id="inspector-subtitle" class="sub">Select a message to inspect and edit.</p>
+                </div>
+                <button id="clear-selection-btn" class="btn btn-icon">×</button>
+              </div>
+              <div id="inspector-empty" class="panel-body">
+                <div class="empty">No message selected.</div>
+              </div>
+              <div id="inspector-form" class="hidden">
+                <div class="tabs">
+                  <button class="active" data-inspector-tab="message">Message</button>
+                  <button data-inspector-tab="template">Template JSON</button>
+                  <button data-inspector-tab="metadata">Metadata</button>
+                </div>
+                <div class="panel-body">
+                  <div class="inspector-grid">
+                    <div class="form-row">
+                      <label>Channel</label>
+                      <input id="msg-channel" readonly>
+                    </div>
+                    <div class="form-row">
+                      <label>Status</label>
+                      <select id="msg-status"></select>
+                    </div>
+                    <div class="form-row field-full">
+                      <label>Recipient</label>
+                      <input id="msg-recipient" readonly>
+                    </div>
+                    <div class="form-row field-full">
+                      <label>Subject</label>
+                      <input id="msg-subject">
+                    </div>
+                    <div id="message-tab" class="field-full">
+                      <div class="form-row">
+                        <label>Message body</label>
+                        <textarea id="msg-body"></textarea>
+                      </div>
+                    </div>
+                    <div id="template-tab" class="field-full hidden">
+                      <div class="form-row">
+                        <label>Template data JSON</label>
+                        <textarea id="msg-template"></textarea>
+                      </div>
+                      <p class="muted" style="margin-top:8px">Templates are currently inline message bodies with variable substitution. No persisted template table exists yet.</p>
+                    </div>
+                    <div id="metadata-tab" class="field-full hidden">
+                      <div id="msg-metadata" class="settings-list"></div>
+                    </div>
+                  </div>
+                  <div id="inspector-error" class="error hidden"></div>
+                  <div id="inspector-notice" class="notice hidden"></div>
+                  <div class="footer-actions">
+                    <button id="save-message-btn" class="btn btn-primary">Save changes</button>
+                    <button id="test-message-btn" class="btn">Test message</button>
+                    <button id="reparse-message-btn" class="btn hidden">Reparse inbound</button>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <div class="two-col">
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Webhook Subscriptions</h2>
+                  <p class="sub">Inbound email delivery targets.</p>
+                </div>
+                <button class="btn" data-section-jump="webhooks">View all</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Service</th><th>Status</th><th>Success</th><th>Failures</th><th>Last delivery</th></tr></thead>
+                  <tbody id="webhook-summary-tbody"></tbody>
+                </table>
+              </div>
+            </article>
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Inbound Email</h2>
+                  <p class="sub">Recent received email records.</p>
+                </div>
+                <button class="btn" data-section-jump="inbound">View all</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>From</th><th>Subject</th><th>Status</th><th>Received</th></tr></thead>
+                  <tbody id="inbound-summary-tbody"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="section-channels" class="section-page">
+          <div class="two-col">
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Channel Registry</h2>
+                  <p class="sub">Edit routing policy, sender identity, allowed purposes, and fallback.</p>
+                </div>
+                <button class="btn" data-action="refresh">Refresh</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th>Key</th><th>Type</th><th>Provider</th><th>Active</th><th>Purposes</th><th>Applications</th><th>Updated</th></tr>
+                  </thead>
+                  <tbody id="channels-tbody"></tbody>
+                </table>
+              </div>
+            </article>
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Channel Editor</h2>
+                  <p id="channel-editor-subtitle" class="sub">Select a channel to edit.</p>
+                </div>
+              </div>
+              <div id="channel-editor-empty" class="panel-body">
+                <div class="empty">No channel selected.</div>
+              </div>
+              <div id="channel-editor" class="panel-body hidden">
+                <div class="form-row"><label>Channel key</label><input id="edit-channel-key" readonly></div>
+                <div class="inspector-grid">
+                  <div class="form-row"><label>Active</label><select id="edit-channel-active"><option value="true">Active</option><option value="false">Inactive</option></select></div>
+                  <div class="form-row"><label>Fallback</label><input id="edit-channel-fallback"></div>
+                </div>
+                <div class="form-row"><label>From email</label><input id="edit-channel-from-email"></div>
+                <div class="form-row"><label>From name</label><input id="edit-channel-from-name"></div>
+                <div class="form-row"><label>Reply-to email</label><input id="edit-channel-reply-to"></div>
+                <div class="form-row"><label>Purposes allowed</label><input id="edit-channel-purposes" placeholder="marketing, transactional, system"></div>
+                <div class="form-row"><label>Applications allowed</label><input id="edit-channel-apps" placeholder="runlayer, orders-microservice"></div>
+                <div id="channel-error" class="error hidden"></div>
+                <div class="footer-actions">
+                  <button id="save-channel-btn" class="btn btn-primary">Save channel</button>
+                  <button id="cancel-channel-btn" class="btn">Cancel</button>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="section-messages" class="section-page">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>All Messages</h2>
+                <p class="sub">The same live message stream with filters and editable detail inspector.</p>
+              </div>
+              <div class="toolbar">
+                <button class="btn" data-action="refresh">Refresh</button>
+              </div>
+            </div>
+            <div class="panel-body">
+              <p class="muted">Use the Overview message table to select any record. This page keeps the full-width message stream visible for review workflows.</p>
+            </div>
+          </article>
+          <article class="panel">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Time</th><th>Direction</th><th>Channel</th><th>Service</th><th class="subject-cell">Subject / Event</th><th>Recipient</th><th>Status</th></tr>
+                </thead>
+                <tbody id="messages-tbody"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section id="section-inbound" class="section-page">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Inbound Email Queue</h2>
+                <p class="sub">S3-first inbound email records, delivery state, and repair actions.</p>
+              </div>
+              <div class="toolbar">
+                <button id="process-undelivered-btn" class="btn">Process undelivered</button>
+                <button class="btn" data-action="refresh">Refresh</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Received</th><th>From</th><th>To</th><th class="subject-cell">Subject</th><th>Message ID</th><th>Status</th></tr></thead>
+                <tbody id="inbound-tbody"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section id="section-webhooks" class="section-page">
+          <div class="two-col">
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Webhook Subscriptions</h2>
+                  <p class="sub">Subscribers receiving inbound email payloads.</p>
+                </div>
+                <button class="btn" data-action="refresh">Refresh</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Service</th><th>Status</th><th>URL</th><th>Deliveries</th><th>Failures</th></tr></thead>
+                  <tbody id="webhooks-tbody"></tbody>
+                </table>
+              </div>
+            </article>
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Subscription Editor</h2>
+                  <p id="webhook-editor-subtitle" class="sub">Select a subscription.</p>
+                </div>
+              </div>
+              <div id="webhook-editor-empty" class="panel-body">
+                <div class="empty">No webhook selected.</div>
+              </div>
+              <div id="webhook-editor" class="panel-body hidden">
+                <div class="form-row"><label>Service name</label><input id="edit-webhook-service"></div>
+                <div class="form-row"><label>Webhook URL</label><input id="edit-webhook-url"></div>
+                <div class="inspector-grid">
+                  <div class="form-row"><label>Status</label><select id="edit-webhook-status"><option value="active">Active</option><option value="inactive">Inactive</option><option value="suspended">Suspended</option></select></div>
+                  <div class="form-row"><label>Timeout ms</label><input id="edit-webhook-timeout" type="number" min="1000"></div>
+                </div>
+                <div class="form-row"><label>Filters JSON</label><textarea id="edit-webhook-filters"></textarea></div>
+                <div id="webhook-error" class="error hidden"></div>
+                <div class="footer-actions">
+                  <button id="save-webhook-btn" class="btn btn-primary">Save subscription</button>
+                  <button id="activate-webhook-btn" class="btn">Activate</button>
+                  <button id="suspend-webhook-btn" class="btn btn-danger">Suspend</button>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="section-settings" class="section-page">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Service Parameters</h2>
+                <p class="sub">Non-secret runtime configuration and documentation status.</p>
+              </div>
+              <button class="btn" data-action="refresh">Refresh</button>
+            </div>
+            <div id="params-list" class="panel-body settings-list"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Intent Preservation</h2>
+                <p class="sub">Development notes stored in repository docs.</p>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div class="settings-list">
+                <div class="setting-row"><span>Domain map</span><strong>docs/orchestrator/INTENT.md</strong></div>
+                <div class="setting-row"><span>Goal tracker</span><strong>docs/orchestrator/GOALS.md</strong></div>
+                <div class="setting-row"><span>Plan</span><strong>docs/orchestrator/PLAN.md</strong></div>
+                <div class="setting-row"><span>Status</span><strong>docs/orchestrator/STATUS.md</strong></div>
+              </div>
+            </div>
+          </article>
+        </section>
+      </div>
+    </main>
+  </div>
+
   <script>
     (function () {
-      const TOKEN_KEY = 'notifications_admin_token';
-      const REFRESH_KEY = 'notifications_admin_refresh';
-      let authServicePublicUrl = '';
-      let currentHistoryFilter = null;
-      let channelsCache = [];
-      let selectedChannelKey = null;
+      var TOKEN_KEY = 'notifications_admin_access_token';
+      var REFRESH_KEY = 'notifications_admin_refresh_token';
+      var state = {
+        authServicePublicUrl: '',
+        history: [],
+        historyOffset: 0,
+        historyLimit: 50,
+        channels: [],
+        webhooks: [],
+        inbound: [],
+        stats: null,
+        params: null,
+        selectedMessage: null,
+        selectedChannel: null,
+        selectedWebhook: null,
+        activeInspectorTab: 'message',
+      };
 
-      function getOrigin() {
-        return window.location.origin;
-      }
-
-      function getToken() {
-        return sessionStorage.getItem(TOKEN_KEY);
-      }
-
-      function getRefreshToken() {
-        return sessionStorage.getItem(REFRESH_KEY);
-      }
-
+      function byId(id) { return document.getElementById(id); }
+      function show(el) { if (el) el.classList.remove('hidden'); }
+      function hide(el) { if (el) el.classList.add('hidden'); }
+      function token() { return sessionStorage.getItem(TOKEN_KEY); }
+      function refreshToken() { return sessionStorage.getItem(REFRESH_KEY); }
+      function origin() { return window.location.origin; }
       function setTokens(access, refresh) {
         sessionStorage.setItem(TOKEN_KEY, access);
         if (refresh) sessionStorage.setItem(REFRESH_KEY, refresh);
       }
-
-      /** Try to refresh access token using refresh token. Returns true if new tokens set. */
-      async function tryRefresh() {
-        const refreshToken = getRefreshToken();
-        if (!refreshToken || !authServicePublicUrl) return false;
-        try {
-          const r = await fetch(authServicePublicUrl + '/auth/refresh', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken: refreshToken }),
-          });
-          if (!r.ok) return false;
-          const data = await r.json();
-          if (data.accessToken) {
-            setTokens(data.accessToken, data.refreshToken || refreshToken);
-            return true;
-          }
-        } catch (e) { /* ignore */ }
-        return false;
-      }
-
       function clearTokens() {
         sessionStorage.removeItem(TOKEN_KEY);
         sessionStorage.removeItem(REFRESH_KEY);
       }
+      function escapeHtml(value) {
+        var div = document.createElement('div');
+        div.textContent = value == null ? '' : String(value);
+        return div.innerHTML;
+      }
+      function fmtDate(value) {
+        if (!value) return '-';
+        var date = new Date(value);
+        return isNaN(date.getTime()) ? '-' : date.toLocaleString();
+      }
+      function shortTime(value) {
+        if (!value) return '-';
+        var date = new Date(value);
+        return isNaN(date.getTime()) ? '-' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+      function compact(value) {
+        if (value == null) return '0';
+        var number = Number(value);
+        if (!isFinite(number)) return String(value);
+        return number.toLocaleString();
+      }
+      function statusClass(status) {
+        var s = String(status || '').toLowerCase();
+        if (s === 'failed' || s === 'down' || s === 'suspended') return 'down';
+        if (s === 'pending' || s === 'inactive') return 'warn';
+        if (s === 'received' || s === 'processed') return 'info';
+        return '';
+      }
+      function badge(status) {
+        return '<span class="status-badge ' + statusClass(status) + '"><i class="status-dot ' + statusClass(status) + '"></i>' + escapeHtml(status || 'ok') + '</span>';
+      }
+      function csvToArray(value) {
+        return String(value || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+      }
 
-      function show(el) { el.classList.remove('hidden'); }
-      function hide(el) { el.classList.add('hidden'); }
+      async function parseResponse(response) {
+        var text = await response.text();
+        if (!text) return {};
+        try {
+          return JSON.parse(text);
+        } catch (error) {
+          throw new Error('Invalid server response');
+        }
+      }
+
+      async function tryRefresh() {
+        if (!refreshToken() || !state.authServicePublicUrl) return false;
+        try {
+          var response = await fetch(state.authServicePublicUrl + '/auth/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken: refreshToken() }),
+          });
+          if (!response.ok) return false;
+          var data = await response.json();
+          if (!data.accessToken) return false;
+          setTokens(data.accessToken, data.refreshToken || refreshToken());
+          return true;
+        } catch (error) {
+          return false;
+        }
+      }
+
+      async function api(path, options) {
+        var opts = options || {};
+        var headers = Object.assign({}, opts.headers || {});
+        if (token()) headers.Authorization = 'Bearer ' + token();
+        if (opts.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+        var response = await fetch(origin() + path, Object.assign({}, opts, { headers: headers }));
+        if (response.status === 401 && await tryRefresh()) {
+          headers.Authorization = 'Bearer ' + token();
+          response = await fetch(origin() + path, Object.assign({}, opts, { headers: headers }));
+        }
+        if (response.status === 401) {
+          showLogin();
+          throw new Error('Session expired');
+        }
+        return response;
+      }
 
       async function loadConfig() {
-        const r = await fetch(getOrigin() + '/api/config');
-        const json = await parseJsonResponse(r, null, '');
-        if (json && json.success && json.data) {
-          authServicePublicUrl = (json.data.authServicePublicUrl || '').replace(/\/$/, '');
+        try {
+          var response = await fetch(origin() + '/api/config');
+          var json = await parseResponse(response);
+          state.authServicePublicUrl = ((json.data && json.data.authServicePublicUrl) || '').replace(/\/$/, '');
+        } catch (error) {
+          state.authServicePublicUrl = '';
         }
-      }
-
-      function renderHeader(loggedIn) {
-        const el = document.getElementById('header-actions');
-        if (loggedIn) {
-          el.innerHTML = '<a href="/" class="btn btn-secondary" style="margin-right:8px">Landing</a><button type="button" class="btn btn-secondary" id="logout-btn">Logout</button>';
-          document.getElementById('logout-btn').onclick = function () {
-            clearTokens();
-            showLogin();
-          };
-        } else {
-          el.innerHTML = '<a href="/" class="btn btn-secondary">Landing</a>';
-        }
-      }
-
-      function showLogin() {
-        hide(document.getElementById('dashboard-view'));
-        show(document.getElementById('login-view'));
-        currentHistoryFilter = null;
-        renderHeader(false);
-      }
-
-      function showDashboard() {
-        hide(document.getElementById('login-view'));
-        show(document.getElementById('dashboard-view'));
-        currentHistoryFilter = null;
-        renderHeader(true);
-        loadStats();
-        loadHistory(false);
-        loadParams();
-        loadChannels();
       }
 
       async function login(email, password) {
-        if (!authServicePublicUrl) {
-          document.getElementById('login-error').textContent = 'Auth service URL not configured.';
-          show(document.getElementById('login-error'));
+        var errorEl = byId('login-error');
+        hide(errorEl);
+        if (!state.authServicePublicUrl) {
+          errorEl.textContent = 'Auth service URL is not available from /api/config.';
+          show(errorEl);
           return;
         }
         try {
-          const r = await fetch(authServicePublicUrl + '/auth/login', {
+          var response = await fetch(state.authServicePublicUrl + '/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password }),
+            body: JSON.stringify({ email: email, password: password }),
           });
-          const data = await r.json();
-          if (!r.ok) {
-            document.getElementById('login-error').textContent = data.message || 'Login failed';
-            show(document.getElementById('login-error'));
+          var data = await response.json();
+          if (!response.ok || !data.accessToken) {
+            errorEl.textContent = data.message || 'Login failed';
+            show(errorEl);
             return;
           }
           setTokens(data.accessToken, data.refreshToken);
-          hide(document.getElementById('login-error'));
           showDashboard();
-        } catch (e) {
-          document.getElementById('login-error').textContent = 'Network error: ' + (e.message || 'Could not reach auth service');
-          show(document.getElementById('login-error'));
-        }
-      }
-
-      /** Call admin API; on 401 tries refresh once and retries. Returns fetch Response. */
-      async function api(path, options) {
-        const token = getToken();
-        const h = options && options.headers ? { ...options.headers } : {};
-        if (token) h['Authorization'] = 'Bearer ' + token;
-        let r = await fetch(getOrigin() + path, { ...options, headers: { ...h, 'Content-Type': 'application/json' } });
-        if (r.status === 401 && (await tryRefresh())) {
-          const newToken = getToken();
-          const newH = options && options.headers ? { ...options.headers } : {};
-          if (newToken) newH['Authorization'] = 'Bearer ' + newToken;
-          r = await fetch(getOrigin() + path, { ...options, headers: { ...newH, 'Content-Type': 'application/json' } });
-        }
-        return r;
-      }
-
-      /** Parse response as JSON; on failure (e.g. HTML 502/504) return null and set friendly error. */
-      async function parseJsonResponse(r, errorTargetEl, fallbackMessage) {
-        const text = await r.text();
-        const ct = (r.headers.get('Content-Type') || '').toLowerCase();
-        const looksLikeJson = ct.indexOf('application/json') !== -1 || (r.status >= 200 && r.status < 300);
-        if (looksLikeJson) {
-          try {
-            return JSON.parse(text);
-          } catch (e) {
-            if (errorTargetEl) {
-              errorTargetEl.textContent = 'Error: Invalid response from server (not JSON). ' + (fallbackMessage || '');
-            }
-            return null;
-          }
-        }
-        const msg = r.status >= 500
-          ? 'Server or gateway error (e.g. timeout). Try again.'
-          : (r.status ? 'Unexpected response (status ' + r.status + ').' : 'Invalid response.');
-        if (errorTargetEl) errorTargetEl.textContent = 'Error: ' + msg;
-        return null;
-      }
-
-      async function loadStats() {
-        const el = document.getElementById('stats-content');
-        const grid = document.getElementById('stats-grid');
-        try {
-          const r = await api('/admin/stats');
-          if (r.status === 401) { showLogin(); return; }
-          const json = await parseJsonResponse(r, el, 'Could not load stats');
-          if (!json) return;
-          if (!json.success) { el.textContent = json.error?.message || 'Failed to load stats'; return; }
-          const d = json.data;
-          grid.innerHTML =
-            '<div class="stat" data-direction="outbound"><span class="value">' + (d.total ?? 0) + '</span><span class="label">Total (sent)</span></div>' +
-            '<div class="stat" data-direction="inbound"><span class="value">' + (d.receivedTotal ?? 0) + '</span><span class="label">Received</span></div>' +
-            '<div class="stat" data-direction="outbound" data-timeframe="24h"><span class="value">' + (d.last24h ?? 0) + '</span><span class="label">Last 24h (sent)</span></div>' +
-            '<div class="stat" data-direction="inbound" data-timeframe="24h"><span class="value">' + (d.receivedLast24h ?? 0) + '</span><span class="label">Received 24h</span></div>' +
-            '<div class="stat" data-direction="outbound" data-timeframe="7d"><span class="value">' + (d.last7d ?? 0) + '</span><span class="label">Last 7 days (sent)</span></div>' +
-            '<div class="stat" data-direction="inbound" data-timeframe="7d"><span class="value">' + (d.receivedLast7d ?? 0) + '</span><span class="label">Received 7d</span></div>' +
-            (d.byChannel ? Object.entries(d.byChannel).map(function (e) {
-              return '<div class="stat" data-direction="outbound" data-channel="' + e[0] + '"><span class="value">' + e[1] + '</span><span class="label">' + e[0] + '</span></div>';
-            }).join('') : '') +
-            (d.byStatus ? Object.entries(d.byStatus).map(function (e) {
-              return '<div class="stat" data-direction="outbound" data-status="' + e[0] + '"><span class="value">' + e[1] + '</span><span class="label">' + e[0] + '</span></div>';
-            }).join('') : '');
-          el.textContent = '';
-          show(grid);
-          // Attach click handlers for filtering history by statistic
-          Array.from(grid.querySelectorAll('.stat')).forEach(function(statEl) {
-            statEl.onclick = function() {
-              const dir = statEl.getAttribute('data-direction') || '';
-              const channel = statEl.getAttribute('data-channel') || '';
-              const status = statEl.getAttribute('data-status') || '';
-              const timeframe = statEl.getAttribute('data-timeframe') || '';
-              currentHistoryFilter = {
-                direction: dir || null,
-                channel: channel || null,
-                status: status || null,
-                timeframe: timeframe || null,
-              };
-              historyOffset = 0;
-              loadHistory(false);
-            };
-          });
-        } catch (e) {
-          el.textContent = 'Error: ' + (e.message || 'Could not load stats');
-        }
-      }
-
-      let historyOffset = 0;
-      const historyLimit = 50;
-      let allHistoryItems = [];
-
-      async function loadHistory(append = false) {
-        const content = document.getElementById('history-content');
-        const table = document.getElementById('history-table');
-        const tbody = document.getElementById('history-tbody');
-        const loadMoreBtn = document.getElementById('load-more-btn');
-        const historyInfo = document.getElementById('history-info');
-        try {
-          if (!append) {
-            historyOffset = 0;
-            allHistoryItems = [];
-            tbody.innerHTML = '';
-          }
-          let url = '/admin/history?limit=' + historyLimit + '&offset=' + historyOffset;
-          if (currentHistoryFilter) {
-            if (currentHistoryFilter.direction) {
-              url += '&direction=' + encodeURIComponent(currentHistoryFilter.direction);
-            }
-            if (currentHistoryFilter.channel) {
-              url += '&channel=' + encodeURIComponent(currentHistoryFilter.channel);
-            }
-            if (currentHistoryFilter.status) {
-              url += '&status=' + encodeURIComponent(currentHistoryFilter.status);
-            }
-            if (currentHistoryFilter.timeframe) {
-              url += '&timeframe=' + encodeURIComponent(currentHistoryFilter.timeframe);
-            }
-          }
-          const r = await api(url);
-          if (r.status === 401) { showLogin(); return; }
-          const json = await parseJsonResponse(r, content, 'Could not load history');
-          if (!json) return;
-          if (!json.success) { content.textContent = json.error?.message || 'Failed to load history'; return; }
-          const list = json.data || [];
-          if (!append) {
-            allHistoryItems = list;
-          } else {
-            allHistoryItems = allHistoryItems.concat(list);
-          }
-          tbody.innerHTML = allHistoryItems.map(function (n) {
-            const created = n.createdAt ? new Date(n.createdAt).toLocaleString() : '-';
-            const subject = (n.subject || '-').substring(0, 50) + (n.subject && n.subject.length > 50 ? '...' : '');
-            const service = n.service || (n.direction === 'inbound' ? 'inbound' : 'unknown');
-            const direction = n.direction === 'inbound' ? 'Received' : 'Sent';
-            return '<tr data-id="' + n.id + '" data-type="' + (n.direction || 'outbound') + '">' +
-              '<td>' + direction + '</td>' +
-              '<td>' + (n.channel || '-') + '</td>' +
-              '<td>' + service + '</td>' +
-              '<td>' + subject + '</td>' +
-              '<td>' + (n.recipient || '-') + '</td>' +
-              '<td>' + (n.status || '-') + '</td>' +
-              '<td>' + created + '</td>' +
-              '</tr>';
-          }).join('');
-          content.textContent = '';
-          show(table);
-          historyOffset += list.length;
-          if (list.length >= historyLimit) {
-            show(loadMoreBtn);
-          } else {
-            hide(loadMoreBtn);
-          }
-          historyInfo.textContent = 'Showing ' + allHistoryItems.length + ' messages' + (currentHistoryFilter ? ' (filtered)' : '') + '.';
-          // Add click handlers to rows
-          Array.from(tbody.querySelectorAll('tr')).forEach(function(tr) {
-            tr.onclick = function() {
-              const id = tr.getAttribute('data-id');
-              const type = tr.getAttribute('data-type');
-              showMessageDetails(id, type);
-            };
-          });
-        } catch (e) {
-          content.textContent = 'Error: ' + (e.message || 'Could not load history');
-        }
-      }
-
-      async function showMessageDetails(id, type) {
-        const modal = document.getElementById('message-modal');
-        const modalTitle = document.getElementById('modal-title');
-        const modalBody = document.getElementById('modal-body');
-        try {
-          modalTitle.textContent = 'Loading...';
-          modalBody.innerHTML = '<div class="loading">Loading message details...</div>';
-          modal.classList.add('show');
-          const r = await api('/admin/message/' + id + '?type=' + (type === 'inbound' ? 'inbound' : 'notification'));
-          if (r.status === 401) { showLogin(); modal.classList.remove('show'); return; }
-          const json = await parseJsonResponse(r, modalBody, 'Could not load message details');
-          if (!json) { modalBody.innerHTML = '<div class="error-msg">Invalid response from server.</div>'; return; }
-          if (!json.success) {
-            modalBody.innerHTML = '<div class="error-msg">' + (json.error?.message || 'Failed to load message details') + '</div>';
-            return;
-          }
-          const msg = json.data;
-          modalTitle.textContent = 'Message Details';
-          let html = '<div style="margin-bottom: 12px;"><strong>Service:</strong> ' + (msg.service || '-') + '</div>';
-          html += '<div style="margin-bottom: 12px;"><strong>Channel:</strong> ' + (msg.channel || '-') + '</div>';
-          html += '<div style="margin-bottom: 12px;"><strong>Direction:</strong> ' + (msg.direction || 'outbound') + '</div>';
-          if (msg.from) {
-            html += '<div style="margin-bottom: 12px;"><strong>From:</strong> ' + msg.from + '</div>';
-          }
-          html += '<div style="margin-bottom: 12px;"><strong>Recipient:</strong> ' + (msg.recipient || '-') + '</div>';
-          html += '<div style="margin-bottom: 12px;"><strong>Subject:</strong> ' + (msg.subject || '-') + '</div>';
-          html += '<div style="margin-bottom: 12px;"><strong>Status:</strong> ' + (msg.status || '-') + '</div>';
-          html += '<div style="margin-bottom: 12px;"><strong>Created:</strong> ' + (msg.createdAt ? new Date(msg.createdAt).toLocaleString() : '-') + '</div>';
-          html += '<div style="margin-top: 16px; margin-bottom: 8px;"><strong>Message:</strong></div>';
-          if (msg.bodyHtml) {
-            html += '<div style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">' + msg.bodyHtml + '</div>';
-          } else if (msg.message) {
-            html += '<pre>' + escapeHtml(msg.message) + '</pre>';
-          } else {
-            html += '<div class="loading">No message content available</div>';
-          }
-          if (msg.attachments && msg.attachments.length > 0) {
-            html += '<div style="margin-top: 16px;"><strong>Attachments:</strong> ' + msg.attachments.length + '</div>';
-          }
-          modalBody.innerHTML = html;
-        } catch (e) {
-          modalBody.innerHTML = '<div class="error-msg">Error: ' + (e.message || 'Could not load message details') + '</div>';
-        }
-      }
-
-      function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-      }
-
-      document.getElementById('close-modal').onclick = function() {
-        document.getElementById('message-modal').classList.remove('show');
-      };
-      document.getElementById('load-more-btn').onclick = function() {
-        loadHistory(true);
-      };
-      document.getElementById('save-channel-btn').onclick = function () {
-        saveChannelUpdate();
-      };
-      document.getElementById('cancel-channel-btn').onclick = function () {
-        hideChannelEditor();
-      };
-
-      async function loadParams() {
-        const content = document.getElementById('params-content');
-        const list = document.getElementById('params-list');
-        try {
-          const r = await api('/admin/params');
-          if (r.status === 401) { showLogin(); return; }
-          const json = await parseJsonResponse(r, content, 'Could not load params');
-          if (!json) return;
-          if (!json.success) { content.textContent = json.error?.message || 'Failed to load params'; return; }
-          const d = json.data || {};
-          list.innerHTML = Object.entries(d).map(function (e) {
-            const v = typeof e[1] === 'boolean' ? (e[1] ? 'Yes' : 'No') : String(e[1]);
-            return '<li><span class="key">' + e[0] + '</span><span>' + v + '</span></li>';
-          }).join('');
-          content.textContent = '';
-          show(list);
-        } catch (e) {
-          content.textContent = 'Error: ' + (e.message || 'Could not load params');
-        }
-      }
-
-      function toCsv(list) {
-        if (!Array.isArray(list)) return '';
-        return list.join(',');
-      }
-
-      function fromCsv(value) {
-        return String(value || '')
-          .split(',')
-          .map(function (item) { return item.trim(); })
-          .filter(function (item) { return item.length > 0; });
-      }
-
-      function hideChannelEditor() {
-        selectedChannelKey = null;
-        hide(document.getElementById('channel-edit-wrap'));
-        hide(document.getElementById('channels-error'));
-      }
-
-      function showChannelEditor(channel) {
-        selectedChannelKey = channel.channelKey;
-        document.getElementById('edit-channel-key').value = channel.channelKey || '';
-        document.getElementById('edit-channel-active').value = String(!!channel.isActive);
-        document.getElementById('edit-channel-fallback').value = channel.fallbackChannelKey || '';
-        document.getElementById('edit-channel-from-email').value = channel.fromEmail || '';
-        document.getElementById('edit-channel-from-name').value = channel.fromName || '';
-        document.getElementById('edit-channel-reply-to').value = channel.replyToEmail || '';
-        document.getElementById('edit-channel-purposes').value = toCsv(channel.purposesAllowed);
-        document.getElementById('edit-channel-apps').value = toCsv(channel.applicationsAllowed);
-        hide(document.getElementById('channels-error'));
-        show(document.getElementById('channel-edit-wrap'));
-      }
-
-      async function loadChannels() {
-        const content = document.getElementById('channels-content');
-        const table = document.getElementById('channels-table');
-        const tbody = document.getElementById('channels-tbody');
-        try {
-          const r = await api('/admin/channels');
-          if (r.status === 401) { showLogin(); return; }
-          const json = await parseJsonResponse(r, content, 'Could not load channels');
-          if (!json) return;
-          if (!json.success) {
-            content.textContent = json.error?.message || 'Failed to load channels';
-            return;
-          }
-          channelsCache = Array.isArray(json.data) ? json.data : [];
-          tbody.innerHTML = channelsCache.map(function (c) {
-            const updated = c.updatedAt ? new Date(c.updatedAt).toLocaleString() : '-';
-            return '<tr data-channel-key="' + (c.channelKey || '') + '">' +
-              '<td>' + (c.channelKey || '-') + '</td>' +
-              '<td>' + (c.type || '-') + '</td>' +
-              '<td>' + (c.provider || '-') + '</td>' +
-              '<td>' + (c.isActive ? 'true' : 'false') + '</td>' +
-              '<td>' + (Array.isArray(c.purposesAllowed) ? c.purposesAllowed.join(', ') : '-') + '</td>' +
-              '<td>' + (Array.isArray(c.applicationsAllowed) ? c.applicationsAllowed.join(', ') : '-') + '</td>' +
-              '<td>' + updated + '</td>' +
-              '</tr>';
-          }).join('');
-          content.textContent = '';
-          show(table);
-          Array.from(tbody.querySelectorAll('tr')).forEach(function (tr) {
-            tr.onclick = function () {
-              const key = tr.getAttribute('data-channel-key');
-              const channel = channelsCache.find(function (item) { return item.channelKey === key; });
-              if (channel) showChannelEditor(channel);
-            };
-          });
-        } catch (e) {
-          content.textContent = 'Error: ' + (e.message || 'Could not load channels');
-        }
-      }
-
-      async function saveChannelUpdate() {
-        if (!selectedChannelKey) return;
-        const errorEl = document.getElementById('channels-error');
-        try {
-          hide(errorEl);
-          const payload = {
-            isActive: document.getElementById('edit-channel-active').value === 'true',
-            fallbackChannelKey: document.getElementById('edit-channel-fallback').value.trim() || null,
-            fromEmail: document.getElementById('edit-channel-from-email').value.trim() || null,
-            fromName: document.getElementById('edit-channel-from-name').value.trim() || null,
-            replyToEmail: document.getElementById('edit-channel-reply-to').value.trim() || null,
-            purposesAllowed: fromCsv(document.getElementById('edit-channel-purposes').value),
-            applicationsAllowed: fromCsv(document.getElementById('edit-channel-apps').value),
-          };
-          const r = await api('/admin/channels/' + encodeURIComponent(selectedChannelKey), {
-            method: 'PATCH',
-            body: JSON.stringify(payload),
-          });
-          if (r.status === 401) { showLogin(); return; }
-          const json = await parseJsonResponse(r, errorEl, 'Could not save channel');
-          if (!json) {
-            show(errorEl);
-            return;
-          }
-          if (!json.success) {
-            errorEl.textContent = json.error?.message || 'Failed to save channel';
-            show(errorEl);
-            return;
-          }
-          hideChannelEditor();
-          await loadChannels();
-        } catch (e) {
-          errorEl.textContent = 'Error: ' + (e.message || 'Could not save channel');
+        } catch (error) {
+          errorEl.textContent = 'Network error: ' + (error.message || 'Could not reach auth service');
           show(errorEl);
         }
       }
 
-      document.getElementById('login-form').onsubmit = function (e) {
-        e.preventDefault();
-        const email = document.getElementById('email').value.trim();
-        const password = document.getElementById('password').value;
-        login(email, password);
-      };
+      function showLogin() {
+        hide(byId('dashboard-view'));
+        show(byId('login-view'));
+      }
 
+      function showDashboard() {
+        hide(byId('login-view'));
+        show(byId('dashboard-view'));
+        loadAll();
+      }
+
+      async function loadAll() {
+        await Promise.allSettled([
+          loadStats(),
+          loadChannels(),
+          loadHistory(false),
+          loadParams(),
+          loadWebhooks(),
+          loadInbound(),
+        ]);
+        renderOverview();
+      }
+
+      async function loadStats() {
+        var response = await api('/admin/stats');
+        var json = await parseResponse(response);
+        if (!json.success) throw new Error('Failed to load stats');
+        state.stats = json.data || {};
+        renderStats();
+      }
+
+      async function loadChannels() {
+        var response = await api('/admin/channels');
+        var json = await parseResponse(response);
+        if (!json.success) throw new Error('Failed to load channels');
+        state.channels = Array.isArray(json.data) ? json.data : [];
+        renderChannels();
+      }
+
+      async function loadHistory(append) {
+        if (!append) {
+          state.historyOffset = 0;
+          state.history = [];
+        }
+        var channel = byId('history-channel-filter').value;
+        var status = byId('history-status-filter').value;
+        var search = byId('global-search').value.trim().toLowerCase();
+        var path = '/admin/history?limit=' + state.historyLimit + '&offset=' + state.historyOffset;
+        if (channel) path += '&channel=' + encodeURIComponent(channel);
+        if (status) path += '&status=' + encodeURIComponent(status);
+        var response = await api(path);
+        var json = await parseResponse(response);
+        if (!json.success) throw new Error('Failed to load history');
+        var list = Array.isArray(json.data) ? json.data : [];
+        if (search) {
+          list = list.filter(function (item) {
+            return [
+              item.subject,
+              item.recipient,
+              item.service,
+              item.channel,
+              item.status,
+              item.id,
+            ].join(' ').toLowerCase().indexOf(search) !== -1;
+          });
+        }
+        state.history = append ? state.history.concat(list) : list;
+        state.historyOffset += list.length;
+        renderHistory();
+      }
+
+      async function loadParams() {
+        var response = await api('/admin/params');
+        var json = await parseResponse(response);
+        if (!json.success) throw new Error('Failed to load params');
+        state.params = json.data || {};
+        renderParams();
+      }
+
+      async function loadWebhooks() {
+        try {
+          var response = await api('/webhooks/subscriptions');
+          var json = await parseResponse(response);
+          state.webhooks = Array.isArray(json) ? json : Array.isArray(json.data) ? json.data : [];
+        } catch (error) {
+          state.webhooks = [];
+        }
+        renderWebhooks();
+      }
+
+      async function loadInbound() {
+        try {
+          var response = await api('/email/inbound?limit=12&listOnly=1');
+          var json = await parseResponse(response);
+          state.inbound = Array.isArray(json.data) ? json.data : [];
+        } catch (error) {
+          state.inbound = [];
+        }
+        renderInbound();
+      }
+
+      function renderStats() {
+        var stats = state.stats || {};
+        byId('environment-label').textContent = (state.params && state.params.nodeEnv) || 'Production';
+        var failed = stats.byStatus && stats.byStatus.failed ? stats.byStatus.failed : 0;
+        var sent = stats.byStatus && stats.byStatus.sent ? stats.byStatus.sent : 0;
+        var total = stats.total || 0;
+        var successRate = total ? Math.round((sent / total) * 1000) / 10 : 0;
+        var metrics = [
+          ['Outbound total', compact(total), 'notifications table'],
+          ['Received total', compact(stats.receivedTotal || 0), 'inbound emails'],
+          ['Last 24h', compact((stats.last24h || 0) + (stats.receivedLast24h || 0)), 'all directions'],
+          ['Success rate', successRate + '%', compact(failed) + ' failed'],
+        ];
+        byId('metrics-grid').innerHTML = metrics.map(function (m) {
+          return '<div class="metric"><span>' + escapeHtml(m[0]) + '</span><strong>' + escapeHtml(m[1]) + '</strong><span>' + escapeHtml(m[2]) + '</span></div>';
+        }).join('');
+        byId('flow-total').textContent = compact(total);
+        byId('flow-inbound').textContent = compact(stats.receivedTotal || 0);
+        byId('flow-failed').textContent = compact(failed);
+        byId('core-rate').textContent = compact(stats.last24h || 0) + ' / 24h';
+        var byChannel = stats.byChannel || {};
+        byId('flow-email').textContent = compact(byChannel.email || 0);
+        byId('flow-telegram').textContent = compact(byChannel.telegram || 0);
+        byId('flow-whatsapp').textContent = compact(byChannel.whatsapp || 0);
+        byId('flow-inbound-rate').textContent = compact(stats.receivedLast24h || 0);
+      }
+
+      function renderOverview() {
+        byId('flow-channels').textContent = compact(state.channels.length);
+        byId('flow-webhooks').textContent = compact(state.webhooks.length);
+      }
+
+      function renderChannels() {
+        var stats = state.stats || {};
+        var byChannel = stats.byChannel || {};
+        var configured = [
+          { channelKey: 'email-default', type: 'email', provider: state.params && state.params.emailProvider, isActive: state.params && (state.params.sesConfigured || state.params.sendgridConfigured) },
+          { channelKey: 'telegram-default', type: 'telegram', provider: 'telegram', isActive: state.params && state.params.telegramConfigured },
+          { channelKey: 'whatsapp-default', type: 'whatsapp', provider: 'meta_whatsapp', isActive: state.params && state.params.whatsappConfigured },
+        ];
+        var list = state.channels.length ? state.channels : configured;
+        byId('channel-list').innerHTML = list.map(function (channel) {
+          var active = !!channel.isActive;
+          var cls = active ? '' : 'down';
+          var traffic = byChannel[channel.type] || 0;
+          return '<div class="channel-item" data-channel="' + escapeHtml(channel.channelKey || '') + '">' +
+            '<div class="channel-title"><span>' + escapeHtml(channel.channelKey || channel.type || 'channel') + '</span><span>' + compact(traffic) + '</span></div>' +
+            '<div class="flow-row"><span><i class="status-dot ' + cls + '"></i> ' + (active ? 'Healthy' : 'Inactive') + '</span><b>' + escapeHtml(channel.provider || '-') + '</b></div>' +
+            '<div class="mini-chart"><span style="height:45%"></span><span style="height:55%"></span><span style="height:34%"></span><span style="height:70%"></span><span style="height:46%"></span></div>' +
+          '</div>';
+        }).join('');
+        byId('channels-tbody').innerHTML = state.channels.length ? state.channels.map(function (c) {
+          return '<tr data-channel-key="' + escapeHtml(c.channelKey || '') + '">' +
+            '<td>' + escapeHtml(c.channelKey || '-') + '</td>' +
+            '<td>' + escapeHtml(c.type || '-') + '</td>' +
+            '<td>' + escapeHtml(c.provider || '-') + '</td>' +
+            '<td>' + badge(c.isActive ? 'active' : 'inactive') + '</td>' +
+            '<td>' + escapeHtml(Array.isArray(c.purposesAllowed) ? c.purposesAllowed.join(', ') : '-') + '</td>' +
+            '<td>' + escapeHtml(Array.isArray(c.applicationsAllowed) ? c.applicationsAllowed.join(', ') : '-') + '</td>' +
+            '<td>' + escapeHtml(fmtDate(c.updatedAt)) + '</td>' +
+          '</tr>';
+        }).join('') : '<tr><td colspan="7"><div class="empty">No channel registry rows yet. Legacy channel fallback is still available.</div></td></tr>';
+        attachChannelHandlers();
+      }
+
+      function renderHistory() {
+        var rows = state.history.map(historyRowHtml).join('');
+        byId('history-tbody').innerHTML = rows || '<tr><td colspan="7"><div class="empty">No messages found.</div></td></tr>';
+        byId('messages-tbody').innerHTML = rows || '<tr><td colspan="7"><div class="empty">No messages found.</div></td></tr>';
+        byId('history-info').textContent = 'Showing ' + state.history.length + ' messages';
+        attachMessageHandlers();
+      }
+
+      function historyRowHtml(item) {
+        var selected = state.selectedMessage && state.selectedMessage.id === item.id ? ' selected' : '';
+        var direction = item.direction === 'inbound' ? 'inbound' : 'notification';
+        return '<tr class="' + selected + '" data-message-id="' + escapeHtml(item.id) + '" data-message-type="' + direction + '">' +
+          '<td>' + escapeHtml(shortTime(item.createdAt)) + '</td>' +
+          '<td>' + escapeHtml(item.direction === 'inbound' ? 'Received' : 'Sent') + '</td>' +
+          '<td>' + escapeHtml(item.channel || '-') + '</td>' +
+          '<td>' + escapeHtml(item.service || '-') + '</td>' +
+          '<td class="subject-cell">' + escapeHtml(item.subject || '-') + '</td>' +
+          '<td>' + escapeHtml(item.recipient || '-') + '</td>' +
+          '<td>' + badge(item.status || '-') + '</td>' +
+        '</tr>';
+      }
+
+      function renderParams() {
+        var params = state.params || {};
+        byId('environment-label').textContent = params.nodeEnv || 'production';
+        byId('params-list').innerHTML = Object.keys(params).map(function (key) {
+          var value = typeof params[key] === 'boolean' ? (params[key] ? 'Yes' : 'No') : params[key];
+          return '<div class="setting-row"><span>' + escapeHtml(key) + '</span><strong>' + escapeHtml(value || '-') + '</strong></div>';
+        }).join('');
+      }
+
+      function renderWebhooks() {
+        var summaryRows = state.webhooks.slice(0, 5).map(function (w) {
+          return '<tr data-webhook-id="' + escapeHtml(w.id || '') + '"><td>' + escapeHtml(w.serviceName || '-') + '</td><td>' + badge(w.status || '-') + '</td><td>' + compact(w.totalDeliveries || 0) + '</td><td>' + compact(w.totalFailures || 0) + '</td><td>' + escapeHtml(fmtDate(w.lastDeliveryAt)) + '</td></tr>';
+        }).join('');
+        byId('webhook-summary-tbody').innerHTML = summaryRows || '<tr><td colspan="5"><div class="empty">No webhook subscriptions found.</div></td></tr>';
+        byId('webhooks-tbody').innerHTML = state.webhooks.map(function (w) {
+          return '<tr data-webhook-id="' + escapeHtml(w.id || '') + '"><td>' + escapeHtml(w.serviceName || '-') + '</td><td>' + badge(w.status || '-') + '</td><td class="subject-cell">' + escapeHtml(w.webhookUrl || '-') + '</td><td>' + compact(w.totalDeliveries || 0) + '</td><td>' + compact(w.totalFailures || 0) + '</td></tr>';
+        }).join('') || '<tr><td colspan="5"><div class="empty">No webhook subscriptions found.</div></td></tr>';
+        attachWebhookHandlers();
+      }
+
+      function renderInbound() {
+        var rows = state.inbound.map(function (item) {
+          return '<tr data-message-id="' + escapeHtml(item.id) + '" data-message-type="inbound"><td>' + escapeHtml(fmtDate(item.receivedAt)) + '</td><td>' + escapeHtml(item.from || '-') + '</td><td>' + escapeHtml(item.to || '-') + '</td><td class="subject-cell">' + escapeHtml(item.subject || '-') + '</td><td>' + escapeHtml(item.messageId || '-') + '</td><td>' + badge(item.status || '-') + '</td></tr>';
+        }).join('');
+        byId('inbound-tbody').innerHTML = rows || '<tr><td colspan="6"><div class="empty">No inbound emails found.</div></td></tr>';
+        byId('inbound-summary-tbody').innerHTML = state.inbound.slice(0, 5).map(function (item) {
+          return '<tr data-message-id="' + escapeHtml(item.id) + '" data-message-type="inbound"><td>' + escapeHtml(item.from || '-') + '</td><td class="subject-cell">' + escapeHtml(item.subject || '-') + '</td><td>' + badge(item.status || '-') + '</td><td>' + escapeHtml(shortTime(item.receivedAt)) + '</td></tr>';
+        }).join('') || '<tr><td colspan="4"><div class="empty">No inbound emails found.</div></td></tr>';
+        attachMessageHandlers();
+      }
+
+      function attachMessageHandlers() {
+        Array.prototype.forEach.call(document.querySelectorAll('[data-message-id]'), function (row) {
+          row.onclick = function () {
+            selectMessage(row.getAttribute('data-message-id'), row.getAttribute('data-message-type'));
+          };
+        });
+      }
+
+      function attachChannelHandlers() {
+        Array.prototype.forEach.call(document.querySelectorAll('[data-channel-key], [data-channel]'), function (row) {
+          row.onclick = function () {
+            var key = row.getAttribute('data-channel-key') || row.getAttribute('data-channel');
+            var channel = state.channels.find(function (c) { return c.channelKey === key; });
+            if (channel) selectChannel(channel);
+          };
+        });
+      }
+
+      function attachWebhookHandlers() {
+        Array.prototype.forEach.call(document.querySelectorAll('[data-webhook-id]'), function (row) {
+          row.onclick = function () {
+            var id = row.getAttribute('data-webhook-id');
+            var webhook = state.webhooks.find(function (w) { return w.id === id; });
+            if (webhook) selectWebhook(webhook);
+          };
+        });
+      }
+
+      async function selectMessage(id, type) {
+        hide(byId('inspector-error'));
+        hide(byId('inspector-notice'));
+        var response = await api('/admin/message/' + encodeURIComponent(id) + '?type=' + encodeURIComponent(type === 'inbound' ? 'inbound' : 'notification'));
+        var json = await parseResponse(response);
+        if (!json.success) throw new Error('Failed to load message');
+        state.selectedMessage = json.data;
+        state.selectedMessage._type = type === 'inbound' ? 'inbound' : 'notification';
+        renderInspector();
+        renderHistory();
+        activateSection('overview');
+      }
+
+      function renderInspector() {
+        var msg = state.selectedMessage;
+        if (!msg) {
+          show(byId('inspector-empty'));
+          hide(byId('inspector-form'));
+          return;
+        }
+        hide(byId('inspector-empty'));
+        show(byId('inspector-form'));
+        byId('inspector-subtitle').textContent = msg.id || 'Selected message';
+        byId('msg-channel').value = msg.channel || '';
+        byId('msg-recipient').value = msg.recipient || '';
+        byId('msg-subject').value = msg.subject || '';
+        byId('msg-body').value = msg.direction === 'inbound' ? (msg.bodyHtml || msg.bodyText || '') : (msg.message || '');
+        byId('msg-template').value = JSON.stringify(msg.templateData || {}, null, 2);
+        var statuses = msg.direction === 'inbound' ? ['pending', 'processed', 'failed'] : ['pending', 'sent', 'failed'];
+        byId('msg-status').innerHTML = statuses.map(function (status) {
+          return '<option value="' + status + '"' + (status === msg.status ? ' selected' : '') + '>' + status + '</option>';
+        }).join('');
+        byId('reparse-message-btn').classList.toggle('hidden', msg.direction !== 'inbound');
+        byId('test-message-btn').disabled = msg.direction === 'inbound';
+        byId('msg-metadata').innerHTML = [
+          ['ID', msg.id],
+          ['Direction', msg.direction],
+          ['Service', msg.service],
+          ['Message ID', msg.messageId],
+          ['From', msg.from],
+          ['Created', fmtDate(msg.createdAt)],
+          ['Updated', fmtDate(msg.updatedAt)],
+          ['Error', msg.error],
+        ].map(function (row) {
+          return '<div class="setting-row"><span>' + escapeHtml(row[0]) + '</span><strong>' + escapeHtml(row[1] || '-') + '</strong></div>';
+        }).join('');
+        setInspectorTab(state.activeInspectorTab);
+      }
+
+      function setInspectorTab(tab) {
+        state.activeInspectorTab = tab;
+        Array.prototype.forEach.call(document.querySelectorAll('[data-inspector-tab]'), function (button) {
+          button.classList.toggle('active', button.getAttribute('data-inspector-tab') === tab);
+        });
+        byId('message-tab').classList.toggle('hidden', tab !== 'message');
+        byId('template-tab').classList.toggle('hidden', tab !== 'template');
+        byId('metadata-tab').classList.toggle('hidden', tab !== 'metadata');
+      }
+
+      async function saveMessage() {
+        var msg = state.selectedMessage;
+        if (!msg) return;
+        var errorEl = byId('inspector-error');
+        var noticeEl = byId('inspector-notice');
+        hide(errorEl);
+        hide(noticeEl);
+        try {
+          var payload;
+          if (msg.direction === 'inbound') {
+            payload = {
+              subject: byId('msg-subject').value,
+              bodyText: byId('msg-body').value,
+              bodyHtml: byId('msg-body').value.indexOf('<') !== -1 ? byId('msg-body').value : null,
+              status: byId('msg-status').value,
+            };
+          } else {
+            var templateData = {};
+            if (byId('msg-template').value.trim()) {
+              templateData = JSON.parse(byId('msg-template').value);
+            }
+            payload = {
+              subject: byId('msg-subject').value,
+              message: byId('msg-body').value,
+              templateData: templateData,
+              status: byId('msg-status').value,
+            };
+          }
+          var response = await api('/admin/message/' + encodeURIComponent(msg.id) + '?type=' + encodeURIComponent(msg.direction === 'inbound' ? 'inbound' : 'notification'), {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+          });
+          var json = await parseResponse(response);
+          if (!json.success) throw new Error((json.error && json.error.message) || 'Save failed');
+          state.selectedMessage = json.data;
+          state.selectedMessage._type = msg._type;
+          noticeEl.textContent = 'Message saved.';
+          show(noticeEl);
+          await loadHistory(false);
+          await loadInbound();
+          renderInspector();
+        } catch (error) {
+          errorEl.textContent = error.message || 'Could not save message';
+          show(errorEl);
+        }
+      }
+
+      async function testMessage() {
+        var msg = state.selectedMessage;
+        if (!msg || msg.direction === 'inbound') return;
+        var confirmed = window.confirm('Send a real test notification to ' + (msg.recipient || 'the selected recipient') + '?');
+        if (!confirmed) return;
+        var response = await api('/notifications/send', {
+          method: 'POST',
+          body: JSON.stringify({
+            channel: msg.channel,
+            type: 'custom',
+            recipient: msg.recipient,
+            service: 'notifications-admin-console',
+            subject: byId('msg-subject').value,
+            message: byId('msg-body').value,
+          }),
+        });
+        var json = await parseResponse(response);
+        var noticeEl = byId('inspector-notice');
+        var errorEl = byId('inspector-error');
+        if (json.success) {
+          noticeEl.textContent = 'Test message queued.';
+          show(noticeEl);
+          hide(errorEl);
+          await loadHistory(false);
+        } else {
+          errorEl.textContent = (json.error && json.error.message) || 'Test failed';
+          show(errorEl);
+        }
+      }
+
+      async function reparseInbound() {
+        var msg = state.selectedMessage;
+        if (!msg || msg.direction !== 'inbound') return;
+        var response = await api('/email/inbound/' + encodeURIComponent(msg.id) + '/reparse', { method: 'POST', body: '{}' });
+        var json = await parseResponse(response);
+        var noticeEl = byId('inspector-notice');
+        noticeEl.textContent = json.message || 'Reparse complete.';
+        show(noticeEl);
+      }
+
+      function selectChannel(channel) {
+        state.selectedChannel = channel;
+        hide(byId('channel-editor-empty'));
+        show(byId('channel-editor'));
+        byId('channel-editor-subtitle').textContent = channel.channelKey || 'Selected channel';
+        byId('edit-channel-key').value = channel.channelKey || '';
+        byId('edit-channel-active').value = String(!!channel.isActive);
+        byId('edit-channel-fallback').value = channel.fallbackChannelKey || '';
+        byId('edit-channel-from-email').value = channel.fromEmail || '';
+        byId('edit-channel-from-name').value = channel.fromName || '';
+        byId('edit-channel-reply-to').value = channel.replyToEmail || '';
+        byId('edit-channel-purposes').value = Array.isArray(channel.purposesAllowed) ? channel.purposesAllowed.join(', ') : '';
+        byId('edit-channel-apps').value = Array.isArray(channel.applicationsAllowed) ? channel.applicationsAllowed.join(', ') : '';
+        activateSection('channels');
+      }
+
+      async function saveChannel() {
+        if (!state.selectedChannel) return;
+        var errorEl = byId('channel-error');
+        hide(errorEl);
+        var payload = {
+          isActive: byId('edit-channel-active').value === 'true',
+          fallbackChannelKey: byId('edit-channel-fallback').value.trim() || null,
+          fromEmail: byId('edit-channel-from-email').value.trim() || null,
+          fromName: byId('edit-channel-from-name').value.trim() || null,
+          replyToEmail: byId('edit-channel-reply-to').value.trim() || null,
+          purposesAllowed: csvToArray(byId('edit-channel-purposes').value),
+          applicationsAllowed: csvToArray(byId('edit-channel-apps').value),
+        };
+        try {
+          var response = await api('/admin/channels/' + encodeURIComponent(state.selectedChannel.channelKey), {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+          });
+          var json = await parseResponse(response);
+          if (!json.success) throw new Error((json.error && json.error.message) || 'Save failed');
+          state.selectedChannel = json.data;
+          await loadChannels();
+          selectChannel(state.selectedChannel);
+        } catch (error) {
+          errorEl.textContent = error.message || 'Could not save channel';
+          show(errorEl);
+        }
+      }
+
+      function selectWebhook(webhook) {
+        state.selectedWebhook = webhook;
+        hide(byId('webhook-editor-empty'));
+        show(byId('webhook-editor'));
+        byId('webhook-editor-subtitle').textContent = webhook.serviceName || webhook.id;
+        byId('edit-webhook-service').value = webhook.serviceName || '';
+        byId('edit-webhook-url').value = webhook.webhookUrl || '';
+        byId('edit-webhook-status').value = webhook.status || 'active';
+        byId('edit-webhook-timeout').value = webhook.deliveryTimeoutMs || 120000;
+        byId('edit-webhook-filters').value = JSON.stringify(webhook.filters || {}, null, 2);
+        activateSection('webhooks');
+      }
+
+      async function saveWebhook() {
+        if (!state.selectedWebhook) return;
+        var errorEl = byId('webhook-error');
+        hide(errorEl);
+        try {
+          var payload = {
+            serviceName: byId('edit-webhook-service').value.trim(),
+            webhookUrl: byId('edit-webhook-url').value.trim(),
+            status: byId('edit-webhook-status').value,
+            deliveryTimeoutMs: Number(byId('edit-webhook-timeout').value || 120000),
+            filters: byId('edit-webhook-filters').value.trim() ? JSON.parse(byId('edit-webhook-filters').value) : null,
+          };
+          var response = await api('/webhooks/subscriptions/' + encodeURIComponent(state.selectedWebhook.id), {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+          });
+          if (!response.ok) throw new Error('Save failed');
+          await loadWebhooks();
+        } catch (error) {
+          errorEl.textContent = error.message || 'Could not save webhook';
+          show(errorEl);
+        }
+      }
+
+      async function webhookAction(action) {
+        if (!state.selectedWebhook) return;
+        await api('/webhooks/subscriptions/' + encodeURIComponent(state.selectedWebhook.id) + '/' + action, {
+          method: 'POST',
+          body: '{}',
+        });
+        await loadWebhooks();
+      }
+
+      async function processUndelivered() {
+        var confirmed = window.confirm('Process undelivered inbound emails now? This can call downstream webhooks.');
+        if (!confirmed) return;
+        await api('/email/inbound/process-undelivered?dbLimit=10&s3MaxKeys=10', { method: 'POST', body: '{}' });
+        await loadInbound();
+      }
+
+      function activateSection(name) {
+        Array.prototype.forEach.call(document.querySelectorAll('.section-page'), function (section) {
+          section.classList.toggle('active', section.id === 'section-' + name);
+        });
+        Array.prototype.forEach.call(document.querySelectorAll('.nav button'), function (button) {
+          button.classList.toggle('active', button.getAttribute('data-section') === name);
+        });
+      }
+
+      function bindEvents() {
+        byId('login-form').onsubmit = function (event) {
+          event.preventDefault();
+          login(byId('email').value.trim(), byId('password').value);
+        };
+        byId('logout-btn').onclick = function () { clearTokens(); showLogin(); };
+        byId('refresh-btn').onclick = loadAll;
+        byId('load-more-btn').onclick = function () { loadHistory(true); };
+        byId('history-channel-filter').onchange = function () { loadHistory(false); };
+        byId('history-status-filter').onchange = function () { loadHistory(false); };
+        byId('global-search').oninput = function () { loadHistory(false); };
+        byId('clear-selection-btn').onclick = function () { state.selectedMessage = null; renderInspector(); renderHistory(); };
+        byId('save-message-btn').onclick = saveMessage;
+        byId('test-message-btn').onclick = testMessage;
+        byId('reparse-message-btn').onclick = reparseInbound;
+        byId('save-channel-btn').onclick = saveChannel;
+        byId('cancel-channel-btn').onclick = function () {
+          state.selectedChannel = null;
+          hide(byId('channel-editor'));
+          show(byId('channel-editor-empty'));
+        };
+        byId('save-webhook-btn').onclick = saveWebhook;
+        byId('activate-webhook-btn').onclick = function () { webhookAction('activate'); };
+        byId('suspend-webhook-btn').onclick = function () { webhookAction('suspend'); };
+        byId('process-undelivered-btn').onclick = processUndelivered;
+        Array.prototype.forEach.call(document.querySelectorAll('.nav button'), function (button) {
+          button.onclick = function () { activateSection(button.getAttribute('data-section')); };
+        });
+        Array.prototype.forEach.call(document.querySelectorAll('[data-section-jump]'), function (button) {
+          button.onclick = function () { activateSection(button.getAttribute('data-section-jump')); };
+        });
+        Array.prototype.forEach.call(document.querySelectorAll('[data-action="refresh"]'), function (button) {
+          button.onclick = loadAll;
+        });
+        Array.prototype.forEach.call(document.querySelectorAll('[data-inspector-tab]'), function (button) {
+          button.onclick = function () { setInspectorTab(button.getAttribute('data-inspector-tab')); };
+        });
+      }
+
+      bindEvents();
       (async function init() {
         await loadConfig();
-        if (getToken()) {
-          showDashboard();
-        } else {
-          showLogin();
-        }
+        if (token()) showDashboard();
+        else showLogin();
       })();
     })();
   </script>
