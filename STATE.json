@@ -1,1 +1,22 @@
-{"v":1,"project":"notifications-microservice","stage":"production","health":"ok","cycle":0,"last_cycle_at":"2026-04-05T00:00:00Z","tasks_active":0,"tasks_failed_last_cycle":0,"open_task_ids":[],"last_milestone":"documentation-standard-applied","next_focus":"review and update by owner","blockers":[],"budget_units_used":0,"metrics":{"custom":{}}}
+{
+  "v": 1,
+  "project": "notifications-microservice",
+  "stage": "production",
+  "health": "ok",
+  "cycle": 0,
+  "last_cycle_at": "2026-04-05T00:00:00Z",
+  "tasks_active": 0,
+  "tasks_failed_last_cycle": 0,
+  "open_task_ids": [],
+  "last_milestone": "documentation-standard-applied",
+  "next_focus": "Project completed/frozen: no active goals, plans, tasks, blockers, or human/AI actions pending as of 2026-06-21.",
+  "blockers": [],
+  "budget_units_used": 0,
+  "metrics": {
+    "custom": {}
+  },
+  "project_status": "completed_frozen",
+  "completed_at": "2026-06-21",
+  "frozen_at": "2026-06-21",
+  "updated_at": "2026-06-21"
+}
