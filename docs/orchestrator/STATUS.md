@@ -31,12 +31,20 @@ pod to `POST /notifications/send` moved from HTTP `401 Invalid token` to HTTP
 without a valid notification payload. No valid notification send was executed.
 
 Cliplot GOAL-05 notification validation support: `POST /notifications/validate`
-is being added as a protected no-send preflight for consumers that need to
+is deployed as a protected no-send preflight for consumers that need to
 prove notification payload shape and channel policy before using
 `POST /notifications/send`. The endpoint uses the existing notification DTO and
 channel policy resolution, returns `mutation=false` and `providerCall=false`,
 and must not create notification rows or call SES, SendGrid, Telegram, or
 WhatsApp providers.
+
+Runtime evidence after commit `bacdfb4`: deployment was restarted because the
+deploy script keeps the Kubernetes image field at `:latest`; public unauthenticated
+`POST /notifications/validate` returned HTTP `401`, and a Cliplot pod request
+using the projected `NOTIFICATIONS_SERVICE_TOKEN` returned HTTP `201` with
+`success=true`, `mutation=false`, `providerCall=false`, `channel=email`, and
+`decisionReason=legacy_fallback_no_channel_key`. No notification row was
+created and no provider send was requested by the validate endpoint.
 
 ## Current State
 
