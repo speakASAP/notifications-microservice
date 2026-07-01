@@ -30,6 +30,14 @@ pod to `POST /notifications/send` moved from HTTP `401 Invalid token` to HTTP
 `500 SEND_FAILED`, proving Cliplot service-token auth reached the send path
 without a valid notification payload. No valid notification send was executed.
 
+Cliplot GOAL-05 notification validation support: `POST /notifications/validate`
+is being added as a protected no-send preflight for consumers that need to
+prove notification payload shape and channel policy before using
+`POST /notifications/send`. The endpoint uses the existing notification DTO and
+channel policy resolution, returns `mutation=false` and `providerCall=false`,
+and must not create notification rows or call SES, SendGrid, Telegram, or
+WhatsApp providers.
+
 ## Current State
 
 Stage: Goal 7.4 Orders events contract boundary implemented and validated; live broker consumption not deployed.

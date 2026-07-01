@@ -22,6 +22,23 @@ export interface NotificationSendResult {
   messageId?: string;
 }
 
+export interface NotificationValidationResult {
+  valid: true;
+  mutation: false;
+  providerCall: false;
+  channel: string;
+  recipient: string;
+  type: string;
+  subject: string | null;
+  messageLength: number;
+  service: string | null;
+  purpose: string | null;
+  channelKey: string | null;
+  decisionReason: string;
+  emailProvider?: string;
+  contentType?: string;
+}
+
 export interface NotificationHistoryItem {
   id: string;
   channel: string;
@@ -59,6 +76,51 @@ export class NotificationsService {
     @Inject(LoggerService)
     private logger: LoggerService,
   ) {}
+
+  async validateSend(sendNotificationDto: SendNotificationDto): Promise<NotificationValidationResult> {
+    const errors = this.validateSendPayloadShape(sendNotificationDto);
+    if (errors.length > 0) {
+      throw new BadRequestException(`Invalid notification payload: ${errors.join(', ')}`);
+    }
+
+    const resolvedPolicy = await this.channelRegistryService.resolveSendPolicy(sendNotificationDto);
+    const resolvedDto = resolvedPolicy.dto;
+    const { channel, recipient, message, subject, type } = resolvedDto;
+
+    return {
+      valid: true,
+      mutation: false,
+      providerCall: false,
+      channel,
+      recipient,
+      type,
+      subject: subject || null,
+      messageLength: message.length,
+      service: resolvedDto.service || null,
+      purpose: resolvedDto.purpose || null,
+      channelKey: resolvedDto.channelKey || null,
+      decisionReason: resolvedPolicy.decisionReason,
+      emailProvider: resolvedDto.emailProvider,
+      contentType: resolvedDto.contentType,
+    };
+  }
+
+  private validateSendPayloadShape(sendNotificationDto: SendNotificationDto): string[] {
+    const errors: string[] = [];
+    if (!sendNotificationDto.channel && !sendNotificationDto.channelKey) {
+      errors.push('missing_channel_or_channel_key');
+    }
+    if (!sendNotificationDto.type || typeof sendNotificationDto.type !== 'string') {
+      errors.push('missing_type');
+    }
+    if (!sendNotificationDto.recipient || typeof sendNotificationDto.recipient !== 'string') {
+      errors.push('missing_recipient');
+    }
+    if (!sendNotificationDto.message || typeof sendNotificationDto.message !== 'string') {
+      errors.push('missing_message');
+    }
+    return errors;
+  }
 
   async send(sendNotificationDto: SendNotificationDto): Promise<NotificationSendResult> {
     const startTime = Date.now();

@@ -2,7 +2,7 @@
  * Notifications Controller
  */
 
-import { Controller, Post, Get, Body, Param, Query, HttpException, HttpStatus, Req } from '@nestjs/common';
+import { BadRequestException, Controller, Post, Get, Body, Param, Query, HttpException, HttpStatus, Req } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { SendNotificationDto } from './dto/send-notification.dto';
 import { ApiResponseUtil } from '../../shared/utils/api-response.util';
@@ -14,6 +14,48 @@ export class NotificationsController {
     private notificationsService: NotificationsService,
     private logger: LoggerService,
   ) {}
+
+  @Post('validate')
+  async validateNotification(@Body() sendNotificationDto: SendNotificationDto, @Req() req: any) {
+    const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const startTime = Date.now();
+    const clientIp = req.ip || req.connection?.remoteAddress || 'unknown';
+    const userAgent = req.headers?.['user-agent'] || 'unknown';
+
+    this.logger.log(
+      `[NotificationsController] POST /notifications/validate timestamp=${new Date().toISOString()} duration_ms=0 requestId=${requestId} channel=${sendNotificationDto.channel || 'auto'} channelKey=${sendNotificationDto.channelKey || 'none'} purpose=${sendNotificationDto.purpose || 'none'} recipient=${sendNotificationDto.recipient} subject=${sendNotificationDto.subject || 'none'} type=${sendNotificationDto.type} service=${sendNotificationDto.service || 'none'} clientIp=${clientIp} userAgent=${userAgent} messageLength=${sendNotificationDto.message?.length || 0}`,
+      'NotificationsController',
+    );
+
+    try {
+      const result = await this.notificationsService.validateSend(sendNotificationDto);
+      const duration = Date.now() - startTime;
+      this.logger.log(
+        `[NotificationsController] POST /notifications/validate - Request ID: ${requestId} - Success after ${duration}ms - channel=${result.channel}, mutation=${result.mutation}, providerCall=${result.providerCall}`,
+        'NotificationsController',
+      );
+      return ApiResponseUtil.success(result);
+    } catch (error: unknown) {
+      const duration = Date.now() - startTime;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(
+        `[NotificationsController] POST /notifications/validate - Request ID: ${requestId} - Error after ${duration}ms: ${errorMessage} - channel=${sendNotificationDto.channel}, recipient=${sendNotificationDto.recipient}, subject=${sendNotificationDto.subject || 'none'}`,
+        errorStack,
+        'NotificationsController',
+      );
+      if (error instanceof BadRequestException) {
+        throw new HttpException(
+          ApiResponseUtil.error('VALIDATION_FAILED', errorMessage),
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      throw new HttpException(
+        ApiResponseUtil.error('VALIDATION_FAILED', errorMessage),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 
   @Post('send')
   async sendNotification(@Body() sendNotificationDto: SendNotificationDto, @Req() req: any) {

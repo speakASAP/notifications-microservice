@@ -19,12 +19,14 @@ export class InfoController {
       endpoints: {
         health: '/health',
         api: '/api/',
+        validateNotification: 'POST /notifications/validate',
         sendNotification: 'POST /notifications/send',
         getHistory: 'GET /notifications/history',
         getStatus: 'GET /notifications/status/:id',
       },
       documentation: {
         healthCheck: 'GET /health - Check service health status',
+        validateNotification: 'POST /notifications/validate - Validate notification payload and channel policy without sending or persisting',
         sendNotification: 'POST /notifications/send - Send notification via email, telegram, or whatsapp',
         getHistory: 'GET /notifications/history?limit=50&offset=0 - Get notification history',
         getStatus: 'GET /notifications/status/:id - Get notification status by ID',
@@ -50,6 +52,34 @@ export class InfoController {
             status: 'ok',
             timestamp: 'ISO 8601 string',
             service: 'notifications-microservice',
+          },
+        },
+        {
+          method: 'POST',
+          path: '/notifications/validate',
+          description: 'Validate a notification payload and channel policy without creating a notification row or calling a provider',
+          contentType: 'application/json',
+          requestBody: {
+            channel: 'email|telegram|whatsapp (required when channelKey is omitted)',
+            channelKey: 'string (optional) - channel registry key',
+            type: 'order_confirmation|payment_confirmation|order_status_update|shipment_tracking|custom (required)',
+            recipient: 'string (required) - email address, phone number, or telegram chat ID',
+            subject: 'string (optional) - notification subject',
+            message: 'string (required) - notification message with {{template}} variables',
+            templateData: 'object (optional) - template variable values',
+            service: 'string (optional) - calling service name',
+            purpose: 'marketing|transactional|system (optional)',
+          },
+          response: {
+            success: true,
+            data: {
+              valid: true,
+              mutation: false,
+              providerCall: false,
+              channel: 'email|telegram|whatsapp',
+              recipient: 'string',
+              decisionReason: 'string',
+            },
           },
         },
         {
@@ -119,4 +149,3 @@ export class InfoController {
     };
   }
 }
-
