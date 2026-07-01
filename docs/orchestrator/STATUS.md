@@ -1,5 +1,28 @@
 # Notifications Admin Status
 
+## 2026-07-01 - Cliplot Notification Identity Readiness
+
+Intent: allow Cliplot to authenticate to Notifications for future transactional
+order-confirmation notifications without sending a real notification in this
+lane.
+
+Change: `JwtRolesGuard` now accepts only the Vault-projected
+`CLIPLOT_NOTIFICATIONS_SERVICE_TOKEN` as a `cliplot-service` machine actor with
+`internal:notifications-microservice:admin`. The existing `SERVICE_TOKEN`
+machine path is preserved and now uses constant-time comparison. The token is
+projected from `secret/prod/cliplot-service#NOTIFICATIONS_SERVICE_TOKEN`
+through `notifications-microservice-secret`.
+
+Boundary decision: no notification send, test-send, mass send, channel mutation,
+template persistence, webhook delivery, or customer contact action is performed
+in this lane. Validation uses unit tests, server dry-run, deploy, and an
+invalid-body Cliplot smoke that must stop before provider send.
+
+Validation evidence: focused `npm test -- --runInBand src/auth/jwt-roles.guard.spec.ts`
+passed with 4 tests; `npm run build` passed; `git diff --check` passed;
+Kubernetes server dry-run passed for `k8s/external-secret.yaml`. Runtime deploy
+and invalid-body Cliplot smoke are pending.
+
 ## Current State
 
 Stage: Goal 7.4 Orders events contract boundary implemented and validated; live broker consumption not deployed.

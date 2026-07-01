@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
+import { timingSafeEqual } from 'crypto';
 import { Request } from 'express';
 import { ROLES_KEY, PUBLIC_KEY } from './roles.decorator';
 
@@ -44,18 +45,9 @@ export class JwtRolesGuard implements CanActivate {
 
     const token = authHeader.slice(7);
 
-    // Service-to-service token support: allow static SERVICE_TOKEN to bypass JWT validation
-    // and grant internal admin roles for this service. This keeps JwtRolesGuard in place
-    // while enabling secure machine authentication without calling auth-microservice.
-    const serviceToken = process.env.SERVICE_TOKEN;
-    if (serviceToken && token === serviceToken) {
-      const serviceName = process.env.SERVICE_NAME || 'notifications-microservice';
-      const serviceRoles = [`global:superadmin`, `internal:${serviceName}:admin`];
-      (request as Request & { user: unknown }).user = {
-        sub: `service:${serviceName}`,
-        email: undefined,
-        roles: serviceRoles,
-      };
+    const serviceActor = this.resolveStaticServiceActor(token);
+    if (serviceActor) {
+      (request as Request & { user: unknown }).user = serviceActor;
       return true;
     }
 
@@ -85,5 +77,39 @@ export class JwtRolesGuard implements CanActivate {
   private getDefaultRoles(): string[] {
     const name = process.env.SERVICE_NAME || 'notifications-microservice';
     return [`global:superadmin`, `internal:${name}:admin`];
+  }
+
+  private resolveStaticServiceActor(token: string): { sub: string; email?: string; roles: string[]; serviceName?: string } | null {
+    const serviceName = process.env.SERVICE_NAME || 'notifications-microservice';
+    const serviceToken = process.env.SERVICE_TOKEN;
+    if (serviceToken && this.safeEqual(token, serviceToken)) {
+      return {
+        sub: `service:${serviceName}`,
+        email: undefined,
+        roles: [`global:superadmin`, `internal:${serviceName}:admin`],
+        serviceName,
+      };
+    }
+
+    const cliplotToken = process.env.CLIPLOT_NOTIFICATIONS_SERVICE_TOKEN;
+    if (cliplotToken && this.safeEqual(token, cliplotToken)) {
+      return {
+        sub: 'service:cliplot-service',
+        email: undefined,
+        roles: [`internal:${serviceName}:admin`],
+        serviceName: 'cliplot-service',
+      };
+    }
+
+    return null;
+  }
+
+  private safeEqual(left: string, right: string): boolean {
+    const leftBuffer = Buffer.from(left);
+    const rightBuffer = Buffer.from(right);
+    if (leftBuffer.length !== rightBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(leftBuffer, rightBuffer);
   }
 }
