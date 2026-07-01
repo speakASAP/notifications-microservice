@@ -21,7 +21,14 @@ invalid-body Cliplot smoke that must stop before provider send.
 Validation evidence: focused `npm test -- --runInBand src/auth/jwt-roles.guard.spec.ts`
 passed with 4 tests; `npm run build` passed; `git diff --check` passed;
 Kubernetes server dry-run passed for `k8s/external-secret.yaml`. Runtime deploy
-and invalid-body Cliplot smoke are pending.
+completed with image `localhost:5000/notifications-microservice:485ef45`.
+Because the deploy script only updated the image, `k8s/external-secret.yaml`
+was applied separately, `notifications-microservice-secret` force-synced, and
+`deployment/notifications-microservice` was restarted so the pod picked up
+`CLIPLOT_NOTIFICATIONS_SERVICE_TOKEN`. Safe invalid-body smoke from the Cliplot
+pod to `POST /notifications/send` moved from HTTP `401 Invalid token` to HTTP
+`500 SEND_FAILED`, proving Cliplot service-token auth reached the send path
+without a valid notification payload. No valid notification send was executed.
 
 ## Current State
 
