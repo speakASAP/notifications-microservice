@@ -2,7 +2,35 @@
 
 ## Current State
 
-Stage: deployed to production and smoke-tested.
+Stage: Goal 7.4 Orders events contract boundary implemented and validated; live broker consumption not deployed.
+
+## Goal 7.4 Orders Events Integration Status
+
+- Verified Notifications repo started clean on `main` at `86b7da9`.
+- Verified Orders publishes canonical RabbitMQ lifecycle events on `orders.events` with routing keys `orders.order.created.v1`, `orders.order.updated.v1`, `orders.order.paid.v1`, `orders.order.shipped.v1`, and `orders.order.cancelled.v1`.
+- Verified Notifications exposes existing HTTP `/notifications/send` and no existing Orders RabbitMQ consumer was present.
+- Added a Notifications-owned Orders event DTO validator and router that maps valid Orders events to the existing send path.
+- Added event-id idempotency by checking existing notification `templateData.ordersEvent.eventId` before sending.
+- Added bounded metadata only; customer, address, payment method, tracking, token, secret, and credential fields are rejected.
+- Added focused unit/contract tests for routing, idempotency, dedupe, missing-recipient blocking, and sensitive payload rejection.
+- Deployment not run. Runtime broker and recipient config are still missing.
+- Validation passed: focused Jest spec, `npm run build`, full `npm test`, and `git diff --check`.
+- Runtime ConfigMap key-name audit found no `RABBIT*` or `ORDERS_EVENTS*` keys.
+- Runtime Secret key-name audit found no `RABBIT*` or `ORDERS_EVENTS*` keys.
+- Secret values were not printed.
+- Final deployment is blocked until live consumer and recipient config contracts are approved.
+
+## Goal 7.4 Blockers
+
+- `[MISSING: Notifications-owned RabbitMQ consumer module or approved transport dependency]`
+- `[MISSING: Notifications runtime RABBITMQ_URL or broker secret source]`
+- `[MISSING: Orders-events queue name, binding ownership, dead-letter/retry policy, and deployment owner]`
+- `[MISSING: Production value for ORDERS_EVENTS_NOTIFICATION_RECIPIENT or an approved channel-registry route that provides a recipient]`
+- `[MISSING: Deployment approval after validation and runtime config confirmation]`
+
+## Prior Current State
+
+Stage: deployed to production and smoke-tested for the admin frontend goal.
 
 ## Completed
 

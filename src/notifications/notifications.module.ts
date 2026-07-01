@@ -22,6 +22,7 @@ import { InboundEmail } from '../email/entities/inbound-email.entity';
 import { WebhookSubscription } from '../email/entities/webhook-subscription.entity';
 import { WebhookDelivery } from '../email/entities/webhook-delivery.entity';
 import { ChannelRegistryService } from './channel-registry.service';
+import { OrdersEventNotificationRouter } from './orders-events/orders-event-notification.router';
 
 @Module({
   imports: [
@@ -49,12 +50,14 @@ import { ChannelRegistryService } from './channel-registry.service';
     TelegramService,
     WhatsAppService,
     ChannelRegistryService,
+    OrdersEventNotificationRouter,
   ],
   exports: [
     NotificationsService,
     WebhookSubscriptionService,
     InboundEmailService,
     ChannelRegistryService,
+    OrdersEventNotificationRouter,
   ],
 })
 export class NotificationsModule {}

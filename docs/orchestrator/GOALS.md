@@ -1,6 +1,22 @@
 # Notifications Admin Goals
 
-## Active Goal
+## Active Goal: Goal 7.4 Orders Events Notifications Integration
+
+Create a narrow, intent-preserved Notifications integration boundary for canonical Orders lifecycle events while keeping Orders as the source of truth.
+
+## Goal 7.4 Success Criteria
+
+- [x] Verify Orders event contracts from `orders-microservice` source/docs without editing Orders.
+- [x] Verify Notifications has no existing RabbitMQ Orders consumer or broker runtime config.
+- [x] Add DTO/schema validation for canonical Orders lifecycle events.
+- [x] Route valid Orders events to the existing notification send path when a notification recipient is configured.
+- [x] Add event-id idempotency and notification dedupe guard before sending.
+- [x] Add focused unit/contract tests for routing, idempotency, and dedupe.
+- [x] Preserve blockers for live broker consumption as `[MISSING: ...]` instead of inventing runtime contracts.
+- [ ] Wire a live RabbitMQ consumer after broker dependency, queue, bindings, and runtime env ownership are approved.
+- [ ] Deploy only after implementation validation and runtime config are complete.
+
+## Prior Active Goal
 
 Create an intent-preserved, goals-driven admin frontend for the notifications microservice on `alfares`, documenting the notifications domain and making communication flows controllable by an admin.
 
