@@ -59,18 +59,17 @@ Stage: Goal 7.4 Orders events contract boundary implemented and validated, inclu
 - Added event-id idempotency by checking existing notification `templateData.ordersEvent.eventId` before sending.
 - Added bounded metadata only; customer, address, payment method, tracking, token, secret, and credential fields are rejected.
 - Added focused unit/contract tests for routing, idempotency, dedupe, missing-recipient blocking, and sensitive payload rejection.
-- Deployment not run. Runtime broker and recipient config are still missing.
+- Deployment not run. Source RabbitMQ consumer wiring is present but runtime broker, queue/DLQ, and recipient config are still missing.
 - Validation passed: focused Jest spec, `npm run build`, full `npm test`, and `git diff --check`. 2026-07-02 branch update passed the focused Orders event router spec (6 tests), `npm run build`, full `npm test -- --runInBand` (6 suites / 26 tests), and `git diff --check`.
 - Runtime ConfigMap key-name audit found no `RABBIT*` or `ORDERS_EVENTS*` keys.
 - Runtime Secret key-name audit found no `RABBIT*` or `ORDERS_EVENTS*` keys.
 - Secret values were not printed.
-- Final deployment is blocked until live consumer and recipient config contracts are approved.
+- Final deployment is blocked until broker URL secret source, queue/DLQ runtime values, recipient config, and deployment approval are available.
 
 ## Goal 7.4 Blockers
 
-- `[MISSING: Notifications-owned RabbitMQ consumer module or approved transport dependency]`
 - `[MISSING: Notifications runtime RABBITMQ_URL or broker secret source]`
-- `[MISSING: Orders-events queue name, binding ownership, dead-letter/retry policy, and deployment owner]`
+- `[MISSING: owner-approved production flip of ORDERS_EVENTS_CONSUMER_ENABLED from false to true after broker and recipient config are present]`
 - `[MISSING: Production value for ORDERS_EVENTS_NOTIFICATION_RECIPIENT or an approved channel-registry route that provides a recipient]`
 - `[MISSING: Deployment approval after validation and runtime config confirmation]`
 

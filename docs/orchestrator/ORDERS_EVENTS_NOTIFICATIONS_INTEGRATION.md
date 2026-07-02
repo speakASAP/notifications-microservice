@@ -119,9 +119,8 @@ Validation evidence collected on 2026-07-01:
 
 ## Live Consumer Blockers
 
-- `[MISSING: Notifications-owned RabbitMQ consumer module or approved transport dependency]`
 - `[MISSING: Notifications runtime RABBITMQ_URL or broker secret source]`
-- `[MISSING: Orders-events queue name, binding ownership, dead-letter/retry policy, and deployment owner]`
+- `[MISSING: owner-approved production flip of ORDERS_EVENTS_CONSUMER_ENABLED from false to true after broker and recipient config are present]`
 - `[MISSING: Production value for ORDERS_EVENTS_NOTIFICATION_RECIPIENT or an approved channel-registry route that provides a recipient]`
 - `[MISSING: Deployment approval after validation and runtime config confirmation]`
 
@@ -129,7 +128,7 @@ Validation evidence collected on 2026-07-01:
 
 | Workstream | Status | Owner role | Scope | Allowed files | Forbidden files | Dependencies | Expected output | Validation owner | Merge order |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| A. Broker consumer wiring | dependency-gated | Notifications backend agent | Add AMQP/Nest transport after runtime contract approval | `src/notifications/orders-events/*`, `src/notifications/notifications.module.ts`, `package.json`, `package-lock.json`, `k8s/*` | Orders and other services | Broker URL secret source, queue/binding/DLX contract | Live consumer calling `OrdersEventNotificationRouter.route()` | Integration owner | 1 |
+| A. Broker consumer wiring | source-complete, runtime-gated | Notifications backend agent | AMQP consumer added behind explicit runtime flag | `src/notifications/orders-events/*`, `src/notifications/notifications.module.ts`, `src/health/health.controller.ts`, `package.json`, `package-lock.json` | Orders and other services | Broker URL secret source, queue/DLX runtime values, deploy approval | Live consumer calling `OrdersEventNotificationRouter.route()` | Integration owner | 1 |
 | B. Recipient/channel policy | dependency-gated | Notifications operations agent | Add approved runtime recipient or channel-registry route | `k8s/configmap.yaml`, `k8s/external-secret.yaml`, docs | Source code outside Notifications | Owner-approved recipient/channel policy | Runtime config names present without secret values | Integration owner | 2 |
 | C. Final deploy and smoke | final integration | Integration owner | Deploy and verify after A/B | deploy script and Kubernetes rollout only | DB destructive operations | A and B merged, full validation green | Production rollout evidence and no secret leakage | Integration owner | 3 |
 

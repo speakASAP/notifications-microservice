@@ -23,6 +23,7 @@ import { WebhookSubscription } from '../email/entities/webhook-subscription.enti
 import { WebhookDelivery } from '../email/entities/webhook-delivery.entity';
 import { ChannelRegistryService } from './channel-registry.service';
 import { OrdersEventNotificationRouter } from './orders-events/orders-event-notification.router';
+import { OrdersEventsRabbitmqConsumer } from './orders-events/orders-events-rabbitmq.consumer';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { OrdersEventNotificationRouter } from './orders-events/orders-event-noti
     WhatsAppService,
     ChannelRegistryService,
     OrdersEventNotificationRouter,
+    OrdersEventsRabbitmqConsumer,
   ],
   exports: [
     NotificationsService,
@@ -58,6 +60,7 @@ import { OrdersEventNotificationRouter } from './orders-events/orders-event-noti
     InboundEmailService,
     ChannelRegistryService,
     OrdersEventNotificationRouter,
+    OrdersEventsRabbitmqConsumer,
   ],
 })
 export class NotificationsModule {}
