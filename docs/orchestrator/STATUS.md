@@ -119,29 +119,28 @@ Validation:
 - 2026-07-02 Kubernetes server dry-run for `k8s/external-secret.yaml` in
   `statex-apps` passed.
 
-Stage: Goal 7.4 Orders events contract boundary implemented and validated; live broker consumption not deployed.
+Stage: Goal 7.4 Orders events contract boundary implemented and validated, including `orders.order.lifecycle_changed.v1`; live broker consumption not deployed.
 
 ## Goal 7.4 Orders Events Integration Status
 
 - Verified Notifications repo started clean on `main` at `86b7da9`.
-- Verified Orders publishes canonical RabbitMQ lifecycle events on `orders.events` with routing keys `orders.order.created.v1`, `orders.order.updated.v1`, `orders.order.paid.v1`, `orders.order.shipped.v1`, and `orders.order.cancelled.v1`.
+- Verified Orders publishes canonical RabbitMQ lifecycle events on `orders.events` with routing keys `orders.order.created.v1`, `orders.order.updated.v1`, `orders.order.paid.v1`, `orders.order.shipped.v1`, `orders.order.cancelled.v1`, and `orders.order.lifecycle_changed.v1`.
 - Verified Notifications exposes existing HTTP `/notifications/send` and no existing Orders RabbitMQ consumer was present.
-- Added a Notifications-owned Orders event DTO validator and router that maps valid Orders events to the existing send path.
+- Added a Notifications-owned Orders event DTO validator and router that maps valid Orders events, including lifecycle-changed events, to the existing send path.
 - Added event-id idempotency by checking existing notification `templateData.ordersEvent.eventId` before sending.
 - Added bounded metadata only; customer, address, payment method, tracking, token, secret, and credential fields are rejected.
 - Added focused unit/contract tests for routing, idempotency, dedupe, missing-recipient blocking, and sensitive payload rejection.
-- Deployment not run. Runtime broker and recipient config are still missing.
-- Validation passed: focused Jest spec, `npm run build`, full `npm test`, and `git diff --check`.
+- Deployment not run. Source RabbitMQ consumer wiring is present but runtime broker, queue/DLQ, and recipient config are still missing.
+- Validation passed: focused Jest spec, `npm run build`, full `npm test`, and `git diff --check`. 2026-07-02 branch update passed the focused Orders event router spec (6 tests), `npm run build`, full `npm test -- --runInBand` (6 suites / 26 tests), and `git diff --check`.
 - Runtime ConfigMap key-name audit found no `RABBIT*` or `ORDERS_EVENTS*` keys.
 - Runtime Secret key-name audit found no `RABBIT*` or `ORDERS_EVENTS*` keys.
 - Secret values were not printed.
-- Final deployment is blocked until live consumer and recipient config contracts are approved.
+- Final deployment is blocked until broker URL secret source, queue/DLQ runtime values, recipient config, and deployment approval are available.
 
 ## Goal 7.4 Blockers
 
-- `[MISSING: Notifications-owned RabbitMQ consumer module or approved transport dependency]`
-- `[MISSING: Notifications runtime RABBITMQ_URL or broker secret source]`
-- `[MISSING: Orders-events queue name, binding ownership, dead-letter/retry policy, and deployment owner]`
+- `RABBITMQ_URL` is now source-configured in `k8s/configmap.yaml` using the existing in-cluster RabbitMQ service name `rabbitmq`.
+- `[MISSING: owner-approved production flip of ORDERS_EVENTS_CONSUMER_ENABLED from false to true after recipient config is present]`
 - `[MISSING: Production value for ORDERS_EVENTS_NOTIFICATION_RECIPIENT or an approved channel-registry route that provides a recipient]`
 - `[MISSING: Deployment approval after validation and runtime config confirmation]`
 

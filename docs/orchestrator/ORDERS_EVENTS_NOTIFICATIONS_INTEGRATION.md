@@ -5,7 +5,7 @@ id: NOTIFICATIONS-ORDERS-EVENTS-INTEGRATION
 status: validated-contract-boundary
 owner: Notifications integration owner
 created: 2026-07-01
-last_updated: 2026-07-01
+last_updated: 2026-07-02
 source_of_truth:
   notifications_repo: /home/ssf/Documents/Github/notifications-microservice
   orders_repo_readonly: /home/ssf/Documents/Github/orders-microservice
@@ -59,6 +59,7 @@ Orders event types verified from `orders-microservice`:
 - `orders.order.paid.v1`
 - `orders.order.shipped.v1`
 - `orders.order.cancelled.v1`
+- `orders.order.lifecycle_changed.v1`
 
 Notifications routing behavior:
 
@@ -67,6 +68,7 @@ Notifications routing behavior:
 - `paid` -> `payment_confirmation`
 - `shipped` -> `shipment_tracking`
 - `cancelled` -> `order_status_update`
+- `lifecycleChanged` -> `order_status_update`
 
 Required runtime recipient config before any live send:
 
@@ -97,6 +99,14 @@ kubectl -n statex-apps get configmap notifications-microservice-config -o go-tem
 kubectl -n statex-apps get secret notifications-microservice-secret -o go-template='{{range $k,$v := .data}}{{println $k}}{{end}}'
 ```
 
+Validation evidence collected on 2026-07-02 branch update:
+
+- `npm test -- --runTestsByPath src/notifications/orders-events/orders-event-notification.router.spec.ts`: pass, 6 tests after adding `orders.order.lifecycle_changed.v1` coverage.
+- `npm run build`: pass.
+- `npm test -- --runInBand`: pass, 6 suites and 26 tests.
+- `git diff --check`: pass.
+- No deployment, live broker consumer, runtime recipient change, notification send, or secret read was performed.
+
 Validation evidence collected on 2026-07-01:
 
 - `git status --short --branch`: started clean on `main...origin/main` before edits.
@@ -109,9 +119,8 @@ Validation evidence collected on 2026-07-01:
 
 ## Live Consumer Blockers
 
-- `[MISSING: Notifications-owned RabbitMQ consumer module or approved transport dependency]`
-- `[MISSING: Notifications runtime RABBITMQ_URL or broker secret source]`
-- `[MISSING: Orders-events queue name, binding ownership, dead-letter/retry policy, and deployment owner]`
+- `RABBITMQ_URL` is now source-configured in `k8s/configmap.yaml` using the existing in-cluster RabbitMQ service name `rabbitmq`.
+- `[MISSING: owner-approved production flip of ORDERS_EVENTS_CONSUMER_ENABLED from false to true after recipient config is present]`
 - `[MISSING: Production value for ORDERS_EVENTS_NOTIFICATION_RECIPIENT or an approved channel-registry route that provides a recipient]`
 - `[MISSING: Deployment approval after validation and runtime config confirmation]`
 
@@ -119,7 +128,7 @@ Validation evidence collected on 2026-07-01:
 
 | Workstream | Status | Owner role | Scope | Allowed files | Forbidden files | Dependencies | Expected output | Validation owner | Merge order |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| A. Broker consumer wiring | dependency-gated | Notifications backend agent | Add AMQP/Nest transport after runtime contract approval | `src/notifications/orders-events/*`, `src/notifications/notifications.module.ts`, `package.json`, `package-lock.json`, `k8s/*` | Orders and other services | Broker URL secret source, queue/binding/DLX contract | Live consumer calling `OrdersEventNotificationRouter.route()` | Integration owner | 1 |
+| A. Broker consumer wiring | source-complete, runtime-gated | Notifications backend agent | AMQP consumer added behind explicit runtime flag | `src/notifications/orders-events/*`, `src/notifications/notifications.module.ts`, `src/health/health.controller.ts`, `package.json`, `package-lock.json` | Orders and other services | Broker URL secret source, queue/DLX runtime values, deploy approval | Live consumer calling `OrdersEventNotificationRouter.route()` | Integration owner | 1 |
 | B. Recipient/channel policy | dependency-gated | Notifications operations agent | Add approved runtime recipient or channel-registry route | `k8s/configmap.yaml`, `k8s/external-secret.yaml`, docs | Source code outside Notifications | Owner-approved recipient/channel policy | Runtime config names present without secret values | Integration owner | 2 |
 | C. Final deploy and smoke | final integration | Integration owner | Deploy and verify after A/B | deploy script and Kubernetes rollout only | DB destructive operations | A and B merged, full validation green | Production rollout evidence and no secret leakage | Integration owner | 3 |
 

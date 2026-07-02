@@ -157,7 +157,7 @@ describe('OrdersEventNotificationRouter', () => {
     expect(notificationsService.send).not.toHaveBeenCalled();
   });
 
-  it('maps paid, shipped, updated, and cancelled events to existing notification types', async () => {
+  it('maps paid, shipped, updated, cancelled, and lifecycle-changed events to existing notification types', async () => {
     const router = createRouter();
 
     await router.route(
@@ -188,6 +188,22 @@ describe('OrdersEventNotificationRouter', () => {
         payload: { orderId: 'order-1', previousStatus: 'confirmed' },
       }),
     );
+    await router.route(
+      createEvent({
+        type: ORDERS_EVENT_TYPES.lifecycleChanged,
+        eventId: 'lifecycle-event',
+        payload: {
+          orderId: 'order-1',
+          channel: 'flipflop',
+          lifecycleStage: 'warehouse_fulfillment_requested',
+          previousLifecycleStage: 'paid_not_delivered',
+          status: 'confirmed',
+          paymentStatus: 'paid',
+          fulfillmentStatus: 'fulfillment_requested',
+          deliveryStatus: 'not_started',
+        },
+      }),
+    );
 
     expect(notificationsService.send).toHaveBeenNthCalledWith(
       1,
@@ -205,5 +221,47 @@ describe('OrdersEventNotificationRouter', () => {
       4,
       expect.objectContaining({ type: NotificationType.ORDER_STATUS_UPDATE }),
     );
+    expect(notificationsService.send).toHaveBeenNthCalledWith(
+      5,
+      expect.objectContaining({
+        type: NotificationType.ORDER_STATUS_UPDATE,
+        subject: 'Order order-1 lifecycle updated',
+        templateData: expect.objectContaining({
+          ordersEvent: expect.objectContaining({
+            eventType: ORDERS_EVENT_TYPES.lifecycleChanged,
+            lifecycleStage: 'warehouse_fulfillment_requested',
+            previousLifecycleStage: 'paid_not_delivered',
+            paymentStatus: 'paid',
+            fulfillmentStatus: 'fulfillment_requested',
+            deliveryStatus: 'not_started',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('rejects lifecycle-changed events with unsupported lifecycle stages', async () => {
+    const router = createRouter();
+
+    const result = await router.route(
+      createEvent({
+        type: ORDERS_EVENT_TYPES.lifecycleChanged,
+        eventId: 'bad-lifecycle-event',
+        payload: {
+          orderId: 'order-1',
+          lifecycleStage: 'invented_stage',
+          status: 'confirmed',
+          paymentStatus: 'paid',
+          fulfillmentStatus: 'fulfillment_requested',
+          deliveryStatus: 'not_started',
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      action: 'ignored',
+      reason: 'invalid_lifecycle_stage',
+    });
+    expect(notificationsService.send).not.toHaveBeenCalled();
   });
 });

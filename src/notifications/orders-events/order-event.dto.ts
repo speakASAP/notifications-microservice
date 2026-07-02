@@ -7,9 +7,28 @@ export const ORDERS_EVENT_TYPES = {
   paid: 'orders.order.paid.v1',
   shipped: 'orders.order.shipped.v1',
   cancelled: 'orders.order.cancelled.v1',
+  lifecycleChanged: 'orders.order.lifecycle_changed.v1',
 } as const;
 
 export type OrdersEventType = typeof ORDERS_EVENT_TYPES[keyof typeof ORDERS_EVENT_TYPES];
+
+export const ORDERS_LIFECYCLE_STAGES = [
+  'ordered_unpaid',
+  'payment_failed',
+  'paid_not_delivered',
+  'warehouse_fulfillment_requested',
+  'warehouse_collecting',
+  'warehouse_forming',
+  'warehouse_formed',
+  'handed_to_delivery',
+  'in_delivery',
+  'received',
+  'not_received',
+  'returned',
+  'cancelled',
+] as const;
+
+export type OrdersLifecycleStage = typeof ORDERS_LIFECYCLE_STAGES[number];
 
 export interface OrdersEventEnvelope<TPayload extends Record<string, unknown> = Record<string, unknown>> {
   type: OrdersEventType;
@@ -48,12 +67,25 @@ export interface OrderCancelledPayload extends Record<string, unknown> {
   previousStatus?: string;
 }
 
+export interface OrderLifecycleChangedPayload extends Record<string, unknown> {
+  orderId: string;
+  lifecycleStage: OrdersLifecycleStage;
+  previousLifecycleStage?: OrdersLifecycleStage | null;
+  status: string;
+  paymentStatus: string;
+  fulfillmentStatus: string;
+  deliveryStatus: string;
+  channel?: string;
+  orderNumber?: string;
+}
+
 export type VerifiedOrdersEventEnvelope =
   | OrdersEventEnvelope<OrderCreatedPayload>
   | OrdersEventEnvelope<OrderUpdatedPayload>
   | OrdersEventEnvelope<OrderPaidPayload>
   | OrdersEventEnvelope<OrderShippedPayload>
-  | OrdersEventEnvelope<OrderCancelledPayload>;
+  | OrdersEventEnvelope<OrderCancelledPayload>
+  | OrdersEventEnvelope<OrderLifecycleChangedPayload>;
 
 export type OrdersEventValidationResult =
   | { valid: true; event: VerifiedOrdersEventEnvelope }
@@ -93,6 +125,7 @@ const FORBIDDEN_PAYLOAD_KEYS = new Set([
 ]);
 
 const VALID_EVENT_TYPES = new Set<string>(Object.values(ORDERS_EVENT_TYPES));
+const VALID_LIFECYCLE_STAGES = new Set<string>(ORDERS_LIFECYCLE_STAGES);
 
 export function validateOrdersEventEnvelope(input: unknown): OrdersEventValidationResult {
   if (!isRecord(input)) {
@@ -162,6 +195,16 @@ function validatePayload(type: OrdersEventType, payload: Record<string, unknown>
       }
       return { valid: true };
     case ORDERS_EVENT_TYPES.cancelled:
+      return { valid: true };
+    case ORDERS_EVENT_TYPES.lifecycleChanged:
+      if (!isNonEmptyString(payload.lifecycleStage) || !VALID_LIFECYCLE_STAGES.has(payload.lifecycleStage)) {
+        return { valid: false, reason: 'invalid_lifecycle_stage' };
+      }
+      for (const field of ['status', 'paymentStatus', 'fulfillmentStatus', 'deliveryStatus']) {
+        if (!isNonEmptyString(payload[field])) {
+          return { valid: false, reason: `missing_${field}` };
+        }
+      }
       return { valid: true };
     default:
       return { valid: false, reason: 'unsupported_event_type' };
