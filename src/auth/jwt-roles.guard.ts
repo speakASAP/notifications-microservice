@@ -94,10 +94,10 @@ export class JwtRolesGuard implements CanActivate {
     const cliplotToken = process.env.CLIPLOT_NOTIFICATIONS_SERVICE_TOKEN;
     if (cliplotToken && this.safeEqual(token, cliplotToken)) {
       return {
-        sub: 'service:cliplot-service',
+        sub: 'service:cliplot',
         email: undefined,
         roles: [`internal:${serviceName}:admin`],
-        serviceName: 'cliplot-service',
+        serviceName: 'cliplot',
       };
     }
 

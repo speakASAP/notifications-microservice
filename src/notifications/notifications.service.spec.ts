@@ -66,7 +66,7 @@ describe('NotificationsService validateSend', () => {
       total: 1590,
       currency: 'CZK',
     },
-    service: 'cliplot-service',
+    service: 'cliplot',
     purpose: 'transactional',
     emailProvider: EmailProvider.AUTO,
   };
@@ -91,7 +91,7 @@ describe('NotificationsService validateSend', () => {
       recipient: 'smoke@example.invalid',
       type: NotificationType.ORDER_CONFIRMATION,
       subject: 'Potvrzení objednávky cliplot-smoke - Cliplot',
-      service: 'cliplot-service',
+      service: 'cliplot',
       purpose: 'transactional',
       decisionReason: 'legacy_fallback_no_channel_key',
       emailProvider: EmailProvider.AUTO,

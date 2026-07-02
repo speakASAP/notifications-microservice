@@ -7,10 +7,10 @@ order-confirmation notifications without sending a real notification in this
 lane.
 
 Change: `JwtRolesGuard` now accepts only the Vault-projected
-`CLIPLOT_NOTIFICATIONS_SERVICE_TOKEN` as a `cliplot-service` machine actor with
+`CLIPLOT_NOTIFICATIONS_SERVICE_TOKEN` as a `cliplot` machine actor with
 `internal:notifications-microservice:admin`. The existing `SERVICE_TOKEN`
 machine path is preserved and now uses constant-time comparison. The token is
-projected from `secret/prod/cliplot-service#NOTIFICATIONS_SERVICE_TOKEN`
+projected from `secret/prod/cliplot#NOTIFICATIONS_SERVICE_TOKEN`
 through `notifications-microservice-secret`.
 
 Boundary decision: no notification send, test-send, mass send, channel mutation,

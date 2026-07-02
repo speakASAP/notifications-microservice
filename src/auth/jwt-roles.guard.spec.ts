@@ -79,9 +79,9 @@ describe('JwtRolesGuard static service actors', () => {
     expect(jwtService.verify).not.toHaveBeenCalled();
     expect(request).toMatchObject({
       user: {
-        sub: 'service:cliplot-service',
+        sub: 'service:cliplot',
         roles: ['internal:notifications-microservice:admin'],
-        serviceName: 'cliplot-service',
+        serviceName: 'cliplot',
       },
     });
   });
