@@ -122,3 +122,6 @@ To print the base notifications checkpoint, run:
 ```bash
 ./scripts/next_goal.sh
 ```
+
+2026-07-03 continuation: Orders lifecycle notification readiness drift was repaired without enabling the consumer. Current `main` commit `cd95255` was deployed as `localhost:5000/notifications-microservice:cd95255`; public and in-pod `/health/orders-events` now return HTTP 200 with `ORDERS_EVENTS_CONSUMER_ENABLED=false`, no broker connection/consumption, routing keys configured, DLX/DLQ configured, and counters all `0`. Validation passed before deploy: `npm run build` and `npm test -- --runInBand` (8 suites / 36 tests). No notification send, provider call, channel-registry mutation, recipient config mutation, customer data access, or consumer enablement was performed. Remaining blockers are `[MISSING: owner-approved ORDERS_EVENTS_CONSUMER_ENABLED=true flip]`, `[MISSING: ORDERS_EVENTS_NOTIFICATION_RECIPIENT or approved orders.lifecycle route]`, `[UNKNOWN: live channel_registry policy row for orders.lifecycle]`, and `[MISSING: no-send enabled-consumer smoke]`.
+

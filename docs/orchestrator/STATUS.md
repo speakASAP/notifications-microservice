@@ -48,6 +48,28 @@ created and no provider send was requested by the validate endpoint.
 
 ## Current State
 
+## 2026-07-03 - Orders Events Health Route Runtime Drift Repaired
+
+Intent: restore live readiness visibility for the Orders lifecycle notification consumer without enabling production consumption or sending notifications.
+
+Change: deployed current `main` commit `cd95255` to Kubernetes as `localhost:5000/notifications-microservice:cd95255`. This clears the stale live image drift where runtime `f855764` returned HTTP 404 for `/health/orders-events` even though source already exposed the endpoint.
+
+Validation evidence:
+- 2026-07-03 `npm run build` passed on `alfares:/home/ssf/Documents/Github/notifications-microservice`.
+- 2026-07-03 `npm test -- --runInBand` passed: 8 suites / 36 tests.
+- 2026-07-03 `./scripts/deploy.sh` completed and rolled out `localhost:5000/notifications-microservice:cd95255`; deploy health check passed.
+- 2026-07-03 live deployment `notifications-microservice` is `1/1` ready on image `localhost:5000/notifications-microservice:cd95255`.
+- 2026-07-03 public `https://notifications.alfares.cz/health/orders-events` returned HTTP 200 with `enabled=false`, `connected=false`, `consuming=false`, exchange `orders.events`, queue `notifications.orders.lifecycle`, routing keys for Orders lifecycle events, DLX/DLQ configured, and all counters `0`.
+- 2026-07-03 in-pod `http://127.0.0.1:3368/health/orders-events` returned HTTP 200 with the same disabled consumer status.
+
+Boundary: `ORDERS_EVENTS_CONSUMER_ENABLED` remains `false`; no live notification sends, no broker consumption, no recipient config mutation, no provider call, no channel-registry mutation, and no customer data access were performed.
+
+Remaining blockers:
+- `[MISSING: owner-approved production flip of ORDERS_EVENTS_CONSUMER_ENABLED from false to true]`
+- `[MISSING: production ORDERS_EVENTS_NOTIFICATION_RECIPIENT or approved orders.lifecycle channel route]`
+- `[UNKNOWN: live channel_registry policy row for orders.lifecycle]`
+- `[MISSING: no-send enabled-consumer smoke proving queue/bindings without dispatching real notifications]`
+
 ## 2026-07-02 - Immutable Deploy Tag Hardening
 
 Intent: keep invoice document notification readiness stable by preventing
