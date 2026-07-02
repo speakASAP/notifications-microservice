@@ -48,6 +48,48 @@ created and no provider send was requested by the validate endpoint.
 
 ## Current State
 
+## 2026-07-02 - Invoices Documents Channel Contract Readiness
+
+Intent: finish the Notifications-side source contract for proforma/final invoice
+message delivery while preserving the no-send boundary.
+
+Change: added the durable contract doc
+`docs/orchestrator/INVOICES_DOCUMENTS_NOTIFICATION_CONTRACT.md`, focused unit
+tests for `channelKey=invoices.documents` policy resolution, and the
+non-destructive runtime check `scripts/check-invoices-documents-readiness.sh`.
+The readiness script uses only `POST /notifications/validate` with
+`invoice-smoke@example.invalid` and requires `mutation=false` plus
+`providerCall=false`; it does not call `/notifications/send`.
+
+Contract decision: Notifications does not need a persisted invoice template for
+this lane. Invoices supplies inline `message`, `subject`, and bounded
+`templateData.invoice`; Notifications must provide auth plus a channel policy
+row allowing `service=invoices-microservice` and `purpose=transactional` on
+`channelKey=invoices.documents`.
+
+Boundary decision: no notification send, provider dispatch, channel mutation,
+secret write, live deploy, template persistence, webhook delivery, customer data
+mutation, or customer contact action was performed.
+
+Runtime blockers:
+- `[MISSING: Vault value secret/prod/invoices-microservice#NOTIFICATIONS_SERVICE_TOKEN before applying the updated ExternalSecret]`
+- `[MISSING: Runtime channel_registry row for invoices.documents allowing service invoices-microservice and purpose transactional]`
+- `[MISSING: Runtime readiness evidence from scripts/check-invoices-documents-readiness.sh after token and channel row provisioning]`
+- `[UNKNOWN: Approved invoice sender identity if provider defaults are not acceptable]`
+
+Validation:
+- 2026-07-02 docs-RAG query from `alfares` for the invoice notification
+  contract failed with DNS `Could not resolve host: docs-rag-microservice.statex-apps.svc.cluster.local`.
+- 2026-07-02 `bash -n scripts/check-invoices-documents-readiness.sh` passed.
+- 2026-07-02 focused `npm test -- --runInBand src/notifications/channel-registry.service.spec.ts src/notifications/notifications.service.spec.ts` passed (2 suites, 7 tests).
+- 2026-07-02 `npm run build` passed.
+- 2026-07-02 full `npm test -- --runInBand` passed (7 suites, 31 tests).
+- 2026-07-02 `git diff --check` passed.
+- Live `./scripts/check-invoices-documents-readiness.sh` was not run because
+  runtime provisioning reported `channel_registry` has 0 rows and this lane is
+  forbidden from mutating channel rows.
+
+
 ## 2026-07-02 - Invoices Notification Identity Readiness
 
 Intent: allow `invoices-microservice` to authenticate to Notifications for

@@ -71,6 +71,65 @@ describe('NotificationsService validateSend', () => {
     emailProvider: EmailProvider.AUTO,
   };
 
+  it('validates an invoices.documents payload without saving or sending', async () => {
+    const invoicePayload: SendNotificationDto = {
+      channel: NotificationChannel.EMAIL,
+      type: NotificationType.ORDER_CONFIRMATION,
+      recipient: 'invoice-smoke@example.invalid',
+      subject: 'Proforma invoice PF-2026-0001',
+      message: 'Proforma invoice PF-2026-0001 is ready: https://invoices.alfares.cz/documents/example.html?token=example',
+      service: 'invoices-microservice',
+      purpose: 'transactional',
+      channelKey: 'invoices.documents',
+      templateData: {
+        invoice: {
+          id: 'invoice-1',
+          type: 'proforma',
+          invoiceNumber: 'PF-2026-0001',
+          orderId: 'order-1',
+        },
+      },
+      emailProvider: EmailProvider.SES,
+    };
+    const {
+      service,
+      notificationRepository,
+      emailService,
+      telegramService,
+      whatsappService,
+      channelRegistryService,
+    } = buildService();
+    channelRegistryService.resolveSendPolicy.mockResolvedValueOnce({
+      dto: invoicePayload,
+      decisionReason: 'channel_key_resolved',
+    });
+
+    const result = await service.validateSend(invoicePayload);
+
+    expect(result).toMatchObject({
+      valid: true,
+      mutation: false,
+      providerCall: false,
+      channel: NotificationChannel.EMAIL,
+      recipient: 'invoice-smoke@example.invalid',
+      type: NotificationType.ORDER_CONFIRMATION,
+      subject: 'Proforma invoice PF-2026-0001',
+      service: 'invoices-microservice',
+      purpose: 'transactional',
+      channelKey: 'invoices.documents',
+      decisionReason: 'channel_key_resolved',
+      emailProvider: EmailProvider.SES,
+    });
+    expect(result.messageLength).toBeGreaterThan(0);
+    expect(channelRegistryService.resolveSendPolicy).toHaveBeenCalledWith(invoicePayload);
+    expect(notificationRepository.findOne).not.toHaveBeenCalled();
+    expect(notificationRepository.create).not.toHaveBeenCalled();
+    expect(notificationRepository.save).not.toHaveBeenCalled();
+    expect(emailService.send).not.toHaveBeenCalled();
+    expect(telegramService.send).not.toHaveBeenCalled();
+    expect(whatsappService.send).not.toHaveBeenCalled();
+  });
+
   it('validates a Cliplot order confirmation without saving or sending', async () => {
     const {
       service,

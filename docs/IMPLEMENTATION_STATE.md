@@ -1,6 +1,6 @@
 # Notifications Microservice Implementation State
 
-Last updated: 2026-06-12.
+Last updated: 2026-07-02.
 
 ## Orchestrator Command
 
@@ -92,6 +92,7 @@ Do not paste full logs. Compress implementation, validation, risks, and changed 
 Newest entries first.
 
 ```text
+2026-07-02: Invoices documents Notifications contract source lane completed on `main` ahead of origin. Added `docs/orchestrator/INVOICES_DOCUMENTS_NOTIFICATION_CONTRACT.md`, `scripts/check-invoices-documents-readiness.sh`, focused `ChannelRegistryService` tests for `invoices.documents`, and `NotificationsService.validateSend` coverage for an invoice payload. Validation on `alfares`: `bash -n scripts/check-invoices-documents-readiness.sh` passed; focused `npm test -- --runInBand src/notifications/channel-registry.service.spec.ts src/notifications/notifications.service.spec.ts` passed 2 suites / 7 tests; `npm run build` passed; full `npm test -- --runInBand` passed 7 suites / 31 tests; `git diff --check` passed. No deploy, no `/notifications/send`, no live readiness script run, no channel registry mutation, no secret write, and no customer contact performed. docs-RAG lookup from `alfares` failed DNS resolution for `docs-rag-microservice.statex-apps.svc.cluster.local`. Runtime reported live `channel_registry` has 0 rows; runtime remains blocked until Vault provides `secret/prod/invoices-microservice#NOTIFICATIONS_SERVICE_TOKEN`, ExternalSecret is applied, `channel_registry` has an active `invoices.documents` row allowing `invoices-microservice` + `transactional`, and `./scripts/check-invoices-documents-readiness.sh` passes.
 2026-06-12: Goal 05 deployed after owner approval. `./scripts/deploy.sh` built and pushed `localhost:5000/notifications-microservice:a56270f` and `latest` with digest `sha256:22f9f67a55df3c7d663291e7e0578a9c553aa8bc3e3c29d507ac3556cd8831f6`; deploy script rollout and health check passed. Because the deployment uses `:latest`, the pod initially remained on previous digest `sha256:97745eb2e9313586fa66006e3dc50207bfd0ea1770c88cdf73201ccf71f50528`, so an approved `kubectl rollout restart deployment/notifications-microservice -n statex-apps` was run. Final pod `notifications-microservice-c8f755679-gxnfr` is running digest `sha256:22f9f67a55df3c7d663291e7e0578a9c553aa8bc3e3c29d507ac3556cd8831f6`. Final `./scripts/smoke-readiness.sh` passed with public `/health` 200, `/api/config` 200, unauthenticated `/admin/stats` 401, protected read-only dashboard/inbound/webhook endpoints 200 with `SERVICE_TOKEN`, rollout complete, in-pod health success, JWT secret alignment matched, and expected secret keys present without printing values. No rollback, secret rotation, send/test-send, repair, redelivery, webhook mutation, or mass notification action performed.
 2026-06-12: Goal 05 Operations Deployment Readiness completed on `feature/notifications-goal-05-operations-deployment-readiness`. Added `docs/DEPLOYMENT.md`, non-destructive `scripts/smoke-readiness.sh`, corrected `INFRA.md` secret target naming, and recorded deployment, rollback, secret rotation, JWT alignment, and smoke procedures. Validation on `alfares`: `bash -n scripts/smoke-readiness.sh` passed; `npm run build` passed; `./scripts/smoke-readiness.sh` passed with public `/health` 200, `/api/config` 200, unauthenticated `/admin/stats` 401, protected read-only dashboard/inbound/webhook endpoints 200 with `SERVICE_TOKEN`, rollout complete, in-pod health success, JWT secret alignment matched, and expected secret keys present without printing values. No deploy, rollback, secret rotation, send/test-send, repair, redelivery, webhook mutation, or mass notification action performed. docs-RAG remained blocked with `401 Malformed token`. Accumulated Goal 01-05 changes were later committed in commit f5646ff and pushed to origin/main.
 2026-06-12: Goal 04 Channel Policy And Template Gap completed on `feature/notifications-goal-04-channel-policy-and-template-gap`. Hardened channel registry admin PATCH to whitelist supported policy/sender fields, added admin channel policy summary and explicit fallback/template copy, corrected README/SYSTEM/public landing docs for `/webhooks/subscriptions` and inline `templateData` behavior, and recorded persisted template management as future product work. Validation: `npm run build` passed; extracted admin script `node --check` passed; protected read smoke returned 200 for `/admin/channels` and `/webhooks/subscriptions`. No deploy, no send/test-send, and no channel/webhook mutation performed. docs-RAG query from `alfares` failed DNS resolution for `docs-rag-microservice.statex-apps.svc.cluster.local`.
@@ -111,9 +112,9 @@ Newest entries first.
 
 ## Next Action
 
-Goal 05 is complete, deployed, and committed in commit f5646ff on main/origin/main. No implementation task remains queued in the current roadmap.
+Goal 05 remains complete and deployed. For the invoices rollout, runtime provisioning must provide the invoices Notifications token, apply the ExternalSecret only after that Vault key exists, seed or update `channel_registry` for `invoices.documents`, and then run `./scripts/check-invoices-documents-readiness.sh` before any real invoice send.
 
-To print this checkpoint, run:
+To print the base notifications checkpoint, run:
 
 ```bash
 ./scripts/next_goal.sh
