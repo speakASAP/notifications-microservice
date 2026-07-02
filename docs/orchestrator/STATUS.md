@@ -48,6 +48,25 @@ created and no provider send was requested by the validate endpoint.
 
 ## Current State
 
+## 2026-07-03 - Orders Events Consumer Recipient Approved
+
+Intent: enable the Orders lifecycle notification consumer with an approved production recipient while preserving channel-policy and migration evidence.
+
+Change:
+- Set `ORDERS_EVENTS_CONSUMER_ENABLED=true`.
+- Set `ORDERS_EVENTS_NOTIFICATION_RECIPIENT=ssfskype@gmail.com`.
+- Added migration `1746445300000-SeedOrdersLifecycleChannel` to seed/update active `channel_registry` policy `orders.lifecycle` with `type=email`, `provider=ses`, `purposesAllowed={transactional}`, and `applicationsAllowed={orders-microservice}`.
+
+Validation evidence before deploy:
+- Live preflight found `orders.lifecycle` absent from `channel_registry`, so the migration was added instead of relying on a missing row.
+- `git diff --check` passed.
+- `npm run build` passed.
+- `npm test -- --runInBand` passed: 8 suites / 36 tests.
+
+Boundary: the approved recipient is `ssfskype@gmail.com`. Consumer enablement is limited to Orders lifecycle routing keys on exchange `orders.events`, queue `notifications.orders.lifecycle`, with DLX/DLQ configured and `ORDERS_EVENTS_REQUEUE_ON_ERROR=false`.
+
+Deployment evidence: [PENDING: deploy and live /health/orders-events verification]
+
 ## 2026-07-03 - Orders Events Health Route Runtime Drift Repaired
 
 Intent: restore live readiness visibility for the Orders lifecycle notification consumer without enabling production consumption or sending notifications.
@@ -65,9 +84,6 @@ Validation evidence:
 Boundary: `ORDERS_EVENTS_CONSUMER_ENABLED` remains `false`; no live notification sends, no broker consumption, no recipient config mutation, no provider call, no channel-registry mutation, and no customer data access were performed.
 
 Remaining blockers:
-- `[MISSING: owner-approved production flip of ORDERS_EVENTS_CONSUMER_ENABLED from false to true]`
-- `[MISSING: production ORDERS_EVENTS_NOTIFICATION_RECIPIENT or approved orders.lifecycle channel route]`
-- `[UNKNOWN: live channel_registry policy row for orders.lifecycle]`
 - `[MISSING: no-send enabled-consumer smoke proving queue/bindings without dispatching real notifications]`
 
 ## 2026-07-02 - Immutable Deploy Tag Hardening
