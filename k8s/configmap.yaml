@@ -19,6 +19,7 @@ data:
   DB_NAME: "notifications"
   DB_SYNC: "false"
   DB_AUTO_CREATE: "true"
+  RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672"
   SENDGRID_FROM_EMAIL: "noreply@flipflop.alfares.cz"
   SENDGRID_FROM_NAME: "flipflop.alfares.cz"
   TELEGRAM_BOT_USERNAME: "StatexNotificationsBot"

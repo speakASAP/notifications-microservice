@@ -119,8 +119,8 @@ Validation evidence collected on 2026-07-01:
 
 ## Live Consumer Blockers
 
-- `[MISSING: Notifications runtime RABBITMQ_URL or broker secret source]`
-- `[MISSING: owner-approved production flip of ORDERS_EVENTS_CONSUMER_ENABLED from false to true after broker and recipient config are present]`
+- `RABBITMQ_URL` is now source-configured in `k8s/configmap.yaml` using the existing in-cluster RabbitMQ service name `rabbitmq`.
+- `[MISSING: owner-approved production flip of ORDERS_EVENTS_CONSUMER_ENABLED from false to true after recipient config is present]`
 - `[MISSING: Production value for ORDERS_EVENTS_NOTIFICATION_RECIPIENT or an approved channel-registry route that provides a recipient]`
 - `[MISSING: Deployment approval after validation and runtime config confirmation]`
 
