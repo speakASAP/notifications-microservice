@@ -14,7 +14,7 @@ Production deploys, rollbacks, secret rotations, repair actions, and test sends 
 
 ## Source Evidence
 
-- `scripts/deploy.sh` builds `localhost:5000/notifications-microservice:<tag>` and `:latest`, pushes both tags, sets the Kubernetes deployment image to `:latest`, waits for rollout, and checks in-pod `GET /health` with Node `fetch`.
+- `scripts/deploy.sh` builds `localhost:5000/notifications-microservice:<tag>` and `:latest`, pushes both tags, sets the Kubernetes deployment image to the immutable `<tag>`, waits for rollout, and checks in-pod `GET /health` with Node `fetch`.
 - `k8s/deployment.yaml` runs one replica, uses `imagePullPolicy: Always`, loads `notifications-microservice-config` and `notifications-microservice-secret`, and probes `/health` for startup, liveness, and readiness.
 - `k8s/external-secret.yaml` syncs `notifications-microservice-secret` from Vault and sources `JWT_SECRET` from `secret/prod/auth-microservice` so admin JWTs signed by auth validate in notifications.
 - `src/health/health.controller.ts` exposes public `GET /health`.
@@ -60,14 +60,16 @@ Expected script behavior:
 
 1. Build Docker image tagged as `localhost:5000/notifications-microservice:<tag>` and `localhost:5000/notifications-microservice:latest`.
 2. Push both tags to the local registry.
-3. Run `kubectl set image deployment/notifications-microservice app=localhost:5000/notifications-microservice:latest -n statex-apps`.
+3. Run `kubectl set image deployment/notifications-microservice app=localhost:5000/notifications-microservice:<tag> -n statex-apps`.
 4. Wait for rollout with a 180 second timeout.
 5. Run in-pod `GET /health` on `127.0.0.1:3368`.
 
-Because the deployment image field stays on `:latest`, Kubernetes may not start a new pod if the pod template is unchanged. If the image digest did not change after a successful script run, use an approved rollout restart:
+The deployment image field should point at the immutable tag from the deploy
+run. If the runtime image ever points back to `:latest`, repin the exact
+approved tag before relying on readiness evidence:
 
 ```bash
-ssh alfares 'kubectl rollout restart deployment/notifications-microservice -n statex-apps && kubectl rollout status deployment/notifications-microservice -n statex-apps --timeout=180s'
+ssh alfares 'kubectl set image deployment/notifications-microservice app=localhost:5000/notifications-microservice:<tag> -n statex-apps && kubectl rollout status deployment/notifications-microservice -n statex-apps --timeout=180s'
 ```
 
 ## Post-Deploy Smoke
@@ -125,7 +127,9 @@ After rollback, run:
 ssh alfares 'cd /home/ssf/Documents/Github/notifications-microservice && ./scripts/smoke-readiness.sh'
 ```
 
-If rollback is needed because `:latest` did not refresh correctly, compare the running pod image ID before and after the restart or undo:
+If rollback is needed, use the previous immutable image tag or Kubernetes
+rollout undo, then compare the running pod image ID before and after the
+rollback:
 
 ```bash
 ssh alfares 'kubectl get pod -n statex-apps -l app=notifications-microservice -o jsonpath="{.items[0].status.containerStatuses[0].imageID}{\n}"'
