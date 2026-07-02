@@ -101,6 +101,16 @@ export class JwtRolesGuard implements CanActivate {
       };
     }
 
+    const invoicesToken = process.env.INVOICES_NOTIFICATIONS_SERVICE_TOKEN;
+    if (invoicesToken && this.safeEqual(token, invoicesToken)) {
+      return {
+        sub: 'service:invoices-microservice',
+        email: undefined,
+        roles: [`internal:${serviceName}:admin`],
+        serviceName: 'invoices-microservice',
+      };
+    }
+
     return null;
   }
 

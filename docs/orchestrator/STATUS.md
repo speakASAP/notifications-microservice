@@ -48,6 +48,35 @@ created and no provider send was requested by the validate endpoint.
 
 ## Current State
 
+## 2026-07-02 - Invoices Notification Identity Readiness
+
+Intent: allow `invoices-microservice` to authenticate to Notifications for
+future proforma/final invoice delivery without sending a real notification in
+this lane.
+
+Change: `JwtRolesGuard` now accepts the Vault-projected
+`INVOICES_NOTIFICATIONS_SERVICE_TOKEN` as an `invoices-microservice` machine
+actor with `internal:notifications-microservice:admin`. The token is projected
+from `secret/prod/invoices-microservice#NOTIFICATIONS_SERVICE_TOKEN` through
+`notifications-microservice-secret`.
+
+Boundary decision: no notification send, validate call, channel mutation,
+template persistence, webhook delivery, or customer contact action is performed
+in this lane. The channel policy row for `invoices.documents` remains a
+separate runtime/configuration blocker.
+
+Deployment gate: do not apply the updated ExternalSecret to a live environment
+until `secret/prod/invoices-microservice#NOTIFICATIONS_SERVICE_TOKEN` exists.
+
+Validation:
+- 2026-07-02 `npm test -- --runInBand src/auth/jwt-roles.guard.spec.ts` passed
+  (5/5 tests).
+- 2026-07-02 `npm run build` passed.
+- 2026-07-02 `npm test -- --runInBand` passed (6 suites, 26 tests).
+- 2026-07-02 `git diff --check` passed.
+- 2026-07-02 Kubernetes server dry-run for `k8s/external-secret.yaml` in
+  `statex-apps` passed.
+
 Stage: Goal 7.4 Orders events contract boundary implemented and validated; live broker consumption not deployed.
 
 ## Goal 7.4 Orders Events Integration Status

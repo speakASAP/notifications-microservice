@@ -38,6 +38,7 @@ describe('JwtRolesGuard static service actors', () => {
     process.env.SERVICE_NAME = 'notifications-microservice';
     delete process.env.SERVICE_TOKEN;
     delete process.env.CLIPLOT_NOTIFICATIONS_SERVICE_TOKEN;
+    delete process.env.INVOICES_NOTIFICATIONS_SERVICE_TOKEN;
   });
 
   afterAll(() => {
@@ -82,6 +83,23 @@ describe('JwtRolesGuard static service actors', () => {
         sub: 'service:cliplot',
         roles: ['internal:notifications-microservice:admin'],
         serviceName: 'cliplot',
+      },
+    });
+  });
+
+  it('accepts the Invoices notifications service token as a machine actor', async () => {
+    process.env.INVOICES_NOTIFICATIONS_SERVICE_TOKEN = 'invoices-notifications-token';
+    const request = { headers: { authorization: 'Bearer invoices-notifications-token' } };
+    const { guard, jwtService } = createGuard();
+
+    await expect(guard.canActivate(createContext(request))).resolves.toBe(true);
+
+    expect(jwtService.verify).not.toHaveBeenCalled();
+    expect(request).toMatchObject({
+      user: {
+        sub: 'service:invoices-microservice',
+        roles: ['internal:notifications-microservice:admin'],
+        serviceName: 'invoices-microservice',
       },
     });
   });
