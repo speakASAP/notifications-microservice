@@ -13,6 +13,7 @@ Create a narrow, intent-preserved Notifications integration boundary for canonic
 - [x] Add event-id idempotency and notification dedupe guard before sending.
 - [x] Add focused unit/contract tests for routing, idempotency, and dedupe.
 - [x] Preserve blockers for live broker consumption as `[MISSING: ...]` instead of inventing runtime contracts.
+- [x] Accept and route `orders.order.lifecycle_changed.v1` to the bounded Orders lifecycle notification path.
 - [ ] Wire a live RabbitMQ consumer after broker dependency, queue, bindings, and runtime env ownership are approved.
 - [ ] Deploy only after implementation validation and runtime config are complete.
 

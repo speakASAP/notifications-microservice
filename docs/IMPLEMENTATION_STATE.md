@@ -5,6 +5,7 @@ Last updated: 2026-07-02.
 ## Orchestrator Command
 
 ```text
+2026-07-02: Goal 7.4 Orders lifecycle-changed event boundary updated on isolated branch `codex/notifications-orders-lifecycle-event`. Notifications now accepts `orders.order.lifecycle_changed.v1`, validates approved lifecycle stages plus status/payment/fulfillment/delivery status fields, maps lifecycle changes to `order_status_update`, stores bounded lifecycle metadata for idempotency/audit, and still rejects sensitive customer/address/payment/tracking/token fields. Validation passed: `npm test -- --runTestsByPath src/notifications/orders-events/orders-event-notification.router.spec.ts` (6 tests), `npm run build`, `npm test -- --runInBand` (6 suites / 26 tests), and `git diff --check`. No deployment, live broker consumer, runtime recipient change, notification send, or secret read is performed in this branch.
 NOTIFICATIONS ORCHESTRATOR: continue implementation
 ```
 
