@@ -48,19 +48,19 @@ created and no provider send was requested by the validate endpoint.
 
 ## Current State
 
-Stage: Goal 7.4 Orders events contract boundary implemented and validated; live broker consumption not deployed.
+Stage: Goal 7.4 Orders events contract boundary implemented and validated, including `orders.order.lifecycle_changed.v1`; live broker consumption not deployed.
 
 ## Goal 7.4 Orders Events Integration Status
 
 - Verified Notifications repo started clean on `main` at `86b7da9`.
-- Verified Orders publishes canonical RabbitMQ lifecycle events on `orders.events` with routing keys `orders.order.created.v1`, `orders.order.updated.v1`, `orders.order.paid.v1`, `orders.order.shipped.v1`, and `orders.order.cancelled.v1`.
+- Verified Orders publishes canonical RabbitMQ lifecycle events on `orders.events` with routing keys `orders.order.created.v1`, `orders.order.updated.v1`, `orders.order.paid.v1`, `orders.order.shipped.v1`, `orders.order.cancelled.v1`, and `orders.order.lifecycle_changed.v1`.
 - Verified Notifications exposes existing HTTP `/notifications/send` and no existing Orders RabbitMQ consumer was present.
-- Added a Notifications-owned Orders event DTO validator and router that maps valid Orders events to the existing send path.
+- Added a Notifications-owned Orders event DTO validator and router that maps valid Orders events, including lifecycle-changed events, to the existing send path.
 - Added event-id idempotency by checking existing notification `templateData.ordersEvent.eventId` before sending.
 - Added bounded metadata only; customer, address, payment method, tracking, token, secret, and credential fields are rejected.
 - Added focused unit/contract tests for routing, idempotency, dedupe, missing-recipient blocking, and sensitive payload rejection.
 - Deployment not run. Runtime broker and recipient config are still missing.
-- Validation passed: focused Jest spec, `npm run build`, full `npm test`, and `git diff --check`.
+- Validation passed: focused Jest spec, `npm run build`, full `npm test`, and `git diff --check`. 2026-07-02 branch update passed the focused Orders event router spec (6 tests), `npm run build`, full `npm test -- --runInBand` (6 suites / 26 tests), and `git diff --check`.
 - Runtime ConfigMap key-name audit found no `RABBIT*` or `ORDERS_EVENTS*` keys.
 - Runtime Secret key-name audit found no `RABBIT*` or `ORDERS_EVENTS*` keys.
 - Secret values were not printed.

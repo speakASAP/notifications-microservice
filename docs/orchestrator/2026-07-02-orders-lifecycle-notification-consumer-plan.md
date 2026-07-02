@@ -10,6 +10,7 @@ Notifications should react to canonical Orders lifecycle events and notify custo
 ## Current Evidence
 
 - Orders event notification router and mapping code exists.
+- `orders.order.lifecycle_changed.v1` is now accepted by the source contract boundary and maps to `order_status_update`.
 - `[MISSING: live broker consumer module or approved transport dependency in Notifications runtime.]`
 
 ## Workstream
@@ -31,7 +32,7 @@ Forbidden files:
 ## Required Work
 
 1. Confirm RabbitMQ or broker transport ownership.
-2. Wire `orders.order.lifecycle_changed.v1` and existing Orders events to the router.
+2. Wire `orders.order.lifecycle_changed.v1` and existing Orders events to the router. Source boundary is complete; live broker wiring remains dependency-gated.
 3. Use authenticated lookup for PII if needed; do not rely on broadcast full addresses.
 4. Add retry/dead-letter behavior or document `[MISSING: retry/DLQ contract]`.
 

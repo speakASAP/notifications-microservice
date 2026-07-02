@@ -5,7 +5,7 @@ id: NOTIFICATIONS-ORDERS-EVENTS-INTEGRATION
 status: validated-contract-boundary
 owner: Notifications integration owner
 created: 2026-07-01
-last_updated: 2026-07-01
+last_updated: 2026-07-02
 source_of_truth:
   notifications_repo: /home/ssf/Documents/Github/notifications-microservice
   orders_repo_readonly: /home/ssf/Documents/Github/orders-microservice
@@ -59,6 +59,7 @@ Orders event types verified from `orders-microservice`:
 - `orders.order.paid.v1`
 - `orders.order.shipped.v1`
 - `orders.order.cancelled.v1`
+- `orders.order.lifecycle_changed.v1`
 
 Notifications routing behavior:
 
@@ -67,6 +68,7 @@ Notifications routing behavior:
 - `paid` -> `payment_confirmation`
 - `shipped` -> `shipment_tracking`
 - `cancelled` -> `order_status_update`
+- `lifecycleChanged` -> `order_status_update`
 
 Required runtime recipient config before any live send:
 
@@ -96,6 +98,14 @@ Runtime config check must print names/presence only, not values:
 kubectl -n statex-apps get configmap notifications-microservice-config -o go-template='{{range $k,$v := .data}}{{println $k}}{{end}}'
 kubectl -n statex-apps get secret notifications-microservice-secret -o go-template='{{range $k,$v := .data}}{{println $k}}{{end}}'
 ```
+
+Validation evidence collected on 2026-07-02 branch update:
+
+- `npm test -- --runTestsByPath src/notifications/orders-events/orders-event-notification.router.spec.ts`: pass, 6 tests after adding `orders.order.lifecycle_changed.v1` coverage.
+- `npm run build`: pass.
+- `npm test -- --runInBand`: pass, 6 suites and 26 tests.
+- `git diff --check`: pass.
+- No deployment, live broker consumer, runtime recipient change, notification send, or secret read was performed.
 
 Validation evidence collected on 2026-07-01:
 

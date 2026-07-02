@@ -183,6 +183,7 @@ export class OrdersEventNotificationRouter {
         return NotificationType.SHIPMENT_TRACKING;
       case ORDERS_EVENT_TYPES.updated:
       case ORDERS_EVENT_TYPES.cancelled:
+      case ORDERS_EVENT_TYPES.lifecycleChanged:
       default:
         return NotificationType.ORDER_STATUS_UPDATE;
     }
@@ -216,6 +217,11 @@ export class OrdersEventNotificationRouter {
           subject: `Order ${orderId} cancelled`,
           message: `Orders accepted cancellation for order ${orderId}.`,
         };
+      case ORDERS_EVENT_TYPES.lifecycleChanged:
+        return {
+          subject: `Order ${orderId} lifecycle updated`,
+          message: `Orders changed order ${orderId} lifecycle stage to ${event.payload.lifecycleStage}.`,
+        };
       default:
         return {
           subject: `Order ${orderId} updated`,
@@ -236,7 +242,11 @@ export class OrdersEventNotificationRouter {
         channel: event.payload.channel,
         status: event.payload.status,
         previousStatus: event.payload.previousStatus,
+        lifecycleStage: event.payload.lifecycleStage,
+        previousLifecycleStage: event.payload.previousLifecycleStage,
         paymentStatus: event.payload.paymentStatus,
+        fulfillmentStatus: event.payload.fulfillmentStatus,
+        deliveryStatus: event.payload.deliveryStatus,
         shipmentStatus: event.payload.shipmentStatus,
       },
     };
