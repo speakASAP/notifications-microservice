@@ -75,9 +75,17 @@ The script reads `INVOICES_NOTIFICATIONS_SERVICE_TOKEN` from the Kubernetes secr
 - No Vault writes from the source lane.
 - No customer data mutation or customer contact.
 
-## Residual Blockers
+## Runtime Provisioning Evidence
 
-- `[MISSING: Vault value secret/prod/invoices-microservice#NOTIFICATIONS_SERVICE_TOKEN before applying the updated ExternalSecret]`
-- `[MISSING: Runtime channel_registry row for invoices.documents with invoices-microservice + transactional allow lists]`
-- `[MISSING: Runtime readiness evidence from scripts/check-invoices-documents-readiness.sh after token and channel row provisioning]`
+Completed on 2026-07-02:
+
+- Vault path `secret/prod/invoices-microservice` contains `NOTIFICATIONS_SERVICE_TOKEN`; value was not printed.
+- `notifications-microservice-secret` contains `INVOICES_NOTIFICATIONS_SERVICE_TOKEN`.
+- `channel_registry` contains active `invoices.documents` policy with `type=email`, `provider=ses`, `purposesAllowed={transactional}`, and `applicationsAllowed={invoices-microservice}`.
+- Deployed image digest is `sha256:4e12aef822773d9ffec333db6417403ac6b5a73cf855ab8e25fb2bcb664f25a1`.
+- `scripts/check-invoices-documents-readiness.sh` passed for proforma and final payloads with HTTP 201, `mutation=false`, and `providerCall=false`.
+- Smoke recipient notification rows stayed `0 -> 0`.
+
+## Remaining Caveat
+
 - `[UNKNOWN: Approved invoice sender identity if provider defaults are not acceptable]`

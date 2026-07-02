@@ -48,6 +48,51 @@ created and no provider send was requested by the validate endpoint.
 
 ## Current State
 
+## 2026-07-02 - Invoices Documents Runtime Readiness Complete
+
+Intent: complete the approved Notifications-side runtime provisioning for
+invoice document delivery while preserving the no-send/customer-contact
+boundary.
+
+Runtime changes:
+- Verified Vault path `secret/prod/invoices-microservice` already contains
+  `NOTIFICATIONS_SERVICE_TOKEN`; no secret value was printed.
+- Applied `k8s/external-secret.yaml` and force-synced
+  `notifications-microservice-secret`; `INVOICES_NOTIFICATIONS_SERVICE_TOKEN`
+  is now present in the Kubernetes Secret.
+- Seeded `channel_registry` with `channelKey=invoices.documents`, `type=email`,
+  `provider=ses`, `isActive=true`, `purposesAllowed={transactional}`, and
+  `applicationsAllowed={invoices-microservice}`. Sender fields remain `NULL`
+  so provider defaults apply.
+- Deployed integration branch `codex/notifications-orders-lifecycle-integration`
+  at commit `a73df0b`; image digest
+  `sha256:4e12aef822773d9ffec333db6417403ac6b5a73cf855ab8e25fb2bcb664f25a1`.
+- Because the deploy script leaves the deployment image at `:latest`, an
+  explicit rollout restart was required. Final ready pod
+  `notifications-microservice-64ff99b44f-jdvpx` runs the new digest above.
+
+Validation:
+- 2026-07-02 pre-deploy `git diff --check` passed on the integration branch.
+- 2026-07-02 pre-deploy `npm run build` passed on the integration branch.
+- 2026-07-02 pre-deploy `npm test -- --runInBand` passed (7 suites, 32 tests).
+- 2026-07-02 `./scripts/deploy.sh` completed successfully and in-pod `/health`
+  passed.
+- 2026-07-02 `./scripts/check-invoices-documents-readiness.sh` passed:
+  proforma and final invoice payloads both returned HTTP 201 with
+  `mutation=false` and `providerCall=false`.
+- 2026-07-02 smoke recipient `invoice-smoke@example.invalid` notification rows
+  stayed `0 -> 0`, confirming the readiness script did not persist a
+  notification row.
+
+Boundary decision: no real `/notifications/send`, provider dispatch, template
+persistence, webhook delivery, customer data mutation, or customer contact
+action was performed. The only live data mutation was the approved
+`channel_registry` policy row.
+
+Remaining caveat:
+- `[UNKNOWN: Approved invoice sender identity if provider defaults are not acceptable]`
+
+
 ## 2026-07-02 - Invoices Documents Channel Contract Readiness
 
 Intent: finish the Notifications-side source contract for proforma/final invoice
@@ -71,10 +116,10 @@ Boundary decision: no notification send, provider dispatch, channel mutation,
 secret write, live deploy, template persistence, webhook delivery, customer data
 mutation, or customer contact action was performed.
 
-Runtime blockers:
-- `[MISSING: Vault value secret/prod/invoices-microservice#NOTIFICATIONS_SERVICE_TOKEN before applying the updated ExternalSecret]`
-- `[MISSING: Runtime channel_registry row for invoices.documents allowing service invoices-microservice and purpose transactional]`
-- `[MISSING: Runtime readiness evidence from scripts/check-invoices-documents-readiness.sh after token and channel row provisioning]`
+Runtime blockers at source-lane handoff, now resolved by the runtime readiness section above:
+- Vault value `secret/prod/invoices-microservice#NOTIFICATIONS_SERVICE_TOKEN` exists and is synced into `notifications-microservice-secret`.
+- Runtime `channel_registry` row for `invoices.documents` exists and allows `invoices-microservice` with `transactional` purpose.
+- `scripts/check-invoices-documents-readiness.sh` passed against live Notifications.
 - `[UNKNOWN: Approved invoice sender identity if provider defaults are not acceptable]`
 
 Validation:
