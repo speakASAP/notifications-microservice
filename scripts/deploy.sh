@@ -57,7 +57,7 @@ docker push "$IMAGE_LATEST"
 deploy_timing_phase_end "Push image"
 
 deploy_timing_phase_start "Update K8s deployment"
-kubectl set image deployment/${SERVICE_NAME} app="${IMAGE_LATEST}" -n "${NAMESPACE}"
+kubectl set image deployment/${SERVICE_NAME} app="${IMAGE}" -n "${NAMESPACE}"
 deploy_timing_phase_end "Update K8s deployment"
 
 deploy_timing_phase_start "Wait for rollout"
