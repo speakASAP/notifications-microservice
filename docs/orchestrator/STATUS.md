@@ -48,6 +48,30 @@ created and no provider send was requested by the validate endpoint.
 
 ## Current State
 
+## 2026-07-02 - Immutable Deploy Tag Hardening
+
+Intent: keep invoice document notification readiness stable by preventing
+future deploys from leaving the Kubernetes deployment on a stale or ambiguous
+`:latest` image.
+
+Change:
+- `scripts/deploy.sh` still builds and pushes both the requested tag and
+  `:latest`, but now sets the Kubernetes deployment image to the immutable
+  requested tag.
+- `docs/DEPLOYMENT.md` now documents immutable deploy tags and the recovery
+  command for repinning if the runtime ever drifts back to `:latest`.
+
+Runtime evidence:
+- Before this source hardening, live deployment was already repinned to
+  `localhost:5000/notifications-microservice:f855764`.
+- `./scripts/check-invoices-documents-readiness.sh` passed for proforma and
+  final invoice validation with HTTP 201, `mutation=false`, and
+  `providerCall=false`.
+
+Boundary decision: no deploy was run for this source hardening, no
+`/notifications/send` was called, no provider dispatch occurred, no
+`channel_registry` mutation was made, and no customer contact was performed.
+
 ## 2026-07-02 - Invoices Documents Runtime Readiness Complete
 
 Intent: complete the approved Notifications-side runtime provisioning for
@@ -218,5 +242,5 @@ Stage: deployed to production and smoke-tested for the admin frontend goal.
 - Template management is documented but not implemented as a persisted backend feature. The UI correctly treats templates as inline body plus JSON data.
 - Test message action sends real notifications to the selected recipient and therefore requires a browser confirmation.
 - `/webhooks/subscriptions` is the implemented route, despite README references to `/api/webhooks/subscriptions`.
-- The deploy script sets the deployment image to `:latest`; when the pod template does not change, a manual rollout restart can be required for the new image to run.
+- Historical deployments that used `:latest` could leave stale pod digests; current deploy script source now pins the immutable requested image tag.
 - Notifications must verify JWTs with the same secret that auth uses to sign them. If admin login shows the dashboard briefly and then returns to login, compare auth and notifications `JWT_SECRET` fingerprints first.
