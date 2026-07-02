@@ -65,7 +65,13 @@ Validation evidence before deploy:
 
 Boundary: the approved recipient is `ssfskype@gmail.com`. Consumer enablement is limited to Orders lifecycle routing keys on exchange `orders.events`, queue `notifications.orders.lifecycle`, with DLX/DLQ configured and `ORDERS_EVENTS_REQUEUE_ON_ERROR=false`.
 
-Deployment evidence: [PENDING: deploy and live /health/orders-events verification]
+Deployment evidence:
+- Applied `k8s/configmap.yaml` before deploy so the pod starts with `ORDERS_EVENTS_CONSUMER_ENABLED=true` and `ORDERS_EVENTS_NOTIFICATION_RECIPIENT=ssfskype@gmail.com`.
+- Deployed image `localhost:5000/notifications-microservice:866a49f`; rollout and in-pod `/health` passed.
+- Startup ran migration `SeedOrdersLifecycleChannel1746445300000`.
+- Live `channel_registry` row `orders.lifecycle` is active with `type=email`, `provider=ses`, `purposesAllowed=transactional`, and `applicationsAllowed=orders-microservice`.
+- Public `/health/orders-events` returned `enabled=true`, `connected=true`, `consuming=true`, `lastErrorCode=null`, and counters `received=1`, `sent=1`, `failed=0` after smoke.
+- Synthetic event `codex-orders-lifecycle-smoke-1783034533137` produced a `sent` notification row to `ssfskype@gmail.com` with `type=order_status_update` and provider message id present.
 
 ## 2026-07-03 - Orders Events Health Route Runtime Drift Repaired
 
@@ -84,7 +90,6 @@ Validation evidence:
 Boundary: `ORDERS_EVENTS_CONSUMER_ENABLED` remains `false`; no live notification sends, no broker consumption, no recipient config mutation, no provider call, no channel-registry mutation, and no customer data access were performed.
 
 Remaining blockers:
-- `[MISSING: no-send enabled-consumer smoke proving queue/bindings without dispatching real notifications]`
 
 ## 2026-07-02 - Immutable Deploy Tag Hardening
 
