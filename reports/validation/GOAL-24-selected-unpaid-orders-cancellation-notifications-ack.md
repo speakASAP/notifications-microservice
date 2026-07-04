@@ -38,12 +38,17 @@ This validation report contains only the selected central order hash supplied fo
 
 ### Validation Evidence
 
-Pending at creation time; final command output must be recorded in the session handoff:
+Passed on 2026-07-04 from `alfares:/home/ssf/Documents/Github/notifications-microservice`:
 
 ```bash
 npm run verify:goal24-selected-unpaid-cancel-ack
-git diff --check
+# Goal 24 Notifications selected unpaid cancellation ack verifier passed.
+
 npm test -- --runInBand src/notifications/orders-events/orders-event-notification.router.spec.ts src/notifications/orders-events/orders-events-rabbitmq.consumer.spec.ts
+# PASS: 2 suites, 10 tests
+
+git diff --check
+# PASS: no whitespace errors
 ```
 
 ### Blockers

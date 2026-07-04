@@ -5,6 +5,7 @@ Last updated: 2026-07-02.
 ## Orchestrator Command
 
 ```text
+2026-07-04: Goal 24 selected unpaid Orders cancellation Notifications acknowledgement created for selected central order hash 04d7d08c82a07853. Notifications source-governance decision: no pre-route notification send, validate call, channel mutation, broker mutation, recipient mutation, provider dispatch, DB write, deploy, or secret read is required before Orders planning may use sideEffectsHandled.notification=true for this selected-hash source-only plan. Added docs/orchestrator/GOAL-24-selected-unpaid-orders-cancellation-notifications-ack.md, reports/validation/GOAL-24-selected-unpaid-orders-cancellation-notifications-ack.md, scripts/verifier/verify-goal24-selected-unpaid-cancel-ack.js, and package script verify:goal24-selected-unpaid-cancel-ack. No runtime source, Orders repo, live send, broker, DB, channel, recipient config, deploy, secret, raw order/customer/payment data, or customer contact action was touched. Remaining blockers: [MISSING: owner-approved runtime packet for any future live Orders cancellation route invocation], [MISSING: owner-approved recipient/customer-contact policy if a future cancelled event should notify a real recipient], [MISSING: final Orders-owned route evidence if Orders later executes the cancellation].
 2026-07-02: Goal 7.4 Orders lifecycle-changed event boundary updated on isolated branch `codex/notifications-orders-lifecycle-event`. Notifications now accepts `orders.order.lifecycle_changed.v1`, validates approved lifecycle stages plus status/payment/fulfillment/delivery status fields, maps lifecycle changes to `order_status_update`, stores bounded lifecycle metadata for idempotency/audit, and still rejects sensitive customer/address/payment/tracking/token fields. Validation passed: `npm test -- --runTestsByPath src/notifications/orders-events/orders-event-notification.router.spec.ts` (6 tests), `npm run build`, `npm test -- --runInBand` (6 suites / 26 tests), and `git diff --check`. No deployment, live broker consumer, runtime recipient change, notification send, or secret read is performed in this branch.
 NOTIFICATIONS ORCHESTRATOR: continue implementation
 ```
@@ -115,7 +116,7 @@ Newest entries first.
 
 ## Next Action
 
-Notifications-side invoice document delivery readiness is complete. The next rollout step belongs to the invoices/runtime owner: enable or exercise invoice delivery only through approved invoices flows, keeping real customer sends behind the product/runtime gates for invoices.
+Goal 24 Notifications selected unpaid cancellation acknowledgement is source-complete for central order hash 04d7d08c82a07853. Orders planning may consume the committed source-only ack for sideEffectsHandled.notification=true; any live cancellation route remains blocked until the owner-approved runtime packet exists.
 
 To print the base notifications checkpoint, run:
 

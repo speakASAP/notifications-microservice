@@ -48,6 +48,27 @@ created and no provider send was requested by the validate endpoint.
 
 ## Current State
 
+## 2026-07-04 - Goal 24 Selected Unpaid Orders Cancellation Notifications Ack
+
+Intent: provide a Notifications-owned source-only acknowledgement for Goal 24 selected unpaid Orders cancellation candidate `centralOrderHash 04d7d08c82a07853` without sending or mutating anything before Orders planning.
+
+Decision: Notifications requires no pre-route notification send, validation call, channel mutation, broker mutation, recipient mutation, provider dispatch, DB write, deploy, or secret read before Orders planning may use `sideEffectsHandled.notification=true` for this selected-hash source-only plan.
+
+Future runtime ownership: if a future owner-approved Orders cancellation route is invoked, Notifications support is downstream Orders cancelled/lifecycle event ownership through the existing Orders lifecycle event boundary. This acknowledgement is not a live-send approval.
+
+Boundary: no runtime source was changed, no Orders repository files were edited, no `/notifications/send` or `/notifications/validate` call was made, no provider call occurred, no DB/channel/broker/recipient config mutation occurred, no secret was read, no deploy was run, and no raw order/customer/payment data was recorded.
+
+Validation artifacts:
+- `docs/orchestrator/GOAL-24-selected-unpaid-orders-cancellation-notifications-ack.md`
+- `reports/validation/GOAL-24-selected-unpaid-orders-cancellation-notifications-ack.md`
+- `scripts/verifier/verify-goal24-selected-unpaid-cancel-ack.js`
+- package script `verify:goal24-selected-unpaid-cancel-ack`
+
+Remaining blockers:
+- `[MISSING: owner-approved runtime packet for any future live Orders cancellation route invocation]`
+- `[MISSING: owner-approved recipient/customer-contact policy if a future cancelled event should notify a real recipient]`
+- `[MISSING: final Orders-owned route evidence if Orders later executes the cancellation]`
+
 ## 2026-07-03 - Orders Events Consumer Recipient Approved
 
 Intent: enable the Orders lifecycle notification consumer with an approved production recipient while preserving channel-policy and migration evidence.
