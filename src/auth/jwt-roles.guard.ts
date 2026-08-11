@@ -111,6 +111,20 @@ export class JwtRolesGuard implements CanActivate {
       };
     }
 
+    // speakasap-notification-service is the transport's only caller: it renders and
+    // addresses the mail, then hands it here purely for delivery. Scoped like the
+    // other per-consumer tokens rather than sharing SERVICE_TOKEN, which grants
+    // global:superadmin — delivery needs no such reach.
+    const speakasapToken = process.env.SPEAKASAP_NOTIFICATIONS_SERVICE_TOKEN;
+    if (speakasapToken && this.safeEqual(token, speakasapToken)) {
+      return {
+        sub: 'service:speakasap-notification-service',
+        email: undefined,
+        roles: [`internal:${serviceName}:admin`],
+        serviceName: 'speakasap-notification-service',
+      };
+    }
+
     return null;
   }
 
