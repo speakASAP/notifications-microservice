@@ -15,7 +15,7 @@ data:
   AUTH_SERVICE_URL: "http://auth-microservice.statex-apps.svc.cluster.local:3370"
   DB_HOST: "db-server-postgres"
   DB_PORT: "5432"
-  DB_USER: "dbadmin"
+  DB_USER: "notifications"
   DB_NAME: "notifications"
   DB_SYNC: "false"
   DB_AUTO_CREATE: "true"
