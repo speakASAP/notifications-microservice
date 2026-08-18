@@ -39,6 +39,11 @@ describe('JwtRolesGuard static service actors', () => {
     delete process.env.SERVICE_TOKEN;
     delete process.env.CLIPLOT_NOTIFICATIONS_SERVICE_TOKEN;
     delete process.env.INVOICES_NOTIFICATIONS_SERVICE_TOKEN;
+    delete process.env.AUTH_NOTIFICATIONS_SERVICE_TOKEN;
+    delete process.env.MARKETING_NOTIFICATIONS_SERVICE_TOKEN;
+    delete process.env.MONITORING_NOTIFICATIONS_SERVICE_TOKEN;
+    delete process.env.LEADS_NOTIFICATIONS_SERVICE_TOKEN;
+    delete process.env.DOMAIN_RESEARCH_NOTIFICATIONS_SERVICE_TOKEN;
   });
 
   afterAll(() => {
@@ -117,5 +122,46 @@ describe('JwtRolesGuard static service actors', () => {
     expect(jwtService.verify).toHaveBeenCalledWith('wrong-token', {
       secret: process.env.JWT_SECRET,
     });
+  });
+
+  // TASK-KEY-F2: these callers previously used the shared SERVICE_TOKEN, which grants
+  // global:superadmin. Each now has its own credential scoped to delivery rights only.
+  const perCaller: Array<[string, string]> = [
+    ['AUTH_NOTIFICATIONS_SERVICE_TOKEN', 'auth-microservice'],
+    ['MARKETING_NOTIFICATIONS_SERVICE_TOKEN', 'marketing-microservice'],
+    ['MONITORING_NOTIFICATIONS_SERVICE_TOKEN', 'monitoring-microservice'],
+    ['LEADS_NOTIFICATIONS_SERVICE_TOKEN', 'leads-microservice'],
+    ['DOMAIN_RESEARCH_NOTIFICATIONS_SERVICE_TOKEN', 'domain-research'],
+  ];
+
+  it.each(perCaller)('accepts %s and scopes it to %s without superadmin', async (envVar, caller) => {
+    process.env[envVar] = `${caller}-token`;
+    const request = { headers: { authorization: `Bearer ${caller}-token` } };
+    const { guard, jwtService } = createGuard();
+
+    await expect(guard.canActivate(createContext(request))).resolves.toBe(true);
+
+    expect(jwtService.verify).not.toHaveBeenCalled();
+    expect(request).toMatchObject({
+      user: {
+        sub: `service:${caller}`,
+        roles: [`internal:notifications-microservice:admin`],
+        serviceName: caller,
+      },
+    });
+    // the whole point of the split: no caller may hold global rights
+    expect((request as any).user.roles).not.toContain('global:superadmin');
+  });
+
+  it('does not accept one caller\'s token in place of another', async () => {
+    process.env.AUTH_NOTIFICATIONS_SERVICE_TOKEN = 'auth-only-token';
+    process.env.LEADS_NOTIFICATIONS_SERVICE_TOKEN = 'leads-only-token';
+    const request = { headers: { authorization: 'Bearer auth-only-token' } };
+    const { guard } = createGuard();
+
+    await guard.canActivate(createContext(request));
+
+    // auth's token must resolve to auth, never to leads
+    expect((request as any).user.serviceName).toBe('auth-microservice');
   });
 });

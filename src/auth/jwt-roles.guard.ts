@@ -125,6 +125,30 @@ export class JwtRolesGuard implements CanActivate {
       };
     }
 
+    // Per-caller tokens for the services that previously authenticated with the shared
+    // SERVICE_TOKEN. That token grants global:superadmin; none of these callers needs more
+    // than delivery rights, so each gets its own credential scoped to internal:<svc>:admin.
+    // A leak of any one of them no longer exposes the other callers or superadmin.
+    const perCallerTokens: ReadonlyArray<readonly [string, string]> = [
+      ['AUTH_NOTIFICATIONS_SERVICE_TOKEN', 'auth-microservice'],
+      ['MARKETING_NOTIFICATIONS_SERVICE_TOKEN', 'marketing-microservice'],
+      ['MONITORING_NOTIFICATIONS_SERVICE_TOKEN', 'monitoring-microservice'],
+      ['LEADS_NOTIFICATIONS_SERVICE_TOKEN', 'leads-microservice'],
+      ['DOMAIN_RESEARCH_NOTIFICATIONS_SERVICE_TOKEN', 'domain-research'],
+    ];
+
+    for (const [envVar, callerName] of perCallerTokens) {
+      const callerToken = process.env[envVar];
+      if (callerToken && this.safeEqual(token, callerToken)) {
+        return {
+          sub: `service:${callerName}`,
+          email: undefined,
+          roles: [`internal:${serviceName}:admin`],
+          serviceName: callerName,
+        };
+      }
+    }
+
     return null;
   }
 
