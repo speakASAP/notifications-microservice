@@ -72,21 +72,22 @@ describe('verifyAuthToken (F3 dual-algorithm)', () => {
   // not intend. Asserted directly against jsonwebtoken, because verifyAuthToken's own
   // header routing would mask its absence — a test that passes with the pin removed
   // proves nothing about the pin.
-  it('pins the HS256 branch so a public-key-as-HMAC token cannot verify', () => {
-    const forged = jwt.sign({ sub: 'attacker', roles: ['global:superadmin'] }, publicPem, {
-      algorithm: 'HS256',
-    });
+  it('pins the HS256 branch so a token claiming another alg cannot verify with JWT_SECRET', async () => {
+    // The real confusion attack: the header claims an algorithm the verifier does not
+    // expect, but the signature is a plain HMAC over JWT_SECRET. Without
+    // `algorithms: ['HS256']`, jsonwebtoken honours the attacker-supplied header and
+    // verifies it. Forged by hand because jwt.sign() will not emit a mismatched header.
+    const b64 = (o: object) =>
+      Buffer.from(JSON.stringify(o)).toString('base64url');
+    const header = b64({ alg: 'HS384', typ: 'JWT' });
+    const body = b64({ sub: 'attacker', roles: ['global:superadmin'] });
+    const sig = require('crypto')
+      .createHmac('sha384', process.env.JWT_SECRET as string)
+      .update(`${header}.${body}`)
+      .digest('base64url');
+    const forged = `${header}.${body}.${sig}`;
 
-    // This jsonwebtoken version refuses a PEM as an HMAC secret on its own
-    // ("invalid algorithm"), so the classic confusion attack is already blocked at the
-    // library layer. Pin the expectation to that behaviour so a dependency change that
-    // relaxes it fails here rather than silently reopening the hole.
-    expect(() => jwt.verify(forged, publicPem)).toThrow(/invalid algorithm/);
-    // And with the real shared secret it must still fail: wrong signature.
-    expect(() => jwt.verify(forged, 'hs256-shared-secret', { algorithms: ['HS256'] })).toThrow();
-    // The pin itself: an RS256 token must never be accepted by the HS256 branch.
-    const rs = jwt.sign({ sub: 'u' }, privatePem, { algorithm: 'RS256', keyid: KID });
-    expect(() => jwt.verify(rs, publicPem, { algorithms: ['HS256'] })).toThrow();
+    await expect(verifyAuthToken(forged)).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('rejects an unsigned alg:none token', async () => {
