@@ -44,6 +44,7 @@ describe('JwtRolesGuard static service actors', () => {
     delete process.env.MONITORING_NOTIFICATIONS_SERVICE_TOKEN;
     delete process.env.LEADS_NOTIFICATIONS_SERVICE_TOKEN;
     delete process.env.DOMAIN_RESEARCH_NOTIFICATIONS_SERVICE_TOKEN;
+    delete process.env.RUNLAYER_NOTIFICATIONS_SERVICE_TOKEN;
   });
 
   afterAll(() => {
@@ -132,6 +133,7 @@ describe('JwtRolesGuard static service actors', () => {
     ['MONITORING_NOTIFICATIONS_SERVICE_TOKEN', 'monitoring-microservice'],
     ['LEADS_NOTIFICATIONS_SERVICE_TOKEN', 'leads-microservice'],
     ['DOMAIN_RESEARCH_NOTIFICATIONS_SERVICE_TOKEN', 'domain-research'],
+    ['RUNLAYER_NOTIFICATIONS_SERVICE_TOKEN', 'runlayer'],
   ];
 
   it.each(perCaller)('accepts %s and scopes it to %s without superadmin', async (envVar, caller) => {

@@ -135,6 +135,7 @@ export class JwtRolesGuard implements CanActivate {
       ['MONITORING_NOTIFICATIONS_SERVICE_TOKEN', 'monitoring-microservice'],
       ['LEADS_NOTIFICATIONS_SERVICE_TOKEN', 'leads-microservice'],
       ['DOMAIN_RESEARCH_NOTIFICATIONS_SERVICE_TOKEN', 'domain-research'],
+      ['RUNLAYER_NOTIFICATIONS_SERVICE_TOKEN', 'runlayer'],
     ];
 
     for (const [envVar, callerName] of perCallerTokens) {
