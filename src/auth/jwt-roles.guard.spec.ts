@@ -111,18 +111,16 @@ describe('JwtRolesGuard static service actors', () => {
   });
 
   it('falls through mismatched static tokens to JWT validation and fails closed', async () => {
+    // Asserts the behaviour (an unrecognised token is rejected), not the mechanism.
+    // Verification moved to verifyAuthToken in TASK-KEY-F3 so it can accept RS256 as
+    // well as HS256; pinning the old jwtService.verify call shape here would break on
+    // that refactor without saying anything about security.
     process.env.CLIPLOT_NOTIFICATIONS_SERVICE_TOKEN = 'cliplot-notifications-token';
+    process.env.JWT_SECRET = 'test-secret';
     const request = { headers: { authorization: 'Bearer wrong-token' } };
-    const { guard, jwtService } = createGuard();
-    jest.spyOn(jwtService, 'verify').mockImplementation(() => {
-      throw new Error('bad token');
-    });
+    const { guard } = createGuard();
 
     await expect(guard.canActivate(createContext(request))).rejects.toThrow(UnauthorizedException);
-
-    expect(jwtService.verify).toHaveBeenCalledWith('wrong-token', {
-      secret: process.env.JWT_SECRET,
-    });
   });
 
   // TASK-KEY-F2: these callers previously used the shared SERVICE_TOKEN, which grants
