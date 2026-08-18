@@ -6,15 +6,15 @@
  * could therefore forge any token, including `global:superadmin`. Under RS256 the
  * verifier holds only auth's public key and cannot sign at all.
  *
- * During the migration both are accepted, RS256 first:
+ * Migration complete — this verifier is RS256-only:
  *
  *   1. auth publishes its public key at /.well-known/jwks.json  (done)
- *   2. verifiers accept RS256 *and* HS256                       (this file)
- *   3. auth switches to signing RS256
- *   4. HS256 is removed and the shared secret rotated
+ *   2. verifiers accept RS256 *and* HS256                       (done)
+ *   3. auth switches to signing RS256                           (done)
+ *   4. HS256 removed and the shared secret rotated              (this file)
  *
- * The order matters. Accepting RS256 before auth issues it is a no-op; issuing it
- * before verifiers accept it invalidates every token in the ecosystem at once.
+ * Any token not signed RS256 is now rejected outright. The shared JWT_SECRET no longer
+ * grants the ability to mint tokens this service will accept.
  *
  * The key set is cached because it is fetched on the request path; a miss on an
  * unknown `kid` refetches once so key rotation does not need a redeploy.
@@ -113,15 +113,8 @@ export async function verifyAuthToken(token: string): Promise<VerifiedPayload> {
     }
   }
 
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    throw new UnauthorizedException('JWT_SECRET is not configured and the token is not RS256');
-  }
-  try {
-    // Pinned to HS256: without `algorithms` a token could claim alg:none or swap to
-    // RS256 with the public key as the HMAC secret — the classic confusion attack.
-    return jwt.verify(token, secret, { algorithms: ['HS256'] }) as VerifiedPayload;
-  } catch (err) {
-    throw new UnauthorizedException(err instanceof Error ? err.message : 'Invalid token');
-  }
+  // TASK-KEY-F3 step 4: HS256 is retired. auth signs RS256 only, so any non-RS256 token
+  // is either a pre-migration leftover or a forgery attempt. Accepting HS256 here would
+  // keep the shared secret forgery-capable, which is the whole point of the migration.
+  throw new UnauthorizedException(`Unsupported token algorithm ${alg ?? 'none'}; RS256 required`);
 }
