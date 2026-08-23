@@ -31,6 +31,12 @@ export enum TelegramParseMode {
   HTML = 'HTML',
   MARKDOWN = 'Markdown',
   MARKDOWNV2 = 'MarkdownV2',
+  // Send the body as literal text with no markup parsing. Callers sending
+  // machine-generated content (log tails, stack traces, kubectl output) must
+  // use this: with any other mode a stray '<' makes Telegram reject the entire
+  // message. There was previously no way to express "this is not markup", so
+  // such callers had no correct option.
+  PLAIN = 'Plain',
 }
 
 export enum EmailProvider {
