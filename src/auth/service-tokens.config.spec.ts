@@ -87,6 +87,7 @@ describe('assertServiceTokensConfigured', () => {
   it('covers exactly the tokens JwtRolesGuard resolves', () => {
     expect([...REQUIRED_SERVICE_TOKEN_VARS].sort()).toEqual([
       'CLIPLOT_NOTIFICATIONS_SERVICE_TOKEN',
+      'CV_TUNING_NOTIFICATIONS_SERVICE_TOKEN',
       'INVOICES_NOTIFICATIONS_SERVICE_TOKEN',
       'SERVICE_TOKEN',
       'SPEAKASAP_NOTIFICATIONS_SERVICE_TOKEN',

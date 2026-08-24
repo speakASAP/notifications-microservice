@@ -102,6 +102,19 @@ export class JwtRolesGuard implements CanActivate {
       };
     }
 
+    // cv-tuning sends one thing: the outcome nudge that asks a user whether they heard back
+    // about an application they downloaded. Scoped like the other per-consumer tokens rather
+    // than sharing SERVICE_TOKEN, which grants global:superadmin — a nudge needs no such reach.
+    const cvTuningToken = process.env.CV_TUNING_NOTIFICATIONS_SERVICE_TOKEN;
+    if (cvTuningToken && this.safeEqual(token, cvTuningToken)) {
+      return {
+        sub: 'service:cv-tuning',
+        email: undefined,
+        roles: [`internal:${serviceName}:admin`],
+        serviceName: 'cv-tuning',
+      };
+    }
+
     const invoicesToken = process.env.INVOICES_NOTIFICATIONS_SERVICE_TOKEN;
     if (invoicesToken && this.safeEqual(token, invoicesToken)) {
       return {

@@ -45,6 +45,7 @@ describe('JwtRolesGuard static service actors', () => {
     delete process.env.LEADS_NOTIFICATIONS_SERVICE_TOKEN;
     delete process.env.DOMAIN_RESEARCH_NOTIFICATIONS_SERVICE_TOKEN;
     delete process.env.RUNLAYER_NOTIFICATIONS_SERVICE_TOKEN;
+    delete process.env.CV_TUNING_NOTIFICATIONS_SERVICE_TOKEN;
   });
 
   afterAll(() => {
@@ -106,6 +107,25 @@ describe('JwtRolesGuard static service actors', () => {
         sub: 'service:invoices-microservice',
         roles: ['internal:notifications-microservice:admin'],
         serviceName: 'invoices-microservice',
+      },
+    });
+  });
+
+  it('accepts the cv-tuning notifications service token as a machine actor', async () => {
+    process.env.CV_TUNING_NOTIFICATIONS_SERVICE_TOKEN = 'cv-tuning-notifications-token';
+    const request = { headers: { authorization: 'Bearer cv-tuning-notifications-token' } };
+    const { guard, jwtService } = createGuard();
+
+    await expect(guard.canActivate(createContext(request))).resolves.toBe(true);
+
+    expect(jwtService.verify).not.toHaveBeenCalled();
+    // Scoped to this service, never global:superadmin: cv-tuning only sends its own
+    // outcome nudges and needs no reach beyond delivery.
+    expect(request).toMatchObject({
+      user: {
+        sub: 'service:cv-tuning',
+        roles: ['internal:notifications-microservice:admin'],
+        serviceName: 'cv-tuning',
       },
     });
   });
