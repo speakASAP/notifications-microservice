@@ -388,6 +388,53 @@ export class InboundEmailService {
   }
 
   /**
+   * Unfold a MIME header block into real header fields.
+   *
+   * RFC 5322 continuation lines start with WSP and belong to the previous field.
+   * Scanning a raw header blob with a bare /Content-Transfer-Encoding:/ regex is unsafe:
+   * DKIM-Signature carries a signed-header list (h=from:subject:...:content-transfer-encoding:...)
+   * whose folded continuation line starts with "content-transfer-encoding:", so a naive match
+   * reads the DKIM list as the transfer encoding and the body is never decoded (=3D leaks
+   * into helpdesk tickets).
+   */
+  private unfoldHeaders(headers: string): Array<{ name: string; value: string }> {
+    const fields: Array<{ name: string; value: string }> = [];
+    for (const rawLine of headers.split(/\r?\n/)) {
+      if (/^[ \t]/.test(rawLine)) {
+        // Continuation of the previous field - never a new header, even if it contains a colon.
+        if (fields.length > 0) {
+          fields[fields.length - 1].value += ' ' + rawLine.trim();
+        }
+        continue;
+      }
+      const sep = rawLine.indexOf(':');
+      if (sep === -1) {
+        continue;
+      }
+      fields.push({
+        name: rawLine.substring(0, sep).trim().toLowerCase(),
+        value: rawLine.substring(sep + 1).trim(),
+      });
+    }
+    return fields;
+  }
+
+  /**
+   * Read a single header field value by name (last occurrence wins, as MTAs prepend).
+   * Returns undefined when the header is absent.
+   */
+  private getHeaderValue(headers: string, name: string): string | undefined {
+    const wanted = name.toLowerCase();
+    const fields = this.unfoldHeaders(headers);
+    for (let i = fields.length - 1; i >= 0; i--) {
+      if (fields[i].name === wanted) {
+        return fields[i].value;
+      }
+    }
+    return undefined;
+  }
+
+  /**
    * Parse email parts (headers, body, attachments) from raw email content
    */
   private parseEmailParts(emailContent: string): {
@@ -462,16 +509,18 @@ export class InboundEmailService {
       }
     }
 
-    // Check Content-Transfer-Encoding and charset for non-multipart messages
-    const transferEncodingMatch = headers.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
-    const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim() : '';
-    const charsetMatch = headers.match(/charset=["']?([^"'\s;]+)["']?/i);
+    // Check Content-Transfer-Encoding and charset for non-multipart messages.
+    // Read them as real header fields - a raw regex over the header blob matches the
+    // DKIM-Signature signed-header list instead (see unfoldHeaders).
+    const contentTypeHeader = this.getHeaderValue(headers, 'content-type') || '';
+    const transferEncoding = (this.getHeaderValue(headers, 'content-transfer-encoding') || '').trim();
+    const charsetMatch = contentTypeHeader.match(/charset=["']?([^"'\s;]+)["']?/i);
     const messageCharset = charsetMatch ? charsetMatch[1].trim() : undefined;
 
     // Check if multipart message
-    if (headers.includes('Content-Type: multipart')) {
+    if (/^multipart\//i.test(contentTypeHeader)) {
       // Parse multipart message (trim boundary - RFC allows whitespace)
-      const boundaryMatch = headers.match(/boundary="?([^";\r\n]+)"?/i);
+      const boundaryMatch = contentTypeHeader.match(/boundary="?([^";\r\n]+)"?/i);
       if (boundaryMatch) {
         const boundary = boundaryMatch[1].trim();
         const multipartParts = this.parseMultipart(body, boundary);
@@ -552,7 +601,7 @@ export class InboundEmailService {
       // Simple message, decode content first, then check content type
       const decodedBody = this.decodeContent(body, transferEncoding, messageCharset);
 
-      if (headers.includes('Content-Type: text/html')) {
+      if (/^text\/html/i.test(contentTypeHeader)) {
         parts.bodyHtml = decodedBody;
         parts.bodyText = this.stripHtml(decodedBody);
       } else {
@@ -637,13 +686,29 @@ export class InboundEmailService {
         ? section.substring(headerBodySplit + 4)
         : section.substring(headerBodySplitLF + 2);
 
-      const contentTypeMatch = partHeaders.match(/Content-Type:\s*([^;\r\n]+)/i);
-      const contentDispositionMatch = partHeaders.match(/Content-Disposition:\s*([^;\r\n]+)/i);
+      // Read part headers as real header fields (folded continuation lines merged),
+      // so a value that happens to contain "content-transfer-encoding:" cannot be
+      // mistaken for the header itself.
+      const partContentTypeHeader = this.getHeaderValue(partHeaders, 'content-type');
+      const partContentDispositionHeader = this.getHeaderValue(partHeaders, 'content-disposition');
+      const partTransferEncodingHeader = this.getHeaderValue(partHeaders, 'content-transfer-encoding');
+
+      const contentTypeMatch = partContentTypeHeader
+        ? partContentTypeHeader.match(/^([^;\r\n]+)/)
+        : null;
+      const contentDispositionMatch = partContentDispositionHeader
+        ? partContentDispositionHeader.match(/^([^;\r\n]+)/)
+        : null;
       // Match filename in Content-Disposition: filename="file.pdf" or filename*=UTF-8''file.pdf or filename=file.pdf
-      const filenameMatch = partHeaders.match(/filename\*?=(?:UTF-8[''])?["']?([^";\r\n]+)["']?/i) ||
-                            partHeaders.match(/filename=["']?([^";\r\n]+)["']?/i);
-      const transferEncodingMatch = partHeaders.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
-      const charsetMatch = partHeaders.match(/charset=["']?([^"'\s;]+)["']?/i);
+      const filenameSource = partContentDispositionHeader || '';
+      const filenameMatch = filenameSource.match(/filename\*?=(?:UTF-8[''])?["']?([^";\r\n]+)["']?/i) ||
+                            filenameSource.match(/filename=["']?([^";\r\n]+)["']?/i);
+      const transferEncodingMatch = partTransferEncodingHeader
+        ? partTransferEncodingHeader.match(/^([^\r\n]+)/)
+        : null;
+      const charsetMatch = partContentTypeHeader
+        ? partContentTypeHeader.match(/charset=["']?([^"'\s;]+)["']?/i)
+        : null;
       const partCharset = charsetMatch ? charsetMatch[1].trim() : undefined;
 
       const contentType = contentTypeMatch ? contentTypeMatch[1].trim() : undefined;
@@ -1086,8 +1151,13 @@ export class InboundEmailService {
         const buffer = Buffer.from(content, 'latin1');
         return this.bufferToStringWithCharset(buffer, targetCharset);
       } else {
-        // Unknown encoding - log warning but return as-is
-        this.logger.warn(`[PARSE] Unknown Content-Transfer-Encoding: ${encoding}, returning content as-is`, 'InboundEmailService');
+        // Unknown encoding - surface loudly. Returning raw content here is how
+        // quoted-printable bodies leaked into helpdesk tickets as "=3D" noise.
+        this.logger.error(
+          `[PARSE] ❌ Unknown Content-Transfer-Encoding: ${JSON.stringify(encoding)} (charset: ${targetCharset}, content length: ${content.length}). Body is NOT decoded and will be stored raw.`,
+          undefined,
+          'InboundEmailService',
+        );
         return content;
       }
     } catch (e) {
