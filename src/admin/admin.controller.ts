@@ -1,3 +1,4 @@
+import { Roles } from '../auth/roles.decorator';
 /**
  * Admin Controller
  * Protected endpoints for admin panel: stats, history, service params
@@ -19,6 +20,7 @@ import { InboundEmailService } from '../email/inbound-email.service';
 import { ApiResponseUtil } from '../../shared/utils/api-response.util';
 import { LoggerService } from '../../shared/logger/logger.service';
 import { ChannelRegistryService } from '../notifications/channel-registry.service';
+import { NOTIFICATIONS_ADMIN_ROLES, NOTIFICATIONS_READ_ROLES } from '../auth/roles.constants';
 
 @Controller('admin')
 export class AdminController {
@@ -30,12 +32,14 @@ export class AdminController {
     private readonly logger: LoggerService,
   ) {}
 
+  @Roles(...NOTIFICATIONS_ADMIN_ROLES)
   @Get('channels')
   async getChannels() {
     const channels = await this.channelRegistryService.listChannels();
     return ApiResponseUtil.success(channels);
   }
 
+  @Roles(...NOTIFICATIONS_ADMIN_ROLES)
   @Get('channels/:channelKey')
   async getChannel(@Param('channelKey') channelKey: string) {
     const channels = await this.channelRegistryService.listChannels();
@@ -49,6 +53,7 @@ export class AdminController {
     return ApiResponseUtil.success(channel);
   }
 
+  @Roles(...NOTIFICATIONS_ADMIN_ROLES)
   @Patch('channels/:channelKey')
   async updateChannel(
     @Param('channelKey') channelKey: string,
@@ -62,6 +67,7 @@ export class AdminController {
     return ApiResponseUtil.success(updated);
   }
 
+  @Roles(...NOTIFICATIONS_READ_ROLES)
   @Get('stats')
   async getStats() {
     const requestStart = Date.now();
@@ -118,6 +124,7 @@ export class AdminController {
     }
   }
 
+  @Roles(...NOTIFICATIONS_READ_ROLES)
   @Get('history')
   async getHistory(
     @Query('limit') limit?: number,
@@ -264,6 +271,7 @@ export class AdminController {
     }
   }
 
+  @Roles(...NOTIFICATIONS_READ_ROLES)
   @Get('message/:id')
   async getMessageDetails(
     @Param('id') id: string,
@@ -323,6 +331,7 @@ export class AdminController {
     }
   }
 
+  @Roles(...NOTIFICATIONS_ADMIN_ROLES)
   @Patch('message/:id')
   async updateMessageDetails(
     @Param('id') id: string,
@@ -384,6 +393,7 @@ export class AdminController {
     }
   }
 
+  @Roles(...NOTIFICATIONS_ADMIN_ROLES)
   @Get('params')
   getServiceParams() {
     // Non-secret service parameters for admin dashboard

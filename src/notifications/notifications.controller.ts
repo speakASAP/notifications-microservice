@@ -1,3 +1,4 @@
+import { Roles } from '../auth/roles.decorator';
 /**
  * Notifications Controller
  */
@@ -7,6 +8,7 @@ import { NotificationsService } from './notifications.service';
 import { SendNotificationDto } from './dto/send-notification.dto';
 import { ApiResponseUtil } from '../../shared/utils/api-response.util';
 import { LoggerService } from '../../shared/logger/logger.service';
+import { NOTIFICATIONS_READ_ROLES, NOTIFICATIONS_SEND_ROLES } from '../auth/roles.constants';
 
 @Controller('notifications')
 export class NotificationsController {
@@ -15,6 +17,7 @@ export class NotificationsController {
     private logger: LoggerService,
   ) {}
 
+  @Roles(...NOTIFICATIONS_SEND_ROLES)
   @Post('validate')
   async validateNotification(@Body() sendNotificationDto: SendNotificationDto, @Req() req: any) {
     const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -57,6 +60,7 @@ export class NotificationsController {
     }
   }
 
+  @Roles(...NOTIFICATIONS_SEND_ROLES)
   @Post('send')
   async sendNotification(@Body() sendNotificationDto: SendNotificationDto, @Req() req: any) {
     const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -93,6 +97,7 @@ export class NotificationsController {
     }
   }
 
+  @Roles(...NOTIFICATIONS_READ_ROLES)
   @Get('history')
   async getHistory(
     @Query('limit') limit?: number,
@@ -113,6 +118,7 @@ export class NotificationsController {
     }
   }
 
+  @Roles(...NOTIFICATIONS_READ_ROLES)
   @Get('status/:id')
   async getStatus(@Param('id') id: string) {
     try {

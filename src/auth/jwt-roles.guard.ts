@@ -7,6 +7,7 @@ import {
   Injectable,
   CanActivate,
   ExecutionContext,
+  Logger,
   UnauthorizedException,
   ForbiddenException,
 } from '@nestjs/common';
@@ -19,6 +20,8 @@ import { verifyAuthToken } from './jwt-verifier';
 
 @Injectable()
 export class JwtRolesGuard implements CanActivate {
+  private readonly logger = new Logger(JwtRolesGuard.name);
+
   constructor(
     private reflector: Reflector,
     private jwtService: JwtService,
@@ -35,7 +38,18 @@ export class JwtRolesGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    const requiredRoles = rolesMetadata?.roles?.length ? rolesMetadata.roles : this.getDefaultRoles();
+    // Deny by default. The previous fallback returned
+    // [global:superadmin, internal:notifications-microservice:admin] for any route
+    // without @Roles or @Public, so 29 undecorated routes each accepted the
+    // broadest credential in the service. An omission is now a loud 403.
+    const requiredRoles = rolesMetadata?.roles?.length ? rolesMetadata.roles : null;
+    if (!requiredRoles) {
+      const handler = `${context.getClass().name}.${context.getHandler().name}`;
+      this.logger.error(
+        `Route ${handler} has neither @Roles nor @Public; denying. Add an explicit policy.`,
+      );
+      throw new ForbiddenException('Route is missing an authorization policy');
+    }
 
     const request = context.switchToHttp().getRequest<Request>();
     const authHeader = request.headers.authorization;
@@ -46,8 +60,23 @@ export class JwtRolesGuard implements CanActivate {
 
     const token = authHeader.slice(7);
 
+    // A static service token is still subject to the route's policy. It used to
+    // return true here outright, so any holder of SERVICE_TOKEN reached every
+    // route in the service regardless of what the route required.
     const serviceActor = this.resolveStaticServiceActor(token);
     if (serviceActor) {
+      const actorRoles = Array.isArray(serviceActor.roles) ? serviceActor.roles : [];
+      if (!requiredRoles.some((r) => actorRoles.includes(r))) {
+        this.logger.warn(
+          `Static service token ${serviceActor.serviceName ?? 'unknown'} refused on ` +
+            `${context.getClass().name}.${context.getHandler().name}: lacks required role`,
+        );
+        throw new ForbiddenException('Insufficient permissions');
+      }
+      this.logger.warn(
+        `Static service token used by ${serviceActor.serviceName ?? 'unknown'} on ` +
+          `${context.getClass().name}.${context.getHandler().name}; migrate to a per-pair Auth JWT`,
+      );
       (request as Request & { user: unknown }).user = serviceActor;
       return true;
     }
@@ -75,10 +104,6 @@ export class JwtRolesGuard implements CanActivate {
     }
   }
 
-  private getDefaultRoles(): string[] {
-    const name = process.env.SERVICE_NAME || 'notifications-microservice';
-    return [`global:superadmin`, `internal:${name}:admin`];
-  }
 
   private resolveStaticServiceActor(token: string): { sub: string; email?: string; roles: string[]; serviceName?: string } | null {
     const serviceName = process.env.SERVICE_NAME || 'notifications-microservice';
@@ -87,7 +112,10 @@ export class JwtRolesGuard implements CanActivate {
       return {
         sub: `service:${serviceName}`,
         email: undefined,
-        roles: [`global:superadmin`, `internal:${serviceName}:admin`],
+        // Was [global:superadmin, internal:<self>:admin]. A shared static string
+        // must not carry the ecosystem's broadest role; admin on this service is
+        // already more than any current caller needs.
+        roles: [`internal:${serviceName}:admin`],
         serviceName,
       };
     }
@@ -104,7 +132,7 @@ export class JwtRolesGuard implements CanActivate {
 
     // cv-tuning sends one thing: the outcome nudge that asks a user whether they heard back
     // about an application they downloaded. Scoped like the other per-consumer tokens rather
-    // than sharing SERVICE_TOKEN, which grants global:superadmin — a nudge needs no such reach.
+    // than sharing SERVICE_TOKEN, which grants admin on this service — a nudge needs no such reach.
     const cvTuningToken = process.env.CV_TUNING_NOTIFICATIONS_SERVICE_TOKEN;
     if (cvTuningToken && this.safeEqual(token, cvTuningToken)) {
       return {
@@ -128,7 +156,7 @@ export class JwtRolesGuard implements CanActivate {
     // speakasap-notification-service is the transport's only caller: it renders and
     // addresses the mail, then hands it here purely for delivery. Scoped like the
     // other per-consumer tokens rather than sharing SERVICE_TOKEN, which grants
-    // global:superadmin — delivery needs no such reach.
+    // admin on this service — delivery needs no such reach.
     const speakasapToken = process.env.SPEAKASAP_NOTIFICATIONS_SERVICE_TOKEN;
     if (speakasapToken && this.safeEqual(token, speakasapToken)) {
       return {
@@ -140,7 +168,7 @@ export class JwtRolesGuard implements CanActivate {
     }
 
     // Per-caller tokens for the services that previously authenticated with the shared
-    // SERVICE_TOKEN. That token grants global:superadmin; none of these callers needs more
+    // SERVICE_TOKEN. That token grants admin on this service; none of these callers needs more
     // than delivery rights, so each gets its own credential scoped to internal:<svc>:admin.
     // A leak of any one of them no longer exposes the other callers or superadmin.
     const perCallerTokens: ReadonlyArray<readonly [string, string]> = [

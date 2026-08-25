@@ -1,3 +1,4 @@
+import { Roles } from '../auth/roles.decorator';
 /**
  * Webhook Subscription Controller
  * API for managing webhook subscriptions for inbound email notifications
@@ -17,6 +18,7 @@ import {
 } from '@nestjs/common';
 import { WebhookSubscriptionService } from './webhook-subscription.service';
 import { CreateSubscriptionDto, UpdateSubscriptionDto } from './dto/webhook-subscription.dto';
+import { NOTIFICATIONS_ADMIN_ROLES, NOTIFICATIONS_READ_ROLES } from '../auth/roles.constants';
 
 @Controller('webhooks/subscriptions')
 export class WebhookSubscriptionController {
@@ -26,6 +28,7 @@ export class WebhookSubscriptionController {
    * Register a new webhook subscription
    * POST /webhooks/subscriptions
    */
+  @Roles(...NOTIFICATIONS_ADMIN_ROLES)
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() createDto: CreateSubscriptionDto) {
@@ -36,6 +39,7 @@ export class WebhookSubscriptionController {
    * Get all subscriptions
    * GET /webhooks/subscriptions
    */
+  @Roles(...NOTIFICATIONS_READ_ROLES)
   @Get()
   async findAll() {
     return this.subscriptionService.findAll();
@@ -45,6 +49,7 @@ export class WebhookSubscriptionController {
    * Get subscription by ID
    * GET /webhooks/subscriptions/:id
    */
+  @Roles(...NOTIFICATIONS_READ_ROLES)
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.subscriptionService.findOne(id);
@@ -54,6 +59,7 @@ export class WebhookSubscriptionController {
    * Update subscription
    * PUT /webhooks/subscriptions/:id
    */
+  @Roles(...NOTIFICATIONS_ADMIN_ROLES)
   @Put(':id')
   async update(@Param('id') id: string, @Body() updateDto: UpdateSubscriptionDto) {
     return this.subscriptionService.update(id, updateDto);
@@ -63,6 +69,7 @@ export class WebhookSubscriptionController {
    * Delete subscription
    * DELETE /webhooks/subscriptions/:id
    */
+  @Roles(...NOTIFICATIONS_ADMIN_ROLES)
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id') id: string) {
@@ -73,6 +80,7 @@ export class WebhookSubscriptionController {
    * Activate subscription
    * POST /webhooks/subscriptions/:id/activate
    */
+  @Roles(...NOTIFICATIONS_ADMIN_ROLES)
   @Post(':id/activate')
   async activate(@Param('id') id: string) {
     return this.subscriptionService.activate(id);
@@ -82,6 +90,7 @@ export class WebhookSubscriptionController {
    * Suspend subscription
    * POST /webhooks/subscriptions/:id/suspend
    */
+  @Roles(...NOTIFICATIONS_ADMIN_ROLES)
   @Post(':id/suspend')
   async suspend(@Param('id') id: string) {
     return this.subscriptionService.suspend(id);
@@ -92,6 +101,7 @@ export class WebhookSubscriptionController {
    * Keeps the oldest active row in each group.
    * POST /webhooks/subscriptions/remediate-duplicates
    */
+  @Roles(...NOTIFICATIONS_ADMIN_ROLES)
   @Post('remediate-duplicates')
   async remediateDuplicates() {
     return this.subscriptionService.remediateDuplicateSubscriptions();

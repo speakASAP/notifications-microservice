@@ -1,14 +1,15 @@
 import 'reflect-metadata';
-import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { JwtRolesGuard } from './jwt-roles.guard';
 import { PUBLIC_KEY, ROLES_KEY } from './roles.decorator';
+import { NOTIFICATIONS_SEND_ROLES } from './roles.constants';
 
 function createContext(request: any = { headers: {} }): ExecutionContext {
   return {
-    getHandler: jest.fn(),
-    getClass: jest.fn(),
+    getHandler: jest.fn(() => ({ name: 'handler' })),
+    getClass: jest.fn(() => ({ name: 'TestController' })),
     switchToHttp: jest.fn(() => ({
       getRequest: () => request,
     })),
@@ -28,6 +29,55 @@ function createGuard(options: { isPublic?: boolean; roles?: string[] } = {}) {
   } as unknown as JwtService;
   return { guard: new JwtRolesGuard(reflector, jwtService), jwtService };
 }
+
+describe('JwtRolesGuard route policy', () => {
+  const NOTIF_ADMIN = 'internal:notifications-microservice:admin';
+
+  afterEach(() => {
+    delete process.env.SERVICE_TOKEN;
+    jest.restoreAllMocks();
+  });
+
+  // 29 routes carried no @Roles and inherited
+  // [global:superadmin, internal:notifications-microservice:admin] from the guard
+  // default, so forgetting a policy granted the broadest access in the service.
+  it('denies a route declaring neither @Roles nor @Public', async () => {
+    jest.spyOn(require('@nestjs/common').Logger.prototype, 'error').mockImplementation(() => undefined);
+    const { guard } = createGuard();
+    const ctx = createContext({ headers: { authorization: 'Bearer anything' } });
+
+    await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  // The static token used to `return true` before any role check, so any holder
+  // reached every route regardless of what the route required.
+  it('refuses a static service token on a route whose role it lacks', async () => {
+    jest.spyOn(require('@nestjs/common').Logger.prototype, 'warn').mockImplementation(() => undefined);
+    process.env.SERVICE_TOKEN = 'static-secret';
+    const { guard } = createGuard({ roles: ['internal:notifications-microservice:send-only-role'] });
+    const ctx = createContext({ headers: { authorization: 'Bearer static-secret' } });
+
+    await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('accepts a static service token on a route whose role it holds', async () => {
+    jest.spyOn(require('@nestjs/common').Logger.prototype, 'warn').mockImplementation(() => undefined);
+    process.env.SERVICE_TOKEN = 'static-secret';
+    const { guard } = createGuard({ roles: [NOTIF_ADMIN] });
+    const ctx = createContext({ headers: { authorization: 'Bearer static-secret' } });
+
+    await expect(guard.canActivate(ctx)).resolves.toBe(true);
+  });
+
+  it('no longer grants global:superadmin to the shared SERVICE_TOKEN', async () => {
+    jest.spyOn(require('@nestjs/common').Logger.prototype, 'warn').mockImplementation(() => undefined);
+    process.env.SERVICE_TOKEN = 'static-secret';
+    const { guard } = createGuard({ roles: ['global:superadmin'] });
+    const ctx = createContext({ headers: { authorization: 'Bearer static-secret' } });
+
+    await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
 
 describe('JwtRolesGuard static service actors', () => {
   const originalEnv = process.env;
@@ -63,7 +113,7 @@ describe('JwtRolesGuard static service actors', () => {
   it('accepts the existing notifications SERVICE_TOKEN machine actor', async () => {
     process.env.SERVICE_TOKEN = 'notifications-token';
     const request = { headers: { authorization: 'Bearer notifications-token' } };
-    const { guard, jwtService } = createGuard();
+    const { guard, jwtService } = createGuard({ roles: [...NOTIFICATIONS_SEND_ROLES] });
 
     await expect(guard.canActivate(createContext(request))).resolves.toBe(true);
 
@@ -71,7 +121,7 @@ describe('JwtRolesGuard static service actors', () => {
     expect(request).toMatchObject({
       user: {
         sub: 'service:notifications-microservice',
-        roles: ['global:superadmin', 'internal:notifications-microservice:admin'],
+        roles: ['internal:notifications-microservice:admin'],
         serviceName: 'notifications-microservice',
       },
     });
@@ -80,7 +130,7 @@ describe('JwtRolesGuard static service actors', () => {
   it('accepts the Cliplot notifications service token as a machine actor', async () => {
     process.env.CLIPLOT_NOTIFICATIONS_SERVICE_TOKEN = 'cliplot-notifications-token';
     const request = { headers: { authorization: 'Bearer cliplot-notifications-token' } };
-    const { guard, jwtService } = createGuard();
+    const { guard, jwtService } = createGuard({ roles: [...NOTIFICATIONS_SEND_ROLES] });
 
     await expect(guard.canActivate(createContext(request))).resolves.toBe(true);
 
@@ -97,7 +147,7 @@ describe('JwtRolesGuard static service actors', () => {
   it('accepts the Invoices notifications service token as a machine actor', async () => {
     process.env.INVOICES_NOTIFICATIONS_SERVICE_TOKEN = 'invoices-notifications-token';
     const request = { headers: { authorization: 'Bearer invoices-notifications-token' } };
-    const { guard, jwtService } = createGuard();
+    const { guard, jwtService } = createGuard({ roles: [...NOTIFICATIONS_SEND_ROLES] });
 
     await expect(guard.canActivate(createContext(request))).resolves.toBe(true);
 
@@ -114,7 +164,7 @@ describe('JwtRolesGuard static service actors', () => {
   it('accepts the cv-tuning notifications service token as a machine actor', async () => {
     process.env.CV_TUNING_NOTIFICATIONS_SERVICE_TOKEN = 'cv-tuning-notifications-token';
     const request = { headers: { authorization: 'Bearer cv-tuning-notifications-token' } };
-    const { guard, jwtService } = createGuard();
+    const { guard, jwtService } = createGuard({ roles: [...NOTIFICATIONS_SEND_ROLES] });
 
     await expect(guard.canActivate(createContext(request))).resolves.toBe(true);
 
@@ -138,7 +188,7 @@ describe('JwtRolesGuard static service actors', () => {
     process.env.CLIPLOT_NOTIFICATIONS_SERVICE_TOKEN = 'cliplot-notifications-token';
     process.env.JWT_SECRET = 'test-secret';
     const request = { headers: { authorization: 'Bearer wrong-token' } };
-    const { guard } = createGuard();
+    const { guard } = createGuard({ roles: [...NOTIFICATIONS_SEND_ROLES] });
 
     await expect(guard.canActivate(createContext(request))).rejects.toThrow(UnauthorizedException);
   });
@@ -157,7 +207,7 @@ describe('JwtRolesGuard static service actors', () => {
   it.each(perCaller)('accepts %s and scopes it to %s without superadmin', async (envVar, caller) => {
     process.env[envVar] = `${caller}-token`;
     const request = { headers: { authorization: `Bearer ${caller}-token` } };
-    const { guard, jwtService } = createGuard();
+    const { guard, jwtService } = createGuard({ roles: [...NOTIFICATIONS_SEND_ROLES] });
 
     await expect(guard.canActivate(createContext(request))).resolves.toBe(true);
 
@@ -177,7 +227,7 @@ describe('JwtRolesGuard static service actors', () => {
     process.env.AUTH_NOTIFICATIONS_SERVICE_TOKEN = 'auth-only-token';
     process.env.LEADS_NOTIFICATIONS_SERVICE_TOKEN = 'leads-only-token';
     const request = { headers: { authorization: 'Bearer auth-only-token' } };
-    const { guard } = createGuard();
+    const { guard } = createGuard({ roles: [...NOTIFICATIONS_SEND_ROLES] });
 
     await guard.canActivate(createContext(request));
 

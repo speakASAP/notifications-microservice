@@ -6,12 +6,13 @@
 
 import { Controller, Post, Get, Headers, HttpCode, HttpStatus, Req, Query, Param, Body, HttpException } from '@nestjs/common';
 import { Request } from 'express';
-import { Public } from '../auth/roles.decorator';
+import { Public , Roles} from '../auth/roles.decorator';
 import { InboundEmailService, InboundEmailSummary } from './inbound-email.service';
 import { WebhookDeliveryService } from './webhook-delivery.service';
 import { LoggerService } from '../../shared/logger/logger.service';
 import { Inject } from '@nestjs/common';
 import * as https from 'https';
+import { NOTIFICATIONS_ADMIN_ROLES, NOTIFICATIONS_INBOUND_ROLES, NOTIFICATIONS_READ_ROLES } from '../auth/roles.constants';
 
 /** Body shape for POST /email/inbound/s3 (SNS SubscriptionConfirmation, S3 event, or manual { bucket, key }) */
 interface S3EndpointBody {
@@ -48,6 +49,7 @@ export class InboundEmailController {
    * Returns 200 OK to prevent SNS retries, but does not process emails.
    * POST /email/inbound
    */
+  @Roles(...NOTIFICATIONS_INBOUND_ROLES)
   @Post('inbound')
   @HttpCode(HttpStatus.OK)
   async handleInbound(
@@ -68,6 +70,7 @@ export class InboundEmailController {
    * List S3 objects not yet in DB (unprocessed emails). Uses service S3 client (no AWS CLI on host needed).
    * GET /email/inbound/s3-unprocessed?maxKeys=500
    */
+  @Roles(...NOTIFICATIONS_READ_ROLES)
   @Get('inbound/s3-unprocessed')
   async getS3Unprocessed(
     @Query('maxKeys') maxKeys?: string,
@@ -88,6 +91,7 @@ export class InboundEmailController {
    * GET /email/inbound?limit=100&toFilter=@speakasap.com&excludeTo=support@speakasap.com&status=processed
    * GET /email/inbound?listOnly=1&limit=10 - lightweight list (id, from, to, subject, receivedAt, messageId, status only) for poll; fetch full by GET /email/inbound/:id
    */
+  @Roles(...NOTIFICATIONS_READ_ROLES)
   @Get('inbound')
   async getInboundEmails(
     @Query('limit') limit?: string,
@@ -141,6 +145,7 @@ export class InboundEmailController {
    * POST /email/inbound/delivery-confirmation
    * Body: { inboundEmailId, subscriptionId, status: 'delivered'|'failed', ticketId?, commentId?, error? }
    */
+  @Roles(...NOTIFICATIONS_INBOUND_ROLES)
   @Post('inbound/delivery-confirmation')
   @HttpCode(HttpStatus.OK)
   async deliveryConfirmation(
@@ -186,6 +191,7 @@ export class InboundEmailController {
    * Use after redeploy. Auth: Bearer SERVICE_TOKEN.
    * POST /email/inbound/process-undelivered?dbLimit=5&s3MaxKeys=5
    */
+  @Roles(...NOTIFICATIONS_INBOUND_ROLES)
   @Post('inbound/process-undelivered')
   @HttpCode(HttpStatus.OK)
   async processUndelivered(
@@ -248,6 +254,7 @@ export class InboundEmailController {
    * Count inbound emails (raw in DB) not yet delivered to helpdesk.
    * GET /email/inbound/undelivered-count
    */
+  @Roles(...NOTIFICATIONS_READ_ROLES)
   @Get('inbound/undelivered-count')
   async getUndeliveredCount(): Promise<{ success: boolean; count: number }> {
     try {
@@ -264,6 +271,7 @@ export class InboundEmailController {
    * List webhook deliveries sent to helpdesk but not yet confirmed (status=sent).
    * GET /email/inbound/undelivered?limit=100
    */
+  @Roles(...NOTIFICATIONS_READ_ROLES)
   @Get('inbound/undelivered')
   async getUndelivered(
     @Query('limit') limit?: string,
@@ -284,6 +292,7 @@ export class InboundEmailController {
    * Used by helpdesk poll flow: list with listOnly=1, then fetch full email by ID for each item to create ticket.
    * GET /email/inbound/:id (must be after static routes like inbound/undelivered)
    */
+  @Roles(...NOTIFICATIONS_READ_ROLES)
   @Get('inbound/:id')
   async getInboundEmailById(
     @Param('id') id: string,
@@ -296,6 +305,7 @@ export class InboundEmailController {
    * Re-parse an email from rawData and update attachments
    * POST /email/inbound/:id/reparse
    */
+  @Roles(...NOTIFICATIONS_ADMIN_ROLES)
   @Post('inbound/:id/reparse')
   async reparseEmail(@Param('id') id: string): Promise<{ success: boolean; message: string; attachments?: number }> {
     try {
