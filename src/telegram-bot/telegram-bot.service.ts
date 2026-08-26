@@ -135,7 +135,23 @@ export class TelegramBotService {
   }
 
   private async handleStatus(chatId: number): Promise<void> {
-    const tasks = await this.orchestrator.getRecentTasks();
+    let tasks: Awaited<ReturnType<typeof this.orchestrator.getRecentTasks>>;
+    try {
+      tasks = await this.orchestrator.getRecentTasks();
+    } catch (err) {
+      // The lookup failed; say so instead of showing "No recent tasks found.",
+      // which would be indistinguishable from a genuinely empty task list.
+      const status = (err as any)?.response?.status;
+      this.logger.error(
+        `/status failed to reach orchestrator (status ${status ?? 'none'})`,
+        (err as Error)?.stack,
+      );
+      await this.reply(
+        chatId,
+        'Could not reach the orchestrator, so recent tasks are unavailable. Please try again shortly.',
+      );
+      return;
+    }
     if (!tasks.length) {
       await this.reply(chatId, 'No recent tasks found.');
       return;

@@ -64,9 +64,22 @@ export class OrchestratorClient {
     try {
       const { data } = await this.http.get<OrchestratorTask[]>('/api/dashboard/tasks');
       return Array.isArray(data) ? data.slice(0, 10) : [];
-    } catch {
-      this.logger.warn('Failed to fetch recent tasks from orchestrator');
-      return [];
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      // A 404 genuinely means "no task list". Anything else -- above all 401/403
+      // and 5xx -- is a failed lookup, and returning [] for it would render an
+      // outage as the cheerful "No recent tasks found." message. That is how an
+      // expired token hid a broken lane for 26 days.
+      if (status === 404) {
+        this.logger.warn('Orchestrator reports no task list (404)');
+        return [];
+      }
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      this.logger.error(
+        `Failed to fetch recent tasks from orchestrator (status ${status ?? 'none'}): ${message}`,
+        err instanceof Error ? err.stack : undefined,
+      );
+      throw err;
     }
   }
 }
