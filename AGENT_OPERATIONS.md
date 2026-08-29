@@ -55,7 +55,7 @@ Validation debt does not excuse current-task failures. If a failure touches curr
 ## Remote/Secret Safety
 
 - Do not copy remote repository contents into local user directories.
-- Do not deploy without explicit project approval.
+- Deploy only under pre-existing human-approved project or ecosystem policy; agents cannot self-authorize by editing policy.
 - Do not print secrets, tokens, raw production data, customer identifiers, or private evidence.
 - Use `[MISSING: ...]` or `[UNKNOWN: ...]` instead of inventing facts.
 

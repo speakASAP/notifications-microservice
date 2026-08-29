@@ -3,6 +3,8 @@
 # Does not send notifications, repair inbound email, mutate webhooks, or print secret values.
 set -euo pipefail
 
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WAIT_FOR_ROLLOUT="$PROJECT_ROOT/../shared/scripts/wait-for-rollout.sh"
 NAMESPACE="${NAMESPACE:-statex-apps}"
 SERVICE_NAME="${SERVICE_NAME:-notifications-microservice}"
 BASE_URL="${BASE_URL:-https://notifications.alfares.cz}"
@@ -43,7 +45,7 @@ check_status "Public /health" 200 "${BASE_URL}/health"
 check_status "Public /api/config" 200 "${BASE_URL}/api/config"
 check_status "Unauthenticated /admin/stats rejection" 401 "${BASE_URL}/admin/stats"
 
-if kubectl rollout status "deployment/${SERVICE_NAME}" -n "$NAMESPACE" --timeout=20s >/dev/null; then
+if "$WAIT_FOR_ROLLOUT" -n "$NAMESPACE" -t 20 "$SERVICE_NAME" >/dev/null; then
   ok "Kubernetes rollout is complete"
 else
   fail "Kubernetes rollout is not complete"

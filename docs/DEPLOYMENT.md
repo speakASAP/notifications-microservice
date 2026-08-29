@@ -10,11 +10,13 @@ Container port: `3368`
 
 ## Approval Boundary
 
-Production deploys, rollbacks, secret rotations, repair actions, and test sends require explicit owner approval in the current session. Read-only smoke checks are allowed. Do not run mass sends or notification test sends from this runbook.
+Production changes follow pre-existing human-approved project and ecosystem
+policy. This runbook does not grant its own authorization. Do not run mass
+sends or notification test sends from this runbook.
 
 ## Source Evidence
 
-- `scripts/deploy.sh` builds `localhost:5000/notifications-microservice:<tag>` and `:latest`, pushes both tags, sets the Kubernetes deployment image to the immutable `<tag>`, waits for rollout, and checks in-pod `GET /health` with Node `fetch`.
+- `scripts/deploy.sh` delegates to the shared deploy runner; `deploy.config.sh` declares the image, Deployment and port.
 - `k8s/deployment.yaml` runs one replica, uses `imagePullPolicy: Always`, loads `notifications-microservice-config` and `notifications-microservice-secret`, and probes `/health` for startup, liveness, and readiness.
 - `k8s/external-secret.yaml` syncs `notifications-microservice-secret` from Vault and sources `JWT_SECRET` from `secret/prod/auth-microservice` so admin JWTs signed by auth validate in notifications.
 - `src/health/health.controller.ts` exposes public `GET /health`.
@@ -58,18 +60,18 @@ ssh alfares 'cd /home/ssf/Documents/Github/notifications-microservice && ./scrip
 
 Expected script behavior:
 
-1. Build Docker image tagged as `localhost:5000/notifications-microservice:<tag>` and `localhost:5000/notifications-microservice:latest`.
-2. Push both tags to the local registry.
-3. Run `kubectl set image deployment/notifications-microservice app=localhost:5000/notifications-microservice:<tag> -n statex-apps`.
-4. Wait for rollout with a 180 second timeout.
-5. Run in-pod `GET /health` on `127.0.0.1:3368`.
+1. Validate repository state and the declared deployment contract.
+2. Build and push the immutable image through the serialized shared runner.
+3. Apply declared manifests and set the Deployment image.
+4. Wait for real convergence with `shared/scripts/wait-for-rollout.sh`.
+5. Verify readiness and `GET /health`.
 
 The deployment image field should point at the immutable tag from the deploy
 run. If the runtime image ever points back to `:latest`, repin the exact
 approved tag before relying on readiness evidence:
 
 ```bash
-ssh alfares 'kubectl set image deployment/notifications-microservice app=localhost:5000/notifications-microservice:<tag> -n statex-apps && kubectl rollout status deployment/notifications-microservice -n statex-apps --timeout=180s'
+ssh alfares "/home/ssf/Documents/Github/shared/scripts/with-deploy-lock.sh bash -lc 'kubectl set image deployment/notifications-microservice app=localhost:5000/notifications-microservice:<tag> -n statex-apps && /home/ssf/Documents/Github/shared/scripts/wait-for-rollout.sh -n statex-apps -t 180 notifications-microservice'"
 ```
 
 ## Post-Deploy Smoke
@@ -85,7 +87,7 @@ The smoke covers:
 - public `GET /health`;
 - public `GET /api/config`;
 - unauthenticated rejection for `GET /admin/stats`;
-- Kubernetes rollout status;
+- Kubernetes Deployment convergence through the shared waiter;
 - in-pod `GET /health`;
 - protected read-only admin/dashboard endpoints using `SERVICE_TOKEN` without printing the token;
 - JWT secret alignment between notifications and auth Kubernetes secrets when both are readable;
@@ -112,13 +114,13 @@ ssh alfares 'kubectl rollout history deployment/notifications-microservice -n st
 Rollback to the previous ReplicaSet:
 
 ```bash
-ssh alfares 'kubectl rollout undo deployment/notifications-microservice -n statex-apps && kubectl rollout status deployment/notifications-microservice -n statex-apps --timeout=180s'
+ssh alfares "/home/ssf/Documents/Github/shared/scripts/with-deploy-lock.sh bash -lc 'kubectl rollout undo deployment/notifications-microservice -n statex-apps && /home/ssf/Documents/Github/shared/scripts/wait-for-rollout.sh -n statex-apps -t 180 notifications-microservice'"
 ```
 
 Rollback to a specific revision:
 
 ```bash
-ssh alfares 'kubectl rollout undo deployment/notifications-microservice -n statex-apps --to-revision=<revision> && kubectl rollout status deployment/notifications-microservice -n statex-apps --timeout=180s'
+ssh alfares "/home/ssf/Documents/Github/shared/scripts/with-deploy-lock.sh bash -lc 'kubectl rollout undo deployment/notifications-microservice -n statex-apps --to-revision=<revision> && /home/ssf/Documents/Github/shared/scripts/wait-for-rollout.sh -n statex-apps -t 180 notifications-microservice'"
 ```
 
 After rollback, run:
@@ -161,7 +163,7 @@ ssh alfares 'cd /home/ssf/Documents/Github/notifications-microservice && ./scrip
 4. Restart the deployment if the application must reload environment variables:
 
 ```bash
-ssh alfares 'kubectl rollout restart deployment/notifications-microservice -n statex-apps && kubectl rollout status deployment/notifications-microservice -n statex-apps --timeout=180s'
+ssh alfares "/home/ssf/Documents/Github/shared/scripts/with-deploy-lock.sh bash -lc 'kubectl rollout restart deployment/notifications-microservice -n statex-apps && /home/ssf/Documents/Github/shared/scripts/wait-for-rollout.sh -n statex-apps -t 180 notifications-microservice'"
 ```
 
 5. Run post-rotation smoke again.

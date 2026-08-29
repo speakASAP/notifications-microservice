@@ -88,6 +88,6 @@ kubectl exec -n statex-apps deploy/notifications-microservice -- wget -q http://
 # Logs
 kubectl logs -n statex-apps deploy/notifications-microservice --tail=50 -f
 
-# Rollout status
-kubectl rollout status deploy/notifications-microservice -n statex-apps
+# Deployment convergence
+/home/ssf/Documents/Github/shared/scripts/wait-for-rollout.sh -n statex-apps notifications-microservice
 ```

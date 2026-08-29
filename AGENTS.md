@@ -107,15 +107,17 @@ Sequential goals may run on one goal branch and merge after validation. Parallel
 integration/notifications-merge-goals
 ```
 
-## Knowledge Retrieval (query before reading files)
+## Knowledge Retrieval
 
-Query the RAG service first for architectural, configuration, deployment, migration, operations, and API-contract questions:
+Use `docs-rag-microservice` for bounded discovery when it is healthy, then
+verify deployment, security, database, integration and public-contract facts
+against the cited Git source. Git remains authoritative.
 
-- URL: `http://docs-rag-microservice.statex-apps.svc.cluster.local:3397`
-- Endpoint: `POST /retrieval/agent-context` with `{"query": "...", "maxTokens": 3000}`
-- Auth: `Authorization: Bearer <JWT_TOKEN>`
+Authority and fallback rules:
+`/home/ssf/Documents/Github/shared/docs/DOCUMENTATION_AUTHORITY.md`.
 
-Use source code to verify implementation details after retrieving the relevant docs context.
+Do not generate tokens in documentation or assume an unconfident/failed RAG
+response means that source documentation does not exist.
 
 ## Product And Operations Guardrails
 
