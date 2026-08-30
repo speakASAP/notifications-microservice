@@ -4,15 +4,6 @@
   "generated_at": "2026-08-30T18:52:05Z",
   "artifacts": [
     {
-      "id": "VISION-NOTIFICATIONS-INTENT",
-      "type": "vision",
-      "status": "active",
-      "title": "Notifications microservice intent and constraints",
-      "path": "docs/orchestrator/INTENT.md",
-      "parent_ids": [],
-      "updated_at": "2026-06-12T09:45:40+02:00"
-    },
-    {
       "id": "GOAL-01-ORCHESTRATOR-OPERATING-MODEL",
       "type": "goal",
       "status": "done",
@@ -28,7 +19,9 @@
       "status": "done",
       "title": "Protected admin live data verification",
       "path": "implementation-goals/GOAL-02-admin-live-data-verification.md",
-      "parent_ids": ["GOAL-01-ORCHESTRATOR-OPERATING-MODEL"],
+      "parent_ids": [
+        "GOAL-01-ORCHESTRATOR-OPERATING-MODEL"
+      ],
       "runlayer_goal_id": null,
       "updated_at": "2026-06-12T14:47:54+02:00"
     },
@@ -38,7 +31,9 @@
       "status": "done",
       "title": "Delivery reliability hardening",
       "path": "implementation-goals/GOAL-03-delivery-reliability.md",
-      "parent_ids": ["GOAL-02-ADMIN-LIVE-DATA-VERIFICATION"],
+      "parent_ids": [
+        "GOAL-02-ADMIN-LIVE-DATA-VERIFICATION"
+      ],
       "runlayer_goal_id": null,
       "updated_at": "2026-06-12T14:47:54+02:00"
     },
@@ -48,7 +43,9 @@
       "status": "done",
       "title": "Channel policy and template gap documentation",
       "path": "implementation-goals/GOAL-04-channel-policy-and-template-gap.md",
-      "parent_ids": ["GOAL-02-ADMIN-LIVE-DATA-VERIFICATION"],
+      "parent_ids": [
+        "GOAL-02-ADMIN-LIVE-DATA-VERIFICATION"
+      ],
       "runlayer_goal_id": null,
       "updated_at": "2026-06-12T14:47:54+02:00"
     },
@@ -58,7 +55,9 @@
       "status": "done",
       "title": "Operations deployment readiness",
       "path": "implementation-goals/GOAL-05-operations-deployment-readiness.md",
-      "parent_ids": ["GOAL-01-ORCHESTRATOR-OPERATING-MODEL"],
+      "parent_ids": [
+        "GOAL-01-ORCHESTRATOR-OPERATING-MODEL"
+      ],
       "runlayer_goal_id": null,
       "updated_at": "2026-06-12T14:47:54+02:00"
     },
@@ -71,24 +70,6 @@
       "parent_ids": [],
       "runlayer_goal_id": null,
       "updated_at": "2026-07-04T23:52:46+02:00"
-    },
-    {
-      "id": "PLAN-NOTIFICATIONS-ADMIN-IMPLEMENTATION",
-      "type": "execution_plan",
-      "status": "done",
-      "title": "Notifications admin implementation plan",
-      "path": "docs/orchestrator/PLAN.md",
-      "parent_ids": [],
-      "updated_at": "2026-06-12T09:45:40+02:00"
-    },
-    {
-      "id": "PROMPT-NOTIFICATIONS-IMPLEMENTATION-ORCHESTRATOR",
-      "type": "prompt",
-      "status": "active",
-      "title": "Master orchestrator continuation prompt",
-      "path": "docs/IMPLEMENTATION_ORCHESTRATOR.md",
-      "parent_ids": [],
-      "updated_at": "2026-06-12T14:47:54+02:00"
     },
     {
       "id": "HANDOFF-IMPLEMENTATION-STATE",
@@ -109,12 +90,32 @@
       "updated_at": "2026-07-04T23:55:30+02:00"
     },
     {
+      "id": "PLAN-NOTIFICATIONS-ADMIN-IMPLEMENTATION",
+      "type": "execution_plan",
+      "status": "done",
+      "title": "Notifications admin implementation plan",
+      "path": "docs/orchestrator/PLAN.md",
+      "parent_ids": [],
+      "updated_at": "2026-06-12T09:45:40+02:00"
+    },
+    {
+      "id": "PROMPT-NOTIFICATIONS-IMPLEMENTATION-ORCHESTRATOR",
+      "type": "prompt",
+      "status": "active",
+      "title": "Master orchestrator continuation prompt",
+      "path": "docs/IMPLEMENTATION_ORCHESTRATOR.md",
+      "parent_ids": [],
+      "updated_at": "2026-06-12T14:47:54+02:00"
+    },
+    {
       "id": "VAL-GOAL-24-SELECTED-UNPAID-CANCEL-ACK",
       "type": "validation",
       "status": "validated",
       "title": "Goal 24 selected unpaid cancellation acknowledgement validation",
       "path": "reports/validation/GOAL-24-selected-unpaid-orders-cancellation-notifications-ack.md",
-      "parent_ids": ["GOAL-24-SELECTED-UNPAID-CANCEL-ACK"],
+      "parent_ids": [
+        "GOAL-24-SELECTED-UNPAID-CANCEL-ACK"
+      ],
       "updated_at": "2026-07-04T23:55:30+02:00"
     },
     {
@@ -125,23 +126,20 @@
       "path": "docs/orchestrator/VALIDATION_DEBT.md",
       "parent_ids": [],
       "updated_at": "2026-06-15T15:04:45+02:00"
+    },
+    {
+      "id": "VISION-NOTIFICATIONS-INTENT",
+      "type": "vision",
+      "status": "active",
+      "title": "Notifications microservice intent and constraints",
+      "path": "docs/orchestrator/INTENT.md",
+      "parent_ids": [],
+      "updated_at": "2026-06-12T09:45:40+02:00"
     }
   ],
   "warnings": [
-    {
-      "id": "WARN-001",
-      "message": "[UNKNOWN: docs/orchestrator/GOALS.md still labels Goal 7.4 as active while TASKS.md and STATE.json mark the repository completed/frozen.]",
-      "path": "docs/orchestrator/GOALS.md"
-    },
-    {
-      "id": "WARN-002",
-      "message": "[UNKNOWN: RunLayer goal/task IDs and permalinks are not verified in repository documents; all runlayer_* fields remain null.]",
-      "path": "docs/registry/REPOSITORY_PROFILE.json"
-    },
-    {
-      "id": "WARN-003",
-      "message": "[MISSING: validation debt ledger has template placeholders only, so validation_debt_count is projected as 0 concrete entries.]",
-      "path": "docs/orchestrator/VALIDATION_DEBT.md"
-    }
+    "[WARN-001] [UNKNOWN: docs/orchestrator/GOALS.md still labels Goal 7.4 as active while TASKS.md and STATE.json mark the repository completed/frozen.] (path: docs/orchestrator/GOALS.md)",
+    "[WARN-002] [UNKNOWN: RunLayer goal/task IDs and permalinks are not verified in repository documents; all runlayer_* fields remain null.] (path: docs/registry/REPOSITORY_PROFILE.json)",
+    "[WARN-003] [MISSING: validation debt ledger has template placeholders only, so validation_debt_count is projected as 0 concrete entries.] (path: docs/orchestrator/VALIDATION_DEBT.md)"
   ]
 }
