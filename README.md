@@ -2,6 +2,37 @@
 
 Multi-channel notification delivery service for the Statex ecosystem. Sends email (AWS SES active path), Telegram, and WhatsApp notifications on behalf of orders-microservice, marketing-microservice, runlayer, and all client applications. Built on NestJS, port 3368, domain https://notifications.alfares.cz.
 
+## Status
+
+Production, deployed to Kubernetes namespace `statex-apps`.
+
+## Documentation Authority
+
+`BUSINESS.md` and `SYSTEM.md` are authoritative; this README documents usage. See `docs/00_constitution/CONSTITUTION.md` and `docs/01_vision/VISION.md` for the approved IPS baseline.
+
+## Capabilities
+
+- Multi-channel send (email/Telegram/WhatsApp) via `POST /notifications/send`.
+- Inbound email parsing and helpdesk delivery via AWS SES/S3/SNS webhooks.
+- Webhook subscription CRUD and payment-result callback delivery.
+- Admin stats/history/channel-registry endpoints protected by JWT.
+
+## Configuration
+
+Deployment architecture, environment variables, and Kubernetes setup are documented in `INFRA.md`. Live config values are in `k8s/configmap.yaml`; secrets are stored in Vault at `secret/prod/notifications-microservice`.
+
+## Deployment
+
+Deployed via the shared serialized deploy runner (`./scripts/deploy.sh`) to the `statex-apps` namespace, domain `https://notifications.alfares.cz`.
+
+## Health and Observability
+
+`GET /health` provides the liveness/readiness signal used by Kubernetes probes; see Quick Ops below for `kubectl` health/log commands.
+
+## Interfaces
+
+This service exposes a single HTTP REST API (no gRPC/GraphQL) covering send, history/status, admin, inbound-email webhooks, and webhook-subscription management, listed in the table below.
+
 ## API Endpoints
 
 | Method | Path | Description |
@@ -41,7 +72,7 @@ Current send behavior does not include persisted template management. Callers se
 - Admin panel available at https://notifications.alfares.cz/admin
 - Requires JWT authentication for admin routes
 
-## Configuration
+## Configuration Reference
 
 See `INFRA.md` for deployment architecture, environment variables, and Kubernetes setup. Live config values are in `k8s/configmap.yaml`. Secrets are stored in Vault at `secret/prod/notifications-microservice`.
 
@@ -91,3 +122,7 @@ kubectl logs -n statex-apps deploy/notifications-microservice --tail=50 -f
 # Deployment convergence
 /home/ssf/Documents/Github/shared/scripts/wait-for-rollout.sh -n statex-apps notifications-microservice
 ```
+
+## Development
+
+This is a NestJS/TypeScript service. Install dependencies with `npm install`, run locally with `npm run start:dev`, and run the test suite with `npm test`. Environment variables mirror the production `k8s/configmap.yaml`/Vault keys documented in `docs/DEPLOYMENT.md`; use a local `.env` for development-only values.

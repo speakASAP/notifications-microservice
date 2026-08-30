@@ -132,6 +132,26 @@ response means that source documentation does not exist.
 - `/email/inbound/s3` remains public for AWS SNS/S3 compatibility.
 - Admin APIs remain protected by JWT role guards.
 
+## Authority
+
+`BUSINESS.md` is human-owned and immutable to AI agents. `SYSTEM.md`, planning, and orchestration docs may be proposed/updated by agents subject to review.
+
+## Intent Preservation System
+
+This repository follows `Vision -> Goal Impact -> System -> Feature -> Task -> Execution Plan -> Coding Prompt -> Code -> Validation` per `AGENT_OPERATIONS.md` and the central `intent-preservation-system` standard.
+
+## Safety and Operations
+
+Never send mass or test notifications without explicit owner approval; never print secrets or tokens; keep `/email/inbound/s3` public and unauthenticated for AWS compatibility.
+
+## Project-Specific Rules
+
+See "Product And Operations Guardrails" above.
+
+## Required Final Report
+
+Report files changed, validation evidence, validation debt used or added, blockers as `[MISSING: ...]`/`[UNKNOWN: ...]`, and the next concrete action.
+
 ## Active Agents
 
 <!-- Coordinator-maintained -->

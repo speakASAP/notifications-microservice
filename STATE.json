@@ -1,29 +1,17 @@
 {
-  "schema_version": "1.0",
-  "repository": "notifications-microservice",
-  "service": {
-    "name": "notifications-microservice",
-    "kind": "service",
-    "lifecycle": "active",
-    "deployment": "kubernetes"
+  "schemaVersion": 1,
+  "project": "notifications-microservice",
+  "lifecycle": "active",
+  "health": "healthy",
+  "activeTask": "none",
+  "lastUpdated": "2026-08-30",
+  "deployment": {
+    "status": "deployed",
+    "environment": "production",
+    "url": "https://notifications.alfares.cz"
   },
-  "planning": {
-    "status": "done",
-    "active_goal_ids": [],
-    "next_ready_goal_ids": [],
-    "blocked_goal_ids": [],
-    "active_workstream_ids": [],
-    "last_updated_at": "2026-08-30T18:52:05Z"
-  },
-  "delivery": {
-    "last_validation_id": "VAL-GOAL-24-SELECTED-UNPAID-CANCEL-ACK",
-    "last_validation_status": "validated",
-    "validation_debt_count": 0,
-    "last_deployment_commit": null
-  },
-  "collection": {
-    "profile": "service",
-    "artifact_index": "docs/registry/ARTIFACT_INDEX.json",
-    "status_source": "human-and-agent-maintained"
-  }
+  "blockers": [],
+  "followUps": [
+    "Review template library for consistency."
+  ]
 }

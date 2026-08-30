@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 1,
+  "profile": "runtime-service",
+  "project": {
+    "name": "notifications-microservice",
+    "repository": "https://github.com/speakASAP/notifications-microservice.git"
+  },
+  "standard": {
+    "repository": "https://github.com/speakASAP/intent-preservation-system",
+    "revision": "3e36f64c11e31b878fd2fe09267426738b25ae7f"
+  },
+  "artifacts": {
+    "readme": "README.md",
+    "business": "BUSINESS.md",
+    "system": "SYSTEM.md",
+    "agents": "AGENTS.md",
+    "operations": "AGENT_OPERATIONS.md",
+    "claude": "CLAUDE.md",
+    "tasks": "TASKS.md",
+    "state": "STATE.json",
+    "constitution": "docs/00_constitution/CONSTITUTION.md",
+    "vision": "docs/01_vision/VISION.md",
+    "integrationContract": "docs/06_architecture/INTEGRATION_CONTRACT.md",
+    "projectInvariants": "docs/17_governance/PROJECT_INVARIANTS.md",
+    "validationDebt": "docs/orchestrator/VALIDATION_DEBT.md",
+    "bootstrapTask": "docs/11_tasks/TASK-001-bootstrap-service.md",
+    "bootstrapGoalImpact": "docs/22_goal_impact/GOAL-IMPACT-TASK-001.md",
+    "bootstrapExecutionPlan": "docs/21_execution_plans/EP-TASK-001-bootstrap-service.md",
+    "bootstrapValidation": "docs/12_validation/VAL-TASK-001-bootstrap-service.md"
+  },
+  "integrationReview": [
+    {
+      "capability": "auth",
+      "component": "auth-microservice",
+      "decision": "required",
+      "reason": "Admin endpoints (/admin/*) require JWT role verification issued by auth-microservice.",
+      "contract": "JWT bearer verification for admin endpoints",
+      "configuration": "Vault-provisioned JWT secret",
+      "failureMode": "Admin endpoints return 401/403; send/health endpoints unaffected",
+      "validation": "curl admin endpoint with and without a valid JWT"
+    },
+    {
+      "capability": "postgres",
+      "component": "db-server-postgres",
+      "decision": "required",
+      "reason": "Notification history and channel-registry rows are persisted in db-server-postgres.",
+      "contract": "Direct SQL connection to db-server-postgres",
+      "configuration": "Connection string via ExternalSecret",
+      "failureMode": "Send may still be attempted; history/status/channel-registry endpoints degrade or fail",
+      "validation": "Database connectivity check in health/readiness probe"
+    },
+    {
+      "capability": "redis",
+      "component": "db-server-redis",
+      "decision": "not-applicable",
+      "reason": "No caching or session layer is implemented by this service.",
+      "contract": "n/a",
+      "configuration": "n/a",
+      "failureMode": "n/a",
+      "validation": "n/a"
+    },
+    {
+      "capability": "logging",
+      "component": "logging-microservice",
+      "decision": "required",
+      "reason": "Runtime services emit structured logs to logging-microservice.",
+      "contract": "HTTP log forwarding",
+      "configuration": "LOGGING_SERVICE_URL",
+      "failureMode": "Local console fallback per ecosystem client convention",
+      "validation": "Log entries visible via logging-microservice query API"
+    },
+    {
+      "capability": "notifications",
+      "component": "notifications-microservice",
+      "decision": "not-applicable",
+      "reason": "This is the notifications-microservice itself.",
+      "contract": "n/a",
+      "configuration": "n/a",
+      "failureMode": "n/a",
+      "validation": "n/a"
+    },
+    {
+      "capability": "ai",
+      "component": "ai-microservice",
+      "decision": "not-applicable",
+      "reason": "No AI-driven behavior exists in this service.",
+      "contract": "n/a",
+      "configuration": "n/a",
+      "failureMode": "n/a",
+      "validation": "n/a"
+    },
+    {
+      "capability": "payments",
+      "component": "payments-microservice",
+      "decision": "required",
+      "reason": "Receives POST /webhooks/payment-result callbacks to trigger payment-related notifications.",
+      "contract": "POST /webhooks/payment-result callback",
+      "configuration": "Webhook subscription config",
+      "failureMode": "Callback failure is logged; the payment flow itself is unaffected since this is notification-only",
+      "validation": "Webhook subscription delivery test"
+    },
+    {
+      "capability": "catalog",
+      "component": "catalog-microservice",
+      "decision": "not-applicable",
+      "reason": "No catalog data is read or written by this service.",
+      "contract": "n/a",
+      "configuration": "n/a",
+      "failureMode": "n/a",
+      "validation": "n/a"
+    },
+    {
+      "capability": "orders",
+      "component": "orders-microservice",
+      "decision": "required",
+      "reason": "orders-microservice calls POST /notifications/send to notify customers of order events.",
+      "contract": "POST /notifications/send caller-initiated by orders-microservice",
+      "configuration": "n/a (caller supplies channel/payload)",
+      "failureMode": "Send failure is logged; the order flow itself is not blocked",
+      "validation": "Notification history shows order-triggered sends"
+    },
+    {
+      "capability": "warehouse",
+      "component": "warehouse-microservice",
+      "decision": "not-applicable",
+      "reason": "No warehouse data is read or written by this service.",
+      "contract": "n/a",
+      "configuration": "n/a",
+      "failureMode": "n/a",
+      "validation": "n/a"
+    },
+    {
+      "capability": "invoices",
+      "component": "invoices-microservice",
+      "decision": "not-applicable",
+      "reason": "No invoice data is read or written by this service.",
+      "contract": "n/a",
+      "configuration": "n/a",
+      "failureMode": "n/a",
+      "validation": "n/a"
+    },
+    {
+      "capability": "object-storage",
+      "component": "minio-microservice",
+      "decision": "not-applicable",
+      "reason": "Inbound email attachments/bodies are fetched directly from AWS S3, not the internal MinIO service.",
+      "contract": "n/a",
+      "configuration": "n/a",
+      "failureMode": "n/a",
+      "validation": "n/a"
+    },
+    {
+      "capability": "event-bus",
+      "component": "RabbitMQ",
+      "decision": "not-applicable",
+      "reason": "Delivery is triggered synchronously via HTTP send calls and AWS SNS webhooks, not the ecosystem RabbitMQ bus.",
+      "contract": "n/a",
+      "configuration": "n/a",
+      "failureMode": "n/a",
+      "validation": "n/a"
+    },
+    {
+      "capability": "docs-rag",
+      "component": "docs-rag-microservice",
+      "decision": "required",
+      "reason": "Project documentation must be discoverable",
+      "contract": "Direct Git repository ingestion",
+      "configuration": "shared/config/ecosystem-repositories.json",
+      "failureMode": "Git remains authoritative when retrieval is unavailable or unconfident",
+      "validation": "Distinctive project phrase resolves to the owning repository path"
+    },
+    {
+      "capability": "monitoring",
+      "component": "monitoring-microservice",
+      "decision": "required",
+      "reason": "Runtime health must be observable",
+      "contract": "GET /health plus Kubernetes probes",
+      "configuration": "Deployment probes and service metadata",
+      "failureMode": "Readiness prevents unhealthy rollout",
+      "validation": "Health and readiness checks pass"
+    },
+    {
+      "capability": "backups",
+      "component": "backups-microservice",
+      "decision": "not-applicable",
+      "reason": "No documented centralized backup integration exists for notification history in this baseline.",
+      "contract": "n/a",
+      "configuration": "n/a",
+      "failureMode": "n/a",
+      "validation": "n/a"
+    }
+  ]
+}

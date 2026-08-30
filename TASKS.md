@@ -7,6 +7,18 @@ active_goal_ids: []
 
 # Tasks: notifications-microservice
 
+## Active
+
+No task is currently active. The most recent completed work is documentation-standard reformatting recorded below; the next candidate action is the template-library consistency review in the Backlog.
+
+## Ready Next
+
+- Review template library for consistency (see Backlog).
+
+## Blocked
+
+No tasks are currently blocked.
+
 ## Backlog
 
 - [ ] Review template library for consistency (priority: 3)
@@ -14,6 +26,10 @@ active_goal_ids: []
 ## Completed
 <!-- AI appends here. Never modifies previous entries. -->
 - [x] 2026-04-05 Documentation standard applied
+
+## Handoff
+
+Current owner: engineering. No open blockers; next candidate action is the template-library consistency review below.
 
 ## Project Completion Marker
 

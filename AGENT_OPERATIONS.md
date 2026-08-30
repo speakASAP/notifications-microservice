@@ -10,7 +10,7 @@ All agents must preserve:
 Vision -> Goal Impact -> System -> Feature -> Task -> Execution Plan -> Coding Prompt -> Code -> Validation
 ```
 
-## Agent Roles
+## Roles
 
 - Readiness scanner: classifies work as ready now, dependency-gated, blocked, active elsewhere, complete, or needs owner input. It does not implement.
 - Worker agent: implements one bounded goal or workstream with explicit scope.
@@ -58,6 +58,16 @@ Validation debt does not excuse current-task failures. If a failure touches curr
 - Deploy only under pre-existing human-approved project or ecosystem policy; agents cannot self-authorize by editing policy.
 - Do not print secrets, tokens, raw production data, customer identifiers, or private evidence.
 - Use `[MISSING: ...]` or `[UNKNOWN: ...]` instead of inventing facts.
+
+## Handoff
+
+A worker agent hands off with: files changed, validation evidence, remaining blockers as `[MISSING: ...]`, and the next concrete action.
+
+## Project-Specific Operations
+
+- Never send mass or test notifications without explicit owner approval.
+- Keep API keys (SendGrid, Telegram, WhatsApp, AWS) in Vault/`.env` only, never in documentation.
+- `/email/inbound/s3` must remain public for AWS SNS/S3 compatibility; do not add auth to it.
 
 ## Final Report
 
