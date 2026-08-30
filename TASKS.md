@@ -1,3 +1,10 @@
+---
+schema_version: "1.0"
+repository: notifications-microservice
+updated_at: 2026-08-30T18:52:05Z
+active_goal_ids: []
+---
+
 # Tasks: notifications-microservice
 
 ## Backlog

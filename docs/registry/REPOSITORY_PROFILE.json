@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "repository": "notifications-microservice",
+  "profile": "service",
+  "project_registration": {
+    "runlayer_project_slug": null,
+    "status": "[UNKNOWN: RunLayer project slug is not verified in repository documents]"
+  },
+  "collectable_paths": [
+    "AGENTS.md",
+    "AGENT_OPERATIONS.md",
+    "BUSINESS.md",
+    "SYSTEM.md",
+    "TASKS.md",
+    "STATE.json",
+    "docs/IMPLEMENTATION_ORCHESTRATOR.md",
+    "docs/IMPLEMENTATION_STATE.md",
+    "docs/orchestrator/INTENT.md",
+    "docs/orchestrator/GOALS.md",
+    "docs/orchestrator/PLAN.md",
+    "docs/orchestrator/STATUS.md",
+    "docs/orchestrator/VALIDATION_DEBT.md",
+    "docs/orchestrator/GOAL-24-selected-unpaid-orders-cancellation-notifications-ack.md",
+    "implementation-goals/README.md",
+    "implementation-goals/GOAL-01-orchestrator-operating-model.md",
+    "implementation-goals/GOAL-02-admin-live-data-verification.md",
+    "implementation-goals/GOAL-03-delivery-reliability.md",
+    "implementation-goals/GOAL-04-channel-policy-and-template-gap.md",
+    "implementation-goals/GOAL-05-operations-deployment-readiness.md",
+    "reports/validation/GOAL-24-selected-unpaid-orders-cancellation-notifications-ack.md",
+    "docs/registry/ARTIFACT_INDEX.json"
+  ],
+  "excluded_path_patterns": [
+    ".env*",
+    "**/secrets/**",
+    "**/*.pem",
+    "**/node_modules/**",
+    "**/coverage/**"
+  ],
+  "owners": {
+    "business_intent": "human",
+    "technical_system": "service-owner",
+    "planning_state": "orchestrator",
+    "integration": "service-owner"
+  }
+}
