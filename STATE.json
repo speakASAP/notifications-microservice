@@ -25,5 +25,18 @@
     "profile": "service",
     "artifact_index": "docs/registry/ARTIFACT_INDEX.json",
     "status_source": "wave-1-contract-remediation"
-  }
+  },
+  "schemaVersion": 1,
+  "project": "notifications-microservice",
+  "lifecycle": "active",
+  "health": "healthy",
+  "activeTask": "No task is currently active; the most recent validated goal was GOAL-24 selected-unpaid-cancel-ack.",
+  "lastUpdated": "2026-08-30T00:00:00Z",
+  "deployment": {
+    "status": "kubernetes"
+  },
+  "blockers": [],
+  "followUps": [
+    "Review template library for consistency (see TASKS.md Backlog)."
+  ]
 }
