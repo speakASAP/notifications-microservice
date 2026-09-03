@@ -4,15 +4,18 @@
 > [`shared/scripts/generate-copilot-instructions.py`](https://github.com/speakASAP/shared/blob/main/scripts/generate-copilot-instructions.py).
 > Do not maintain repository or ecosystem policy in this file.
 
-`AGENTS.md` is the canonical repository agent instruction file. Copilot agents
+`AGENTS.md` is the canonical, agent-neutral instruction file. Copilot agents
 must read it first, then the repository planning/status documents it names.
+`CLAUDE.md` is Claude Code specific: do not read it, and do not copy policy
+out of it. See the [agent instruction standard](https://github.com/speakASAP/shared/blob/main/docs/AGENT_INSTRUCTION_STANDARD.md).
 
 Canonical ecosystem sources:
 
 1. [Documentation authority](https://github.com/speakASAP/shared/blob/main/docs/DOCUMENTATION_AUTHORITY.md)
 2. [Ecosystem map](https://github.com/speakASAP/shared/blob/main/ECOSYSTEM_MAP.md)
-3. [Operating policy](https://github.com/speakASAP/shared/blob/main/CLAUDE.md)
+3. [Common agent operating policy](https://github.com/speakASAP/shared/blob/main/AGENTS.md)
 4. [IPS adoption standard](https://github.com/speakASAP/intent-preservation-system/blob/main/docs/24_onboarding/PROJECT_ADOPTION_STANDARD.md)
+5. [New-app integration skill](https://github.com/speakASAP/shared/blob/main/.agents/skills/register-new-app/SKILL.md)
 
 Repository: [https://github.com/speakASAP/notifications-microservice](https://github.com/speakASAP/notifications-microservice)
 Authoritative checkout: `/home/ssf/Documents/Github/notifications-microservice` on `alfares`.
