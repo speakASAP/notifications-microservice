@@ -136,9 +136,13 @@ export class NotificationsService {
       'NotificationsService',
     );
 
-    // Check for duplicate notification within last 5 minutes (idempotency protection)
-    // Match on recipient, subject, and type to catch duplicates even if message content varies slightly
-    // Check for both SENT and PENDING status to prevent race conditions
+    // Idempotency protection: suppress a genuine retry within 5 minutes.
+    // The shape (channel, recipient, subject, type) is NOT sufficient on its own. On a shared
+    // Telegram chat every alert and the daily digest share the same shape with a null subject,
+    // so a shape-only key silently dropped distinct notifications and returned a false
+    // {status:'sent'} carrying another message's messageId. That hid the daily digest for nine
+    // days (2026-08-25 -> 2026-09-03). A duplicate must therefore also carry identical content
+    // and come from the same service; anything else is a distinct notification and must be sent.
     const duplicateCheckStart = Date.now();
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
     this.logger.log(
@@ -161,7 +165,19 @@ export class NotificationsService {
     });
 
     const duplicateCheckDuration = Date.now() - duplicateCheckStart;
-    if (duplicate) {
+    const sameContent =
+      !!duplicate &&
+      duplicate.message === message &&
+      (duplicate.service || null) === (resolvedDto.service || null);
+
+    if (duplicate && !sameContent) {
+      this.logger.warn(
+        `[NotificationsService] send() - Request ID: ${requestId} - shape collision allowed through: an earlier notification shares (channel=${channel}, recipient=${recipient}, subject=${subject}, type=${type}) but differs in content or service, so it is NOT a duplicate. earlierId=${duplicate.id}`,
+        'NotificationsService',
+      );
+    }
+
+    if (duplicate && sameContent) {
       this.logger.warn(
         `[NotificationsService] send() - Request ID: ${requestId} - DUPLICATE DETECTED after ${duplicateCheckDuration}ms - duplicateId=${duplicate.id}, duplicateStatus=${duplicate.status}, duplicateCreatedAt=${duplicate.createdAt.toISOString()}, duplicateMessageId=${duplicate.messageId || 'none'}, recipient=${recipient}, subject=${subject}, type=${type}`,
         'NotificationsService',
