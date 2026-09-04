@@ -23,3 +23,12 @@ Authoritative checkout: `/home/ssf/Documents/Github/notifications-microservice` 
 Never copy source into production, expose secrets, bypass deployment
 serialization, weaken protected intent, or force-push. New services must carry
 a valid IPS adoption profile and a reviewed ecosystem integration contract.
+
+Concurrent agent sessions: other agents may be editing the same file. Copilot
+runs over SSH and can neither see nor be seen by them, so its only channel is
+[`shared/coordination/FILE_CLAIMS.md`](https://github.com/speakASAP/shared/blob/main/coordination/FILE_CLAIMS.md).
+Read it and `git status` before editing any shared file, claim the file and
+region there and commit that claim **before** editing, then release it when
+done. A file another agent holds is not yours to edit. Procedure:
+[`AGENTS.md`](https://github.com/speakASAP/shared/blob/main/AGENTS.md)
+"Concurrent agent sessions".
