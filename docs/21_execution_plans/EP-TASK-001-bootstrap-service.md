@@ -2,7 +2,7 @@
 
 ```yaml
 id: EP-TASK-001-bootstrap-service
-status: implemented
+status: validated
 source_task: ../11_tasks/TASK-001-bootstrap-service.md
 goal_impact:
   - ../22_goal_impact/GOAL-IMPACT-TASK-001.md
