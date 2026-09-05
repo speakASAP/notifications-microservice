@@ -54,7 +54,6 @@ Improve reliability evidence and testability for notification delivery, especial
 
 - Do implementation, tests, and build on `alfares`.
 - Do not deploy without explicit owner approval.
-- docs-RAG lookup is required by process, but the available notifications `SERVICE_TOKEN` returned `401 Malformed token`; record this blocker if it persists.
 
 ## Acceptance Criteria
 

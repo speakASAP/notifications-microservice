@@ -21,7 +21,6 @@ sends or notification test sends from this runbook.
 - `k8s/external-secret.yaml` syncs `notifications-microservice-secret` from Vault and sources `JWT_SECRET` from `secret/prod/auth-microservice` so admin JWTs signed by auth validate in notifications.
 - `src/health/health.controller.ts` exposes public `GET /health`.
 - `src/config/config.controller.ts` exposes public `GET /api/config` for browser-safe auth configuration.
-- `src/auth/jwt-roles.guard.ts` protects admin APIs with JWT roles and also accepts the service `SERVICE_TOKEN` for machine smoke checks.
 
 ## Pre-Deploy Checklist
 
@@ -89,7 +88,6 @@ The smoke covers:
 - unauthenticated rejection for `GET /admin/stats`;
 - Kubernetes Deployment convergence through the shared waiter;
 - in-pod `GET /health`;
-- protected read-only admin/dashboard endpoints using `SERVICE_TOKEN` without printing the token;
 - JWT secret alignment between notifications and auth Kubernetes secrets when both are readable;
 - presence checks for expected secret keys without printing secret values.
 

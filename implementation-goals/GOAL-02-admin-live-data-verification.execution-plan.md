@@ -77,14 +77,12 @@ Preserve the notifications microservice as a guarded operations console for outb
 ## Validation Commands
 
 - `ssh alfares 'cd /home/ssf/Documents/Github/notifications-microservice && git status --short --branch'`
-- Protected endpoint smoke using `SERVICE_TOKEN` from the running pod without printing the token.
 - Unauthenticated endpoint smoke for the same read endpoints.
 - docs-RAG retrieval attempt from inside the running pod.
 
 ## Risks
 
 - A machine token proves guarded route access but does not fully prove a human admin browser login.
-- docs-RAG rejected `SERVICE_TOKEN` with `401 Malformed token`; the correct docs-RAG JWT was not available in this session.
 - Live API evidence must avoid raw message bodies, recipient identifiers, and token values.
 
 ## Owner Checkpoints

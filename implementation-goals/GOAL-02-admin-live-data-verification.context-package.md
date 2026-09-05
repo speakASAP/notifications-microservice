@@ -34,7 +34,6 @@ Verify protected live data loading for the notifications admin console and recor
   - Registers `JwtRolesGuard` as global `APP_GUARD`.
 - `src/auth/jwt-roles.guard.ts`
   - Requires Bearer auth unless a route is marked `@Public`.
-  - Allows `SERVICE_TOKEN` as an admin-equivalent machine credential.
   - Requires `global:superadmin` or `internal:notifications-microservice:admin` by default.
 - `src/admin/admin.controller.ts`
   - Provides protected admin stats, history, params, channels, and message detail/edit routes.
@@ -73,5 +72,4 @@ Verify protected live data loading for the notifications admin console and recor
 
 ## Questions Or Blockers
 
-- docs-RAG endpoint returned `401 Malformed token` when called from inside the notifications pod with `SERVICE_TOKEN`.
 - Owner may choose to run a human admin browser login as an additional check.

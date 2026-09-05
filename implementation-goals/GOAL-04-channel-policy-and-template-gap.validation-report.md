@@ -41,7 +41,6 @@ Remote workspace: alfares:/home/ssf/Documents/Github/notifications-microservice.
 
 - npm run build passed.
 - Extracted web/admin/index.html script and ran node --check /tmp/notifications-admin-script.js; passed.
-- Protected read smoke using pod SERVICE_TOKEN:
   - GET https://notifications.alfares.cz/admin/channels returned 200, body size 26 bytes.
   - GET https://notifications.alfares.cz/webhooks/subscriptions returned 200, body size 2 bytes.
 - docs-RAG query attempted from alfares, but docs-rag-microservice.statex-apps.svc.cluster.local did not resolve from the remote shell: curl code 6. Prior Goal 02 also recorded docs-RAG token/auth limitations.

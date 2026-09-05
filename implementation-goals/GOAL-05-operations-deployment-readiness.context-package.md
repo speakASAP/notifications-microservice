@@ -7,7 +7,6 @@
 - `scripts/deploy.sh` builds/pushes `<tag>` and `latest`, updates deployment image to `latest`, waits for rollout, and performs an in-pod `/health` check.
 - `k8s/deployment.yaml` uses `imagePullPolicy: Always`, one replica, config/secret env sources, and `/health` startup/liveness/readiness probes.
 - `k8s/external-secret.yaml` targets `notifications-microservice-secret`; `JWT_SECRET` is sourced from `secret/prod/auth-microservice`.
-- `src/auth/jwt-roles.guard.ts` accepts `SERVICE_TOKEN` for protected machine checks and otherwise validates JWT roles.
 - `docs/orchestrator/STATUS.md` records prior deployment evidence and the `:latest` pod-template caveat.
 
 ## docs-RAG Status

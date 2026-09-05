@@ -27,10 +27,6 @@ ssh alfares 'cd /home/ssf/Documents/Github/notifications-microservice && npm run
 ```
 
 ```bash
-ssh alfares 'TOKEN=$(kubectl exec -n statex-apps deploy/notifications-microservice -- printenv SERVICE_TOKEN 2>/dev/null | tr -d "\r"); for path in "/email/inbound/undelivered-count" "/email/inbound/undelivered?limit=5"; do curl ...; done'
-```
-
-```bash
 ssh alfares 'kubectl exec -n statex-apps deploy/notifications-microservice -- node -e "...POST /retrieval/agent-context from inside pod..."'
 ```
 
@@ -44,7 +40,6 @@ ssh alfares 'kubectl exec -n statex-apps deploy/notifications-microservice -- no
   - `/email/inbound/undelivered-count` returned 200 with `{ success, count }` shape.
   - `/email/inbound/undelivered?limit=5` returned 200 with array shape.
 - docs-RAG lookup:
-  - In-pod call reached docs-RAG but returned `401 Malformed token` using notifications `SERVICE_TOKEN`.
   - Compatible docs-RAG JWT remains unavailable.
 
 Post-approval deployment:

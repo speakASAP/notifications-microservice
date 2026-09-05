@@ -19,10 +19,6 @@ ssh alfares 'cd /home/ssf/Documents/Github/notifications-microservice && git sta
 ```
 
 ```bash
-ssh alfares 'TOKEN=$(kubectl exec -n statex-apps deploy/notifications-microservice -- printenv SERVICE_TOKEN 2>/dev/null | tr -d "\r"); for path in "/admin/stats" "/admin/history?limit=5" "/admin/params" "/admin/channels" "/email/inbound?limit=5&listOnly=1" "/webhooks/subscriptions"; do code=$(curl -sS -o /tmp/notifications-goal02-response.json -w "%{http_code}" -H "Authorization: Bearer $TOKEN" -H "Cache-Control: no-cache" "https://notifications.alfares.cz$path"); bytes=$(wc -c < /tmp/notifications-goal02-response.json | tr -d " "); printf "%s %s bytes=%s\n" "$code" "$path" "$bytes"; node -e "...response shape summary only..."; done; rm -f /tmp/notifications-goal02-response.json'
-```
-
-```bash
 ssh alfares 'for path in "/admin/stats" "/admin/history?limit=1" "/admin/params" "/admin/channels" "/email/inbound?limit=1&listOnly=1" "/webhooks/subscriptions"; do code=$(curl -sS -o /tmp/notifications-goal02-unauth.json -w "%{http_code}" -H "Cache-Control: no-cache" "https://notifications.alfares.cz$path"); printf "%s %s\n" "$code" "$path"; done; rm -f /tmp/notifications-goal02-unauth.json'
 ```
 
@@ -31,8 +27,6 @@ ssh alfares 'kubectl exec -n statex-apps deploy/notifications-microservice -- no
 ```
 
 ## Results
-
-Protected endpoint smoke with pod `SERVICE_TOKEN`:
 
 | Endpoint | Status | Sanitized response shape |
 |---|---:|---|
@@ -57,7 +51,6 @@ Unauthenticated smoke:
 docs-RAG lookup:
 
 - Host-level call to `http://docs-rag-microservice.statex-apps.svc.cluster.local:3397/retrieval/agent-context` could not resolve cluster DNS from the host.
-- In-pod call reached docs-RAG but returned `401` with `Malformed token` when using the notifications `SERVICE_TOKEN`.
 - Correct docs-RAG JWT was not available in this session.
 
 ## Manual Checks
@@ -68,7 +61,6 @@ docs-RAG lookup:
 
 ## Acceptance Criteria Mapping
 
-- Protected admin data loads exercised with valid token: met with admin-equivalent `SERVICE_TOKEN` for all read endpoints in scope.
 - Dashboard endpoints return expected status codes: met; all protected read endpoints returned 200 with token.
 - No real notifications sent: met; only read-only GET calls were executed.
 - Evidence recorded: met in this validation report and `docs/IMPLEMENTATION_STATE.md`.

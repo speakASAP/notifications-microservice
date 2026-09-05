@@ -12,7 +12,6 @@ Remote workspace: `alfares:/home/ssf/Documents/Github/notifications-microservice
 - Task: Define the Notifications-owned channel/template contract and a no-send readiness check.
 - Execution Plan: Keep source changes limited to contract docs, focused tests, and `POST /notifications/validate` readiness; leave Vault, channel row provisioning, deploy, and scaling to the runtime lane.
 - Coding Prompt: Do not send real notifications, mutate channel rows, write secrets, deploy, or contact customers.
-- Code: `JwtRolesGuard` accepts `INVOICES_NOTIFICATIONS_SERVICE_TOKEN`; channel policy tests cover `invoices.documents`; readiness script uses `/notifications/validate` only.
 - Validation: Unit tests/build/diff checks in source lane; runtime lane must run the readiness script after token and channel row provisioning.
 
 ## Required Producer Payload
@@ -65,8 +64,6 @@ After runtime provisioning, run:
 ssh alfares 'cd /home/ssf/Documents/Github/notifications-microservice && ./scripts/check-invoices-documents-readiness.sh'
 ```
 
-The script reads `INVOICES_NOTIFICATIONS_SERVICE_TOKEN` from the Kubernetes secret and calls `POST /notifications/validate` for proforma and final invoice payloads using `invoice-smoke@example.invalid`. Expected result: HTTP 200/201 with `mutation=false` and `providerCall=false` for both payloads.
-
 ## Boundaries
 
 - No real `/notifications/send` call in this lane.
@@ -79,8 +76,6 @@ The script reads `INVOICES_NOTIFICATIONS_SERVICE_TOKEN` from the Kubernetes secr
 
 Completed on 2026-07-02:
 
-- Vault path `secret/prod/invoices-microservice` contains `NOTIFICATIONS_SERVICE_TOKEN`; value was not printed.
-- `notifications-microservice-secret` contains `INVOICES_NOTIFICATIONS_SERVICE_TOKEN`.
 - `channel_registry` contains active `invoices.documents` policy with `type=email`, `provider=ses`, `purposesAllowed={transactional}`, and `applicationsAllowed={invoices-microservice}`.
 - Deployed image digest is `sha256:4e12aef822773d9ffec333db6417403ac6b5a73cf855ab8e25fb2bcb664f25a1`.
 - `scripts/check-invoices-documents-readiness.sh` passed for proforma and final payloads with HTTP 201, `mutation=false`, and `providerCall=false`.

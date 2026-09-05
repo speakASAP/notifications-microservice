@@ -115,7 +115,6 @@ Validation evidence collected on 2026-07-01:
 - `npm test`: pass, 4 suites and 19 tests.
 - `git diff --check`: pass.
 - Runtime ConfigMap key-name audit: no `RABBIT*` or `ORDERS_EVENTS*` keys present; only existing matching operational names such as `NODE_ENV`, `PORT`, and `SERVICE_NAME` were printed.
-- Runtime Secret key-name audit: no `RABBIT*` or `ORDERS_EVENTS*` keys present; existing secret names such as `JWT_SECRET` and `SERVICE_TOKEN` were present without values printed.
 
 ## Live Consumer Blockers
 

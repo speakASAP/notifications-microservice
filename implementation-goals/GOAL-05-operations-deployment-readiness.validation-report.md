@@ -46,13 +46,6 @@ Smoke evidence from the run:
 - Unauthenticated `GET /admin/stats`: HTTP 401.
 - Kubernetes rollout status: complete.
 - In-pod `GET /health`: success.
-- Protected `GET /admin/stats`: HTTP 200 with `SERVICE_TOKEN`.
-- Protected `GET /admin/history?limit=5`: HTTP 200 with `SERVICE_TOKEN`.
-- Protected `GET /admin/params`: HTTP 200 with `SERVICE_TOKEN`.
-- Protected `GET /admin/channels`: HTTP 200 with `SERVICE_TOKEN`.
-- Protected `GET /email/inbound?limit=5&listOnly=1`: HTTP 200 with `SERVICE_TOKEN`.
-- Protected `GET /email/inbound/undelivered-count`: HTTP 200 with `SERVICE_TOKEN`.
-- Protected `GET /webhooks/subscriptions`: HTTP 200 with `SERVICE_TOKEN`.
 - JWT secret data matched between notifications and auth Kubernetes secrets.
 - Expected secret keys were present; no secret values were printed.
 
