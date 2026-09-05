@@ -1,6 +1,6 @@
 # Notifications Microservice Implementation State
 
-Last updated: 2026-07-02.
+Last updated: 2026-09-04.
 
 ## Orchestrator Command
 
@@ -91,6 +91,8 @@ Do not paste full logs. Compress implementation, validation, risks, and changed 
 
 ## Validation Evidence Log
 
+2026-09-04: Template-library consistency review completed on `alfares:/home/ssf/Documents/Github/notifications-microservice`. Updated all five files under `implementation-goals/templates/` to align with the repository's IPS template structure: explicit metadata, intent and traceability, sensitive-data boundaries, contract/replay impact, gate evidence, acceptance criteria, stop conditions, and completion decisions. Validation passed: `git diff --check` and a required-section script confirmed all template contracts are present. No runtime source, deployment, notification send, provider call, secret read, or customer data was touched.
+
 Newest entries first.
 
 ```text
@@ -116,7 +118,7 @@ Newest entries first.
 
 ## Next Action
 
-Goal 24 Notifications selected unpaid cancellation acknowledgement is source-complete for central order hash 04d7d08c82a07853. Orders planning may consume the committed source-only ack for sideEffectsHandled.notification=true; any live cancellation route remains blocked until the owner-approved runtime packet exists.
+Template-library consistency review is complete.
 
 To print the base notifications checkpoint, run:
 

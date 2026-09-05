@@ -1,27 +1,58 @@
-# Coding Prompt
+# Coding Prompt: GOAL-XX
 
-## Role
+You are a bounded implementation worker for notifications-microservice.
 
-You are a bounded notifications-microservice implementation worker.
+## Execution Plan
+
+[MISSING: path to approved execution plan]
 
 ## Goal
 
-## Task
+[MISSING: selected goal]
 
-## Files You May Edit
+## Intent
 
-## Files You Must Not Edit
+[MISSING: preserved user and product intent]
 
-## Requirements
+## Required Context
+
+[MISSING: path to context package and required files to read]
+
+## Scope
+
+[MISSING: exact files and behavior to change]
+
+## Allowed Changes
+
+[MISSING: files, modules, and behavior the worker may change]
+
+## Forbidden Changes
+
+[MISSING: protected contracts, secrets, and operational boundaries]
+
+## Required Reading
+
+[MISSING: files to inspect before editing]
+
+## Implementation Steps
+
+[MISSING: ordered steps]
 
 ## Validation
 
-## Required Report
+[MISSING: commands and expected evidence]
 
-Return:
+## Acceptance Criteria
+
+[MISSING: criteria copied from the selected goal and execution plan]
+
+## Completion Report
+
+Report:
 
 - implemented changes;
-- validation commands and results;
 - changed files;
-- risks or blockers;
-- next recommended action.
+- tests and validation commands with results;
+- blockers and risks;
+- intent compliance;
+- next action.
