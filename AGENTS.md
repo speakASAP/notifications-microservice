@@ -136,6 +136,13 @@ response means that source documentation does not exist.
 
 `BUSINESS.md` is human-owned and immutable to AI agents. `SYSTEM.md`, planning, and orchestration docs may be proposed/updated by agents subject to review.
 
+## Service-to-service authentication
+Any call this service makes to, or receives from, another service is governed by
+[`auth-microservice/docs/SERVICE_IDENTITY_CONSUMER_STANDARD.md`](../auth-microservice/docs/SERVICE_IDENTITY_CONSUMER_STANDARD.md).
+Read it before writing or debugging a machine call — including a 401 from an internal
+endpoint. New machine paths use an Auth-issued per-pair RS256 service JWT; a shared static
+token is legacy and closed to new adopters.
+
 ## Intent Preservation System
 
 This repository follows `Vision -> Goal Impact -> System -> Feature -> Task -> Execution Plan -> Coding Prompt -> Code -> Validation` per `AGENT_OPERATIONS.md` and the central `intent-preservation-system` standard.
