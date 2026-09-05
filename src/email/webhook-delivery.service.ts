@@ -767,7 +767,17 @@ export class WebhookDeliveryService {
 
     const helpdeskSubs = await this.subscriptionRepository.find({ where: { serviceName: 'helpdesk', status: 'active' } });
     if (helpdeskSubs.length === 0) {
-      this.logger.warn(`[WEBHOOK_DELIVERY] confirmDeliveryByInboundEmailIdOnly: no active helpdesk subscription`, 'WebhookDeliveryService');
+      // Without a helpdesk subscription no delivery row can be written, and the
+      // "already delivered" subquery in GET /email/inbound joins on that table, so
+      // it silently stops excluding anything: every processed email is returned on
+      // every poll forever. This is a misconfiguration, not a per-email fault, so it
+      // is logged at error level to be alertable rather than buried as a warning.
+      this.logger.error(
+        `[WEBHOOK_DELIVERY] No active helpdesk subscription - delivery for inboundEmailId=${inboundEmailId} cannot be recorded. ` +
+          `Inbound mail will be re-polled indefinitely until a subscription with serviceName='helpdesk' exists.`,
+        undefined,
+        'WebhookDeliveryService',
+      );
       return { success: false, message: 'No active helpdesk subscription' };
     }
 

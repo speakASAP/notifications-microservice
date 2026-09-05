@@ -3,6 +3,7 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { Request } from 'express';
 import { InboundEmailController } from './inbound-email.controller';
 import { InboundEmailService } from './inbound-email.service';
@@ -114,6 +115,64 @@ describe('InboundEmailController', () => {
       expect(inboundEmailService.findInboundEmails).toHaveBeenCalledWith(
         expect.objectContaining({ limit: 100 }),
       );
+    });
+  });
+
+  describe('deliveryConfirmation', () => {
+    it('returns success when the confirmation was recorded', async () => {
+      webhookDeliveryService.confirmDeliveryByInboundEmailIdOnly.mockResolvedValue({
+        success: true,
+        message: 'Delivery confirmed for helpdesk',
+      });
+
+      const result = await controller.deliveryConfirmation({
+        inboundEmailId: 'email-1',
+        status: 'delivered',
+      });
+
+      expect(result).toEqual({ success: true, message: 'Delivery confirmed for helpdesk' });
+    });
+
+    // A 200 here told the caller the email was settled while GET /email/inbound kept
+    // returning it, so the same mail was polled and re-confirmed indefinitely.
+    it('fails with 503 when the confirmation could not be recorded', async () => {
+      webhookDeliveryService.confirmDeliveryByInboundEmailIdOnly.mockResolvedValue({
+        success: false,
+        message: 'No active helpdesk subscription',
+      });
+
+      await expect(
+        controller.deliveryConfirmation({ inboundEmailId: 'email-1', status: 'delivered' }),
+      ).rejects.toMatchObject({
+        status: HttpStatus.SERVICE_UNAVAILABLE,
+        response: { success: false, message: 'No active helpdesk subscription' },
+      });
+    });
+
+    it('does not convert a deliberate HTTP failure into a 200 response', async () => {
+      webhookDeliveryService.confirmDeliveryByInboundEmailIdOnly.mockResolvedValue({
+        success: false,
+        message: 'No active helpdesk subscription',
+      });
+
+      const error = await controller
+        .deliveryConfirmation({ inboundEmailId: 'email-1', status: 'delivered' })
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(HttpException);
+    });
+
+    it('still reports unexpected errors as a plain failure body', async () => {
+      webhookDeliveryService.confirmDeliveryByInboundEmailIdOnly.mockRejectedValue(
+        new Error('database unreachable'),
+      );
+
+      const result = await controller.deliveryConfirmation({
+        inboundEmailId: 'email-1',
+        status: 'delivered',
+      });
+
+      expect(result).toEqual({ success: false, message: 'database unreachable' });
     });
   });
 });

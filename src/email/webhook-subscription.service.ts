@@ -33,7 +33,13 @@ export class WebhookSubscriptionService {
     }
 
     const normalizedServiceName = (createDto.serviceName || '').trim();
-    const normalizedWebhookUrl = this.normalizeWebhookUrl(createDto.webhookUrl);
+    // Compare on the slash-stripped form so ".../webhook" and ".../webhook/" are one
+    // subscription, but deliver to the URL as given: a framework that requires the
+    // trailing slash (Django APPEND_SLASH) answers the stripped path with a 301, and a
+    // redirected POST is replayed as GET without its body, so every delivery would be
+    // silently lost. Only the comparison is normalized; the stored URL is not.
+    const requestedWebhookUrl = (createDto.webhookUrl || '').trim();
+    const normalizedWebhookUrl = this.normalizeWebhookUrl(requestedWebhookUrl);
 
     // Ensure helpdesk subscription receives all @speakasap.com addresses unless filters.to provided
     let filters = createDto.filters ?? null;
@@ -43,11 +49,10 @@ export class WebhookSubscriptionService {
     }
 
     const existing = await this.subscriptionRepository.findOne({
-      where: {
-        serviceName: normalizedServiceName,
-        webhookUrl: normalizedWebhookUrl,
-        status: 'active',
-      },
+      where: [
+        { serviceName: normalizedServiceName, webhookUrl: normalizedWebhookUrl, status: 'active' },
+        { serviceName: normalizedServiceName, webhookUrl: `${normalizedWebhookUrl}/`, status: 'active' },
+      ],
       order: { createdAt: 'ASC' },
     });
     if (existing) {
@@ -60,7 +65,7 @@ export class WebhookSubscriptionService {
 
     const subscription = this.subscriptionRepository.create({
       serviceName: normalizedServiceName,
-      webhookUrl: normalizedWebhookUrl,
+      webhookUrl: requestedWebhookUrl,
       secret: createDto.secret || null,
       filters: filters || null,
       status: 'active',

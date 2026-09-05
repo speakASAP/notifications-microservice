@@ -171,15 +171,27 @@ export class InboundEmailController {
         return result;
       }
       if (body.status === 'delivered') {
-        return await this.webhookDeliveryService.confirmDeliveryByInboundEmailIdOnly({
+        const result = await this.webhookDeliveryService.confirmDeliveryByInboundEmailIdOnly({
           inboundEmailId: body.inboundEmailId,
           status: 'delivered',
           ticketId: body.ticketId ?? null,
           commentId: body.commentId ?? null,
         });
+        // Answering 200 for a confirmation we could not store leaves the caller
+        // believing the email is settled while GET /email/inbound keeps returning it,
+        // so the same mail is polled and re-confirmed forever. A caller that checks
+        // only the status code cannot see that, so fail loudly instead.
+        if (!result.success) {
+          throw new HttpException(result, HttpStatus.SERVICE_UNAVAILABLE);
+        }
+        return result;
       }
       return { success: false, message: 'subscriptionId required when status is failed' };
     } catch (error: unknown) {
+      // Preserve deliberate HTTP failures; only unexpected errors are reported below.
+      if (error instanceof HttpException) {
+        throw error;
+      }
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Error in delivery-confirmation: ${errorMessage}`, undefined, 'InboundEmailController');
       return { success: false, message: errorMessage };
