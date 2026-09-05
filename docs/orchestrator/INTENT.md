@@ -53,7 +53,7 @@ The admin console is a production operations tool, not a marketing page. It shou
 - Secrets must stay in environment/Vault, not the frontend.
 - Rate limits and provider-specific safety must be respected.
 - `/email/inbound/s3` remains public because AWS SNS/S3 cannot send admin JWT.
-- Admin APIs remain protected by `JwtRolesGuard` and require `global:superadmin` or `internal:notifications-microservice:admin`, with service-token support.
+- Admin APIs remain protected by `JwtRolesGuard` and require `global:superadmin` or `internal:notifications-microservice:admin`; service callers follow the [canonical service identity standard](../../../auth-microservice/docs/SERVICE_IDENTITY_CONSUMER_STANDARD.md).
 
 ## Known Doc/Code Mismatches
 
