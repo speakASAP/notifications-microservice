@@ -28,6 +28,10 @@ spec:
           ports:
             - containerPort: 3368
               name: http
+          # LOGGING_SERVICE_TOKEN comes from notifications-microservice-secret
+          # (per-pair RS256 via ExternalSecret). Do not reintroduce the shared
+          # logging-ingest-credentials override — it shadows envFrom with a
+          # static non-JWT and floods Auth with alg=none rejects.
           envFrom:
             - configMapRef:
                 name: notifications-microservice-config
