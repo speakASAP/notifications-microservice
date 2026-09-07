@@ -9,23 +9,9 @@ import { Logger } from '@nestjs/common';
 import * as express from 'express';
 import * as path from 'path';
 import { AppDataSource } from './data-source';
-import { assertServiceTokensConfigured } from './auth/service-tokens.config';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-
-  // Fail fast on missing service tokens, before migrations touch the database.
-  // JwtRolesGuard skips an unset caller token silently, so without this a config gap
-  // surfaces only as an unexplained 401 on the first inter-service call.
-  try {
-    assertServiceTokensConfigured();
-  } catch (err) {
-    logger.error(
-      'Service token validation failed at startup',
-      err instanceof Error ? err.message : String(err),
-    );
-    process.exit(1);
-  }
 
   // Run pending migrations at startup (single deploy step; no separate migration container)
   try {
