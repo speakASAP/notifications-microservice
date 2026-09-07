@@ -138,11 +138,9 @@ response means that source documentation does not exist.
 ## Service-to-service authentication
 For machine service identity, follow the sole canonical [`SERVICE_IDENTITY_CONSUMER_STANDARD.md`](../auth-microservice/docs/SERVICE_IDENTITY_CONSUMER_STANDARD.md). It is not reproduced here.
 
-**Known non-conformance — do not copy or extend.** `JwtRolesGuard` (`src/auth/jwt-roles.guard.ts`) currently accepts a matrix of static per-caller shared secrets, each mapped to a role grant: `SERVICE_TOKEN`, plus `CLIPLOT_`, `CV_TUNING_`, `AUTH_`, `MARKETING_`, `MONITORING_`, `LEADS_`, `DOMAIN_RESEARCH_`, `RUNLAYER_`, `INVOICES_` and `SPEAKASAP_` prefixed `..._NOTIFICATIONS_SERVICE_TOKEN` values.
+**Known non-conformance — do not copy or extend.** `JwtRolesGuard` (`src/auth/jwt-roles.guard.ts`) verifies Auth-issued RS256 first and requires `internal:notifications-microservice:<role>` from the token. A matrix of static per-caller shared secrets (`SERVICE_TOKEN` plus `*_NOTIFICATIONS_SERVICE_TOKEN`) remains open only while `ALLOW_NOTIFICATIONS_STATIC_TOKENS` is unset/true; each static match grants `internal:notifications-microservice:send` and emits a WARN. Close with `ALLOW_NOTIFICATIONS_STATIC_TOKENS=false` after every caller has an authenticated-call proof — exp / Secret sync is not acceptance.
 
-A static shared secret is not an Auth-issued RS256 principal, is not revocable through Auth, and carries no verifiable `internal:notifications-microservice:<role>` claim — a caller presenting the secret *is* the authorization. This is the largest single instance of this drift in the ecosystem and is a defect to repair, not the local convention.
-
-Do not add a new `..._NOTIFICATIONS_SERVICE_TOKEN` variable for a new caller. A new caller needs a real `(caller -> notifications-microservice)` Auth principal per the standard. The presence of this guard is not evidence that service identity is satisfied.
+Do not add a new `..._NOTIFICATIONS_SERVICE_TOKEN` variable for a new caller. A new caller needs a real `(caller -> notifications-microservice)` Auth principal per the standard (`svc-<caller>--notifications-microservice@internal.alfares.cz`, role `internal:notifications-microservice:send`, minted via `auth-microservice/scripts/provision-service-token.js`).
 
 ## Intent Preservation System
 

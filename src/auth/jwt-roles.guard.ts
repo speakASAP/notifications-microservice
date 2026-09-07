@@ -1,6 +1,7 @@
 /**
  * JWT Roles Guard
- * Validates Bearer JWT (same secret as auth-microservice) and enforces roles from payload.roles.
+ * Validates Auth-issued RS256 Bearer JWTs and enforces roles from payload.roles.
+ * Static per-caller shared secrets remain only as a migration window.
  */
 
 import {
@@ -17,6 +18,13 @@ import { timingSafeEqual } from 'crypto';
 import { Request } from 'express';
 import { ROLES_KEY, PUBLIC_KEY } from './roles.decorator';
 import { verifyAuthToken } from './jwt-verifier';
+
+type ServiceActor = {
+  sub: string;
+  email?: string;
+  roles: string[];
+  serviceName?: string;
+};
 
 @Injectable()
 export class JwtRolesGuard implements CanActivate {
@@ -59,39 +67,16 @@ export class JwtRolesGuard implements CanActivate {
     }
 
     const token = authHeader.slice(7);
+    const handler = `${context.getClass().name}.${context.getHandler().name}`;
 
-    // A static service token is still subject to the route's policy. It used to
-    // return true here outright, so any holder of SERVICE_TOKEN reached every
-    // route in the service regardless of what the route required.
-    const serviceActor = this.resolveStaticServiceActor(token);
-    if (serviceActor) {
-      const actorRoles = Array.isArray(serviceActor.roles) ? serviceActor.roles : [];
-      if (!requiredRoles.some((r) => actorRoles.includes(r))) {
-        this.logger.warn(
-          `Static service token ${serviceActor.serviceName ?? 'unknown'} refused on ` +
-            `${context.getClass().name}.${context.getHandler().name}: lacks required role`,
-        );
-        throw new ForbiddenException('Insufficient permissions');
-      }
-      this.logger.warn(
-        `Static service token used by ${serviceActor.serviceName ?? 'unknown'} on ` +
-          `${context.getClass().name}.${context.getHandler().name}; migrate to a per-pair Auth JWT`,
-      );
-      (request as Request & { user: unknown }).user = serviceActor;
-      return true;
-    }
-
+    // Auth-issued RS256 first. A real principal must always be identified as that
+    // principal rather than matched against a leftover static secret string.
     try {
-      // TASK-KEY-F3: accepts RS256 (auth's published key) and HS256 (the shared secret)
-      // while the migration runs. See jwt-verifier.ts for the sequencing.
       const payload = await verifyAuthToken(token);
       const userRoles: string[] = Array.isArray(payload.roles) ? payload.roles : [];
-
-      const hasRole = requiredRoles.some((r) => userRoles.includes(r));
-      if (!hasRole) {
+      if (!requiredRoles.some((r) => userRoles.includes(r))) {
         throw new ForbiddenException('Insufficient permissions');
       }
-
       (request as Request & { user: unknown }).user = {
         sub: payload.sub,
         email: payload.email,
@@ -99,23 +84,59 @@ export class JwtRolesGuard implements CanActivate {
       };
       return true;
     } catch (err) {
-      if (err instanceof UnauthorizedException || err instanceof ForbiddenException) throw err;
-      throw new UnauthorizedException('Invalid token');
+      if (err instanceof ForbiddenException) throw err;
+      // Fall through to the migration static path when allowed.
     }
+
+    if (this.staticCredentialsAllowed()) {
+      const serviceActor = this.resolveStaticServiceActor(token);
+      if (serviceActor) {
+        const actorRoles = Array.isArray(serviceActor.roles) ? serviceActor.roles : [];
+        if (!requiredRoles.some((r) => actorRoles.includes(r))) {
+          this.logger.warn(
+            `Static service token ${serviceActor.serviceName ?? 'unknown'} refused on ` +
+              `${handler}: lacks required role`,
+          );
+          throw new ForbiddenException('Insufficient permissions');
+        }
+        // WARN on every acceptance so the migration has an observable exit
+        // condition: this line going quiet per caller proves that caller no
+        // longer needs a shared secret. Secret sync / exp is not proof.
+        this.logger.warn(
+          `Static service token used by ${serviceActor.serviceName ?? 'unknown'} on ` +
+            `${handler}; migrate to a per-pair Auth JWT`,
+        );
+        (request as Request & { user: unknown }).user = serviceActor;
+        return true;
+      }
+    }
+
+    throw new UnauthorizedException('Invalid token');
   }
 
+  /**
+   * Defaults open so an unconfigured deploy cannot lock out callers that have
+   * not been provisioned yet. Set `ALLOW_NOTIFICATIONS_STATIC_TOKENS=false` to
+   * close the migration window after every caller has an authenticated RS256
+   * call proof.
+   */
+  private staticCredentialsAllowed(): boolean {
+    const raw = (process.env.ALLOW_NOTIFICATIONS_STATIC_TOKENS ?? 'true').trim().toLowerCase();
+    return raw !== 'false' && raw !== '0' && raw !== 'no';
+  }
 
-  private resolveStaticServiceActor(token: string): { sub: string; email?: string; roles: string[]; serviceName?: string } | null {
+  private resolveStaticServiceActor(token: string): ServiceActor | null {
     const serviceName = process.env.SERVICE_NAME || 'notifications-microservice';
+    // Delivery-only. Static secrets must not carry admin — that is a human /
+    // operator role. The send role is what every current machine caller needs.
+    const sendRole = `internal:${serviceName}:send`;
+
     const serviceToken = process.env.SERVICE_TOKEN;
     if (serviceToken && this.safeEqual(token, serviceToken)) {
       return {
         sub: `service:${serviceName}`,
         email: undefined,
-        // Was [global:superadmin, internal:<self>:admin]. A shared static string
-        // must not carry the ecosystem's broadest role; admin on this service is
-        // already more than any current caller needs.
-        roles: [`internal:${serviceName}:admin`],
+        roles: [sendRole],
         serviceName,
       };
     }
@@ -125,20 +146,17 @@ export class JwtRolesGuard implements CanActivate {
       return {
         sub: 'service:cliplot',
         email: undefined,
-        roles: [`internal:${serviceName}:admin`],
+        roles: [sendRole],
         serviceName: 'cliplot',
       };
     }
 
-    // cv-tuning sends one thing: the outcome nudge that asks a user whether they heard back
-    // about an application they downloaded. Scoped like the other per-consumer tokens rather
-    // than sharing SERVICE_TOKEN, which grants admin on this service — a nudge needs no such reach.
     const cvTuningToken = process.env.CV_TUNING_NOTIFICATIONS_SERVICE_TOKEN;
     if (cvTuningToken && this.safeEqual(token, cvTuningToken)) {
       return {
         sub: 'service:cv-tuning',
         email: undefined,
-        roles: [`internal:${serviceName}:admin`],
+        roles: [sendRole],
         serviceName: 'cv-tuning',
       };
     }
@@ -148,29 +166,21 @@ export class JwtRolesGuard implements CanActivate {
       return {
         sub: 'service:invoices-microservice',
         email: undefined,
-        roles: [`internal:${serviceName}:admin`],
+        roles: [sendRole],
         serviceName: 'invoices-microservice',
       };
     }
 
-    // speakasap-notification-service is the transport's only caller: it renders and
-    // addresses the mail, then hands it here purely for delivery. Scoped like the
-    // other per-consumer tokens rather than sharing SERVICE_TOKEN, which grants
-    // admin on this service — delivery needs no such reach.
     const speakasapToken = process.env.SPEAKASAP_NOTIFICATIONS_SERVICE_TOKEN;
     if (speakasapToken && this.safeEqual(token, speakasapToken)) {
       return {
         sub: 'service:speakasap-notification-service',
         email: undefined,
-        roles: [`internal:${serviceName}:admin`],
+        roles: [sendRole],
         serviceName: 'speakasap-notification-service',
       };
     }
 
-    // Per-caller tokens for the services that previously authenticated with the shared
-    // SERVICE_TOKEN. That token grants admin on this service; none of these callers needs more
-    // than delivery rights, so each gets its own credential scoped to internal:<svc>:admin.
-    // A leak of any one of them no longer exposes the other callers or superadmin.
     const perCallerTokens: ReadonlyArray<readonly [string, string]> = [
       ['AUTH_NOTIFICATIONS_SERVICE_TOKEN', 'auth-microservice'],
       ['MARKETING_NOTIFICATIONS_SERVICE_TOKEN', 'marketing-microservice'],
@@ -186,7 +196,7 @@ export class JwtRolesGuard implements CanActivate {
         return {
           sub: `service:${callerName}`,
           email: undefined,
-          roles: [`internal:${serviceName}:admin`],
+          roles: [sendRole],
           serviceName: callerName,
         };
       }
