@@ -1,20 +1,8 @@
 /**
- * Dual-algorithm JWT verification (TASK-KEY-F3).
+ * Auth-issued JWT verification — RS256 only.
  *
- * HS256 is symmetric: holding the secret needed to *verify* a token is the same as
- * holding the secret needed to *mint* one. Every service sharing auth's JWT_SECRET
- * could therefore forge any token, including `global:superadmin`. Under RS256 the
- * verifier holds only auth's public key and cannot sign at all.
- *
- * Migration complete — this verifier is RS256-only:
- *
- *   1. auth publishes its public key at /.well-known/jwks.json  (done)
- *   2. verifiers accept RS256 *and* HS256                       (done)
- *   3. auth switches to signing RS256                           (done)
- *   4. HS256 removed and the shared secret rotated              (this file)
- *
- * Any token not signed RS256 is now rejected outright. The shared JWT_SECRET no longer
- * grants the ability to mint tokens this service will accept.
+ * Verifiers hold Auth's public key via JWKS and cannot mint tokens.
+ * HS256 and any other algorithm are rejected.
  *
  * The key set is cached because it is fetched on the request path; a miss on an
  * unknown `kid` refetches once so key rotation does not need a redeploy.
@@ -61,8 +49,7 @@ async function refreshJwks(): Promise<void> {
       cachedKeys = next;
       cachedAt = Date.now();
     } catch (err) {
-      // Never swallow: a JWKS outage must be visible, not silently degrade to
-      // HS256-only. Verification still falls back, but the failure is logged.
+      // Never swallow: a JWKS outage must be visible.
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[jwt-verifier] JWKS refresh failed from ${url}: ${message}`);
       throw err;
@@ -94,8 +81,8 @@ export interface VerifiedPayload {
 }
 
 /**
- * Verify an auth-issued token, preferring RS256 and falling back to HS256 while the
- * migration is in progress. Throws UnauthorizedException if neither path accepts it.
+ * Verify an auth-issued token. RS256 only.
+ * Throws UnauthorizedException if the token is not accepted.
  */
 export async function verifyAuthToken(token: string): Promise<VerifiedPayload> {
   const decoded = jwt.decode(token, { complete: true });
@@ -113,8 +100,5 @@ export async function verifyAuthToken(token: string): Promise<VerifiedPayload> {
     }
   }
 
-  // TASK-KEY-F3 step 4: HS256 is retired. auth signs RS256 only, so any non-RS256 token
-  // is either a pre-migration leftover or a forgery attempt. Accepting HS256 here would
-  // keep the shared secret forgery-capable, which is the whole point of the migration.
   throw new UnauthorizedException(`Unsupported token algorithm ${alg ?? 'none'}; RS256 required`);
 }
