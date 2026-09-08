@@ -76,11 +76,14 @@ JSON
 printf "Invoices documents notification readiness check\n"
 printf "Namespace: %s | Secret: %s | URL: %s | Channel: %s\n" "$NAMESPACE" "$SECRET_NAME" "$BASE_URL" "$CHANNEL_KEY"
 
-token="$(read_secret_key INVOICES_NOTIFICATIONS_SERVICE_TOKEN)"
+# Static INVOICES_NOTIFICATIONS_SERVICE_TOKEN mounts were deleted: JwtRolesGuard
+# accepts Auth RS256 Bearer only. Pass a minted smoke JWT via env — no Vault
+# static fallback.
+token="${NOTIFICATIONS_SMOKE_BEARER_TOKEN:-}"
 if [ -z "$token" ]; then
-  fail "INVOICES_NOTIFICATIONS_SERVICE_TOKEN is missing from ${SECRET_NAME}"
+  fail "NOTIFICATIONS_SMOKE_BEARER_TOKEN unset; static INVOICES_NOTIFICATIONS_SERVICE_TOKEN mount deleted (Auth RS256 only)"
 else
-  ok "INVOICES_NOTIFICATIONS_SERVICE_TOKEN is present for no-send validate checks"
+  ok "NOTIFICATIONS_SMOKE_BEARER_TOKEN is present for no-send validate checks"
   validate_invoice_payload "proforma" "order_confirmation" "Proforma invoice" "PF-2026-0001"
   validate_invoice_payload "final" "payment_confirmation" "Final tax invoice" "FV-2026-0001"
 fi
