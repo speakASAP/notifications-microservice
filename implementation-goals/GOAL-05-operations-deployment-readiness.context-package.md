@@ -6,7 +6,7 @@
 - Remote repo: `alfares:/home/ssf/Documents/Github/notifications-microservice`.
 - `scripts/deploy.sh` builds/pushes `<tag>` and `latest`, updates deployment image to `latest`, waits for rollout, and performs an in-pod `/health` check.
 - `k8s/deployment.yaml` uses `imagePullPolicy: Always`, one replica, config/secret env sources, and `/health` startup/liveness/readiness probes.
-- `k8s/external-secret.yaml` targets `notifications-microservice-secret`; `JWT_SECRET` is sourced from `secret/prod/auth-microservice`.
+- `k8s/external-secret.yaml` targets `notifications-microservice-secret`. Human admin JWTs verify Auth RS256 per [`CONSUMER_JWT_VALIDATION_STANDARD.md`](../../auth-microservice/docs/CONSUMER_JWT_VALIDATION_STANDARD.md); machine callers use Auth-issued pair RS256 Bearer per [`SERVICE_IDENTITY_CONSUMER_STANDARD.md`](../../auth-microservice/docs/SERVICE_IDENTITY_CONSUMER_STANDARD.md). Do not teach shared `JWT_SECRET` HMAC as verifier or S2S.
 - `docs/orchestrator/STATUS.md` records prior deployment evidence and the `:latest` pod-template caveat.
 
 ## docs-RAG Status
