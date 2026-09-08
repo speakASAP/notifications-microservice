@@ -18,7 +18,7 @@ sends or notification test sends from this runbook.
 
 - `scripts/deploy.sh` delegates to the shared deploy runner; `deploy.config.sh` declares the image, Deployment and port.
 - `k8s/deployment.yaml` runs one replica, uses `imagePullPolicy: Always`, loads `notifications-microservice-config` and `notifications-microservice-secret`, and probes `/health` for startup, liveness, and readiness.
-- `k8s/external-secret.yaml` syncs `notifications-microservice-secret` from Vault and sources `JWT_SECRET` from `secret/prod/auth-microservice` so admin JWTs signed by auth validate in notifications.
+- `k8s/external-secret.yaml` syncs `notifications-microservice-secret` from Vault. Human admin JWTs verify Auth RS256 (JWKS / approved local verifier) per [`CONSUMER_JWT_VALIDATION_STANDARD.md`](../../auth-microservice/docs/CONSUMER_JWT_VALIDATION_STANDARD.md); do not teach `JWT_SECRET` HMAC alignment as the verifier. Machine callers use Auth RS256 pair principal Bearer per [`SERVICE_IDENTITY_CONSUMER_STANDARD.md`](../../auth-microservice/docs/SERVICE_IDENTITY_CONSUMER_STANDARD.md).
 - `src/health/health.controller.ts` exposes public `GET /health`.
 - `src/config/config.controller.ts` exposes public `GET /api/config` for browser-safe auth configuration.
 
@@ -145,7 +145,8 @@ Manifest source of truth:
 - ExternalSecret: `k8s/external-secret.yaml`
 - Kubernetes Secret target: `notifications-microservice-secret`
 - Notifications Vault path: `secret/prod/notifications-microservice`
-- JWT signing secret source: `secret/prod/auth-microservice` property `JWT_SECRET`
+- Human JWT verification: Auth RS256 via JWKS (`AUTH_SERVICE_URL` → `/.well-known/jwks.json`) per [`CONSUMER_JWT_VALIDATION_STANDARD.md`](../../auth-microservice/docs/CONSUMER_JWT_VALIDATION_STANDARD.md)
+- Machine identity: Auth RS256 pair principal Bearer per [`SERVICE_IDENTITY_CONSUMER_STANDARD.md`](../../auth-microservice/docs/SERVICE_IDENTITY_CONSUMER_STANDARD.md)
 
 Rotation procedure after owner approval:
 
@@ -166,7 +167,7 @@ ssh alfares "/home/ssf/Documents/Github/shared/scripts/with-deploy-lock.sh bash 
 
 5. Run post-rotation smoke again.
 
-JWT rotation must keep auth signing and notifications verification aligned. `k8s/external-secret.yaml` intentionally maps notifications `JWT_SECRET` from the auth service Vault path. If admin login redirects back to login or protected dashboard calls return 401, verify this alignment first without printing values.
+Human JWT verification follows [`CONSUMER_JWT_VALIDATION_STANDARD.md`](../../auth-microservice/docs/CONSUMER_JWT_VALIDATION_STANDARD.md) (Auth RS256 / JWKS). Machine identity follows [`SERVICE_IDENTITY_CONSUMER_STANDARD.md`](../../auth-microservice/docs/SERVICE_IDENTITY_CONSUMER_STANDARD.md). Do not diagnose admin 401s as `JWT_SECRET` signing-alignment drift. If admin login redirects back to login or protected dashboard calls return 401, verify Auth reachability, JWKS fetch, and token `alg=RS256` acceptance without printing token or key values.
 
 ## Delivery Path Checks
 

@@ -249,7 +249,7 @@ Stage: deployed to production and smoke-tested for the admin frontend goal.
 - Verified `https://notifications.alfares.cz/admin` serves the new admin console.
 - Verified `https://notifications.alfares.cz/api/config` returns browser-safe `https://auth.alfares.cz`.
 - Verified in-pod `/health` returns 200.
-- Fixed admin login bounce by sourcing notifications `JWT_SECRET` from `secret/prod/auth-microservice` in `k8s/external-secret.yaml`.
+- Fixed admin login bounce by aligning notifications human JWT verification with Auth RS256 (JWKS) per [`CONSUMER_JWT_VALIDATION_STANDARD.md`](../../auth-microservice/docs/CONSUMER_JWT_VALIDATION_STANDARD.md); machine identity remains [`SERVICE_IDENTITY_CONSUMER_STANDARD.md`](../../auth-microservice/docs/SERVICE_IDENTITY_CONSUMER_STANDARD.md).
 - Verified auth test login returns a `global:superadmin` token and all dashboard endpoints return 200.
 
 ## Pending
@@ -262,4 +262,4 @@ Stage: deployed to production and smoke-tested for the admin frontend goal.
 - Test message action sends real notifications to the selected recipient and therefore requires a browser confirmation.
 - `/webhooks/subscriptions` is the implemented route, despite README references to `/api/webhooks/subscriptions`.
 - Historical deployments that used `:latest` could leave stale pod digests; current deploy script source now pins the immutable requested image tag.
-- Notifications must verify JWTs with the same secret that auth uses to sign them. If admin login shows the dashboard briefly and then returns to login, compare auth and notifications `JWT_SECRET` fingerprints first.
+- Notifications must verify human JWTs with Auth RS256 per [`CONSUMER_JWT_VALIDATION_STANDARD.md`](../../auth-microservice/docs/CONSUMER_JWT_VALIDATION_STANDARD.md), not `JWT_SECRET` HMAC. If admin login shows the dashboard briefly and then returns to login, verify JWKS/Auth reachability and RS256 acceptance first (never print keys or tokens).
