@@ -200,7 +200,7 @@ export class InboundEmailController {
 
   /**
    * Process all undelivered: DB (redeliver to helpdesk) + S3 (fetch, store, webhook).
-   * Use after redeploy. Auth: Bearer SERVICE_TOKEN.
+   * Use after redeploy. Auth: Bearer Auth-issued RS256 service JWT with inbound role.
    * POST /email/inbound/process-undelivered?dbLimit=5&s3MaxKeys=5
    */
   @Roles(...NOTIFICATIONS_INBOUND_ROLES)
